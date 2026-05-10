@@ -5,5 +5,40 @@ use CodeIgniter\Router\RouteCollection;
 /**
  * @var RouteCollection $routes
  */
-$routes->get('/', 'Home::index');
-$routes->get('firebasetest', 'FirebaseTest::index');
+$routes->get('/', 'Auth::login');
+$routes->get('login', 'Auth::login');
+$routes->get('auth/login', 'Auth::login');
+$routes->post('auth/processLogin', 'Auth::processLogin');
+$routes->get('register', 'Auth::register');
+$routes->get('auth/register', 'Auth::register');
+$routes->post('auth/processRegister', 'Auth::processRegister');
+
+$routes->get('dashboard', 'Dashboard::index');
+
+// Projects Routes
+$routes->get('projects', 'Projects::index');
+$routes->get('projects/create', 'Projects::create');
+$routes->post('projects/create', 'Projects::create');
+$routes->get('projects/update/(:segment)', 'Projects::update/$1');
+$routes->post('projects/update/(:segment)', 'Projects::update/$1');
+$routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
+
+// Resources Routes
+$routes->get('resources', 'Resources::index');
+$routes->get('resources/requests', 'Resources::requests');
+// Equipment CRUD
+$routes->post('resources/equipment/create', 'Resources::createEquipment');
+$routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');
+$routes->get('resources/equipment/delete/(:segment)', 'Resources::deleteEquipment/$1');
+// Manpower CRUD
+$routes->post('resources/manpower/create', 'Resources::createManpower');
+$routes->post('resources/manpower/update/(:segment)', 'Resources::updateManpower/$1');
+$routes->get('resources/manpower/delete/(:segment)', 'Resources::deleteManpower/$1');
+
+// Staff Routes
+$routes->get('staff', 'Staff::index');
+$routes->get('staff/create', 'Staff::create');
+$routes->post('staff/create', 'Staff::create');
+$routes->get('staff/update/(:segment)', 'Staff::update/$1');
+$routes->post('staff/update/(:segment)', 'Staff::update/$1');
+$routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
