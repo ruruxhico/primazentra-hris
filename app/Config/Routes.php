@@ -12,6 +12,8 @@ $routes->post('auth/processLogin', 'Auth::processLogin');
 $routes->get('register', 'Auth::register');
 $routes->get('auth/register', 'Auth::register');
 $routes->post('auth/processRegister', 'Auth::processRegister');
+$routes->get('auth/logout', 'Auth::logout');
+$routes->post('auth/logout', 'Auth::logout');
 
 $routes->get('dashboard', 'Dashboard::index');
 

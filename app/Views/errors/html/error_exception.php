@@ -1,4 +1,12 @@
 <?php
+/**
+ * @var string $title
+ * @var Throwable $exception
+ * @var string $file
+ * @var int $line
+ * @var array $trace
+ * @var \CodeIgniter\HTTP\Request $request
+ */
 use CodeIgniter\HTTP\Header;
 use CodeIgniter\CodeIgniter;
 
@@ -10,7 +18,7 @@ $errorId = uniqid('error', true);
     <meta charset="UTF-8">
     <meta name="robots" content="noindex">
 
-    <title><?= esc($title) ?></title>
+    <title><?= esc((string)($title ?? 'Error')) ?></title>
     <style>
         <?= preg_replace('#[\r\n\t ]+#', ' ', file_get_contents(__DIR__ . DIRECTORY_SEPARATOR . 'debug.css')) ?>
     </style>
@@ -30,10 +38,10 @@ $errorId = uniqid('error', true);
             Environment: <?= ENVIRONMENT ?>
         </div>
         <div class="container">
-            <h1><?= esc($title), esc($exception->getCode() ? ' #' . $exception->getCode() : '') ?></h1>
+            <h1><?= esc((string)($title ?? 'Error')), esc($exception->getCode() ? ' #' . $exception->getCode() : '') ?></h1>
             <p>
-                <?= nl2br(esc($exception->getMessage())) ?>
-                <a href="https://www.duckduckgo.com/?q=<?= urlencode($title . ' ' . preg_replace('#\'.*\'|".*"#Us', '', $exception->getMessage())) ?>"
+                <?= nl2br(esc((string)$exception->getMessage())) ?>
+                <a href="https://www.duckduckgo.com/?q=<?= urlencode((string)($title ?? 'Error') . ' ' . preg_replace('#\'.*\'|".*"#Us', '', (string)$exception->getMessage())) ?>"
                    rel="noreferrer" target="_blank">search &rarr;</a>
             </p>
         </div>
@@ -41,11 +49,11 @@ $errorId = uniqid('error', true);
 
     <!-- Source -->
     <div class="container">
-        <p><b><?= esc(clean_path($file)) ?></b> at line <b><?= esc($line) ?></b></p>
+        <p><b><?= esc(clean_path((string)$file)) ?></b> at line <b><?= esc((string)$line) ?></b></p>
 
-        <?php if (is_file($file)) : ?>
+        <?php if (is_file((string)$file)) : ?>
             <div class="source">
-                <?= static::highlightFile($file, $line, 15); ?>
+                <?= static::highlightFile((string)$file, (int)$line, 15); ?>
             </div>
         <?php endif; ?>
     </div>
@@ -62,10 +70,10 @@ $errorId = uniqid('error', true);
     Caused by:
     <?= esc($prevException::class), esc($prevException->getCode() ? ' #' . $prevException->getCode() : '') ?>
 
-    <?= nl2br(esc($prevException->getMessage())) ?>
-    <a href="https://www.duckduckgo.com/?q=<?= urlencode($prevException::class . ' ' . preg_replace('#\'.*\'|".*"#Us', '', $prevException->getMessage())) ?>"
+    <?= nl2br(esc((string)$prevException->getMessage())) ?>
+    <a href="https://www.duckduckgo.com/?q=<?= urlencode($prevException::class . ' ' . preg_replace('#\'.*\'|".*"#Us', '', (string)$prevException->getMessage())) ?>"
        rel="noreferrer" target="_blank">search &rarr;</a>
-    <?= esc(clean_path($prevException->getFile()) . ':' . $prevException->getLine()) ?>
+    <?= esc((string)(clean_path((string)$prevException->getFile()) . ':' . $prevException->getLine())) ?>
     </pre>
 
         <?php
@@ -140,7 +148,7 @@ $errorId = uniqid('error', true);
                             <?php endif; ?>
 
                             <?php if (! isset($row['class']) && isset($row['function'])) : ?>
-                                &nbsp;&nbsp;&mdash;&nbsp;&nbsp;    <?= esc($row['function']) ?>()
+                                <td><?= esc((string)$row['function']) ?>()      </td>
                             <?php endif; ?>
                         </p>
 
@@ -207,10 +215,10 @@ $errorId = uniqid('error', true);
                         <tbody>
                         <?php foreach ($constants['user'] as $key => $value) : ?>
                             <tr>
-                                <td><?= esc($key) ?></td>
+                                <td><?= esc((string)$key) ?></td>
                                 <td>
                                     <?php if (is_string($value)) : ?>
-                                        <?= esc($value) ?>
+                                        <?= esc((string)$value) ?>
                                     <?php else: ?>
                                         <pre><?= esc(print_r($value, true)) ?></pre>
                                     <?php endif; ?>
@@ -230,15 +238,15 @@ $errorId = uniqid('error', true);
                     <tbody>
                         <tr>
                             <td style="width: 10em">Path</td>
-                            <td><?= esc($request->getUri()) ?></td>
+                            <td><?= esc((string)$request->getUri()) ?></td>
                         </tr>
                         <tr>
                             <td>HTTP Method</td>
-                            <td><?= esc($request->getMethod()) ?></td>
+                            <td><?= esc((string)$request->getMethod()) ?></td>
                         </tr>
                         <tr>
                             <td>IP Address</td>
-                            <td><?= esc($request->getIPAddress()) ?></td>
+                            <td><?= esc((string)$request->getIPAddress()) ?></td>
                         </tr>
                         <tr>
                             <td style="width: 10em">Is AJAX Request?</td>
@@ -254,7 +262,7 @@ $errorId = uniqid('error', true);
                         </tr>
                         <tr>
                             <td>User Agent</td>
-                            <td><?= esc($request->getUserAgent()->getAgentString()) ?></td>
+                            <td><?= esc((string)$request->getUserAgent()->getAgentString()) ?></td>
                         </tr>
 
                     </tbody>
@@ -320,14 +328,14 @@ $errorId = uniqid('error', true);
                         <tbody>
                         <?php foreach ($headers as $name => $value) : ?>
                             <tr>
-                                <td><?= esc($name, 'html') ?></td>
+                                <td><?= esc((string)$name, 'html') ?></td>
                                 <td>
                                 <?php
                                 if ($value instanceof Header) {
-                                    echo esc($value->getValueLine(), 'html');
+                                    echo esc((string)$value->getValueLine(), 'html');
                                 } else {
                                     foreach ($value as $i => $header) {
-                                        echo ' ('. $i+1 . ') ' . esc($header->getValueLine(), 'html');
+                                        echo ' ('. $i+1 . ') ' . esc((string)$header->getValueLine(), 'html');
                                     }
                                 }
                                 ?>
@@ -367,14 +375,14 @@ $errorId = uniqid('error', true);
                         <tbody>
                         <?php foreach ($headers as $name => $value) : ?>
                             <tr>
-                                <td><?= esc($name, 'html') ?></td>
+                                <td><?= esc((string)$name, 'html') ?></td>
                                 <td>
                                 <?php
                                 if ($value instanceof Header) {
-                                    echo esc($response->getHeaderLine($name), 'html');
+                                    echo esc((string)$response->getHeaderLine((string)$name), 'html');
                                 } else {
                                     foreach ($value as $i => $header) {
-                                        echo ' ('. $i+1 . ') ' . esc($header->getValueLine(), 'html');
+                                        echo ' ('. $i+1 . ') ' . esc((string)$header->getValueLine(), 'html');
                                     }
                                 }
                                 ?>
@@ -405,15 +413,15 @@ $errorId = uniqid('error', true);
                     <tbody>
                         <tr>
                             <td>Memory Usage</td>
-                            <td><?= esc(static::describeMemory(memory_get_usage(true))) ?></td>
+                            <td><?= esc((string)static::describeMemory(memory_get_usage(true))) ?></td>
                         </tr>
                         <tr>
                             <td style="width: 12em">Peak Memory Usage:</td>
-                            <td><?= esc(static::describeMemory(memory_get_peak_usage(true))) ?></td>
+                            <td><?= esc((string)static::describeMemory(memory_get_peak_usage(true))) ?></td>
                         </tr>
                         <tr>
                             <td>Memory Limit:</td>
-                            <td><?= esc(ini_get('memory_limit')) ?></td>
+                            <td><?= esc((string)ini_get('memory_limit')) ?></td>
                         </tr>
                     </tbody>
                 </table>
