@@ -38,4 +38,43 @@ class Model_Users extends Model_BaseFirestore
         $usersRef = $db->collection($this->collection);
         return $usersRef->add($data);
     }
+
+    /**
+     * Count all staff members (excluding executives)
+     */
+    public function countStaff()
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        // Get all users
+        $documents = $usersRef->documents();
+        
+        $count = 0;
+        foreach ($documents as $document) {
+            if ($document->exists()) {
+                $count++;
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Get all users/staff
+     */
+    public function getAllStaff()
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        $documents = $usersRef->documents();
+
+        $staff = [];
+        foreach ($documents as $document) {
+            if ($document->exists()) {
+                $data = $document->data();
+                $data['id'] = $document->id();
+                $staff[] = $data;
+            }
+        }
+        return $staff;
+    }
 }

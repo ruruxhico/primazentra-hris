@@ -54,4 +54,12 @@ class Auth extends BaseController {
         $this->firestore->getDb()->collection('users')->add($data);
         return redirect()->to('/login')->with('success', 'Executive Account Created');
     }
+
+    /**
+     * Logout user
+     */
+    public function logout() {
+        session()->destroy();
+        return redirect()->to('auth/login')->with('success', 'Logged out successfully');
+    }
 }
