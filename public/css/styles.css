@@ -1063,6 +1063,11 @@ footer {
 }
 
 /* ============================================
+   22. STAFF PAGE
+   ============================================ */
+
+/* Staff Header */
+.staff-header {
    20. PROJECTS PAGE
    ============================================ */
 
@@ -1104,6 +1109,8 @@ footer {
     font-weight: 700;
 }
 
+/* Staff Toolbar */
+.staff-toolbar {
 .user-profile {
     text-align: right;
 }
@@ -1128,6 +1135,8 @@ footer {
     flex-wrap: wrap;
 }
 
+/* Staff Table Container */
+.staff-table-container {
 .search-input {
     flex: 1;
     min-width: 250px;
@@ -1225,6 +1234,11 @@ footer {
     transition: background-color 0.2s ease;
 }
 
+.staff-table tbody tr:hover {
+    background-color: #FFFBF0;
+}
+
+.staff-table td {
 .projects-table tbody tr:hover {
     background-color: #FFFBF0;
 }
@@ -1234,6 +1248,12 @@ footer {
     font-size: 0.95rem;
 }
 
+.staff-table td strong {
+    font-weight: 600;
+}
+
+/* Role Badge */
+.role-badge {
 .projects-table td strong {
     font-weight: 600;
 }
@@ -1248,189 +1268,7 @@ footer {
     font-weight: 500;
 }
 
-/* Action Buttons */
-.action-button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 18px;
-    margin: 0 5px;
-    text-decoration: none;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-    display: inline-block;
-}
-
-.action-button:hover {
-    transform: scale(1.2);
-    opacity: 0.8;
-}
-
-/* Empty State */
-.empty-state {
-    padding: 40px;
-    text-align: center;
-    color: #999;
-    font-size: 1rem;
-}
-
-.empty-state a {
-    color: #D4A574;
-    text-decoration: none;
-    font-weight: bold;
-    transition: color 0.2s ease;
-}
-
-.empty-state a:hover {
-    color: #7A5C2D;
-}
-
-/* Pagination */
-.pagination-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    margin-top: 25px;
-    flex-wrap: wrap;
-}
-
-.pagination-button {
-    background: white;
-    color: #7A5C2D;
-    border: 1px solid #D4A574;
-    padding: 8px 12px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: all 0.2s ease;
-    font-family: var(--font-family-base);
-}
-
-.pagination-button:hover {
-    background-color: #f5f5f5;
-}
-
-.pagination-button.active {
-    background-color: #D4A574;
-    color: white;
-    border-color: #D4A574;
-}
-
-.pagination-nav {
-    background: none;
-    border: none;
-    color: #D4A574;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: bold;
-    padding: 0;
-    transition: color 0.2s ease;
-}
-
-.pagination-nav:hover {
-    color: #7A5C2D;
-}
-
-/* ============================================
-   21. PROJECTS FORM
-   ============================================ */
-
-.form-container {
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    padding: 30px;
-    max-width: 700px;
-}
-
-.form-group {
-    margin-bottom: 25px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: #7A5C2D;
-    font-weight: bold;
-    font-size: 0.95rem;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #D4A574;
-    border-radius: 8px;
-    font-size: 14px;
-    box-sizing: border-box;
-    font-family: var(--font-family-base);
-    transition: border-color 0.2s ease;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-    outline: none;
-    border-color: #D99600;
-    box-shadow: 0 0 0 3px rgba(217, 150, 0, 0.1);
-}
-
-.form-actions {
-    display: flex;
-    gap: 15px;
-    margin-top: 30px;
-}
-
-.btn-submit {
-    background: #4CAF50;
-    color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
-    transition: background 0.2s ease;
-    font-family: var(--font-family-base);
-}
-
-.btn-submit:hover {
-    background: #45a049;
-}
-
-.btn-cancel {
-    background: #ccc;
-    color: #333;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 14px;
-    text-decoration: none;
-    display: inline-block;
-    transition: background 0.2s ease;
-    font-family: var(--font-family-base);
-}
-
-.btn-cancel:hover {
-    background: #bbb;
-}
-
-.form-error {
-    background: #F44336;
-    color: white;
-    padding: 15px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* ============================================
-   RESPONSIVE DESIGN - SIDEBAR
+/* RESPONSIVE DESIGN - SIDEBAR
    ============================================ */
 
 @media (max-width: 768px) {
