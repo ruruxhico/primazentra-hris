@@ -81,23 +81,4 @@ class Dashboard extends BaseController
             ]);
         }
     }
-
-    /**
-     * Get project details
-     */
-    public function getProjectDetails($projectId)
-    {
-        try {
-            $project = $this->projectModel->getProjectById($projectId);
-            
-            if (!$project) {
-                return json_encode(['error' => 'Project not found']);
-            }
-
-            return json_encode($project);
-        } catch (\Exception $e) {
-            log_message('error', 'Dashboard::getProjectDetails - ' . $e->getMessage());
-            return json_encode(['error' => $e->getMessage()]);
-        }
-    }
 }
