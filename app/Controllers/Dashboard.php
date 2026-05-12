@@ -65,8 +65,19 @@ class Dashboard extends BaseController
             return view('dashboard/index', $data);
         } catch (\Exception $e) {
             log_message('error', 'Dashboard::index - ' . $e->getMessage());
-            return view('errors/html', [
-                'message' => 'Unable to load dashboard: ' . $e->getMessage()
+
+            return view('dashboard/index', [
+                'userName' => session()->get('userName') ?? 'User',
+                'role' => session()->get('role') ?? 'User',
+                'projectCount' => 0,
+                'resourceCount' => 0,
+                'staffCount' => 0,
+                'blockers' => [],
+                'tools' => [],
+                'availableResources' => [],
+                'deployedResources' => [],
+                'activeProjects' => [],
+                'errorMessage' => 'Unable to load dashboard: ' . $e->getMessage(),
             ]);
         }
     }
