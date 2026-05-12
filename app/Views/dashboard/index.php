@@ -273,10 +273,10 @@
                 <tbody>
                     <?php foreach ($manpower as $worker): ?>
                         <tr>
-                            <td><?= esc((string)$worker['name'] ?? 'N/A') ?></td>
-                            <td><?= esc((string)$worker['role'] ?? 'Field Worker') ?></td>
-                            <td><?= esc((string)$worker['specialization'] ?? 'N/A') ?></td>
-                            <td><span class="status-badge"><?= esc((string)$worker['status'] ?? 'Available') ?></span></td>
+                            <td><?= esc((string) ($worker['name'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string) ($worker['role'] ?? 'Field Worker')) ?></td>
+                            <td><?= esc((string) ($worker['specialization'] ?? 'N/A')) ?></td>
+                            <td><span class="status-badge"><?= esc((string) ($worker['status'] ?? 'Available')) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
