@@ -148,7 +148,7 @@ $errorId = uniqid('error', true);
                             <?php endif; ?>
 
                             <?php if (! isset($row['class']) && isset($row['function'])) : ?>
-                                <td><?= esc((string)$row['function']) ?>()      </td>
+                                <?= esc((string) $row['function']) ?>()
                             <?php endif; ?>
                         </p>
 
