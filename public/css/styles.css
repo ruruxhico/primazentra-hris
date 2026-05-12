@@ -109,13 +109,22 @@ html {
 }
 
 body {
-    background-color: var(--color-white);
+    background-color: #f8f8f8;
     color: var(--color-gray-dark);
     font-family: var(--font-family-base);
     font-size: var(--font-size-base);
     line-height: var(--line-height-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    display: flex;
+    min-height: 100vh;
+}
+
+.main-content {
+    margin-left: 250px;
+    flex: 1;
+    padding: 2rem;
+    min-height: 100vh;
 }
 
 /* ============================================
@@ -1051,6 +1060,373 @@ footer {
 
 .required {
     color: #e74c3c;
+}
+
+/* ============================================
+   20. PROJECTS PAGE
+   ============================================ */
+
+/* Alert Messages */
+.alert-success {
+    background-color: #4CAF50;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alert-error {
+    background-color: #F44336;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Projects Header */
+.projects-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.projects-header h1 {
+    color: #7A5C2D;
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.user-profile {
+    text-align: right;
+}
+
+.user-profile strong {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.user-profile small {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+/* Toolbar Section */
+.projects-toolbar {
+    margin-bottom: 25px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    flex: 1;
+    min-width: 250px;
+    padding: 12px 15px;
+    border: 1px solid #D4A574;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font-family-base);
+}
+
+.search-input::placeholder {
+    color: #aaa;
+}
+
+/* Button Styles */
+.btn-toolbar {
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    font-family: var(--font-family-base);
+}
+
+.btn-filter {
+    background: white;
+    border: 2px solid #D4A574 !important;
+    color: #7A5C2D;
+}
+
+.btn-filter:hover {
+    background-color: #f5f5f5;
+}
+
+.btn-add {
+    background: #4CAF50;
+    color: white;
+}
+
+.btn-add:hover {
+    background: #45a049;
+}
+
+.btn-import {
+    background: #D4A574;
+    color: white;
+}
+
+.btn-import:hover {
+    background: #c29563;
+}
+
+.btn-export {
+    background: #FF9800;
+    color: white;
+}
+
+.btn-export:hover {
+    background: #e68900;
+}
+
+/* Projects Table Container */
+.projects-table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin-bottom: 25px;
+}
+
+.projects-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.projects-table thead tr {
+    background-color: #7A5C2D;
+    color: white;
+}
+
+.projects-table th {
+    padding: 15px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.projects-table tbody tr {
+    border-bottom: 1px solid #E8E8E8;
+    transition: background-color 0.2s ease;
+}
+
+.projects-table tbody tr:hover {
+    background-color: #FFFBF0;
+}
+
+.projects-table td {
+    padding: 15px;
+    font-size: 0.95rem;
+}
+
+.projects-table td strong {
+    font-weight: 600;
+}
+
+/* Status Badge */
+.status-badge {
+    background-color: #E8F5E9;
+    padding: 5px 10px;
+    border-radius: 5px;
+    display: inline-block;
+    color: #2e7d32;
+    font-weight: 500;
+}
+
+/* Action Buttons */
+.action-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    margin: 0 5px;
+    text-decoration: none;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    display: inline-block;
+}
+
+.action-button:hover {
+    transform: scale(1.2);
+    opacity: 0.8;
+}
+
+/* Empty State */
+.empty-state {
+    padding: 40px;
+    text-align: center;
+    color: #999;
+    font-size: 1rem;
+}
+
+.empty-state a {
+    color: #D4A574;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.2s ease;
+}
+
+.empty-state a:hover {
+    color: #7A5C2D;
+}
+
+/* Pagination */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 25px;
+    flex-wrap: wrap;
+}
+
+.pagination-button {
+    background: white;
+    color: #7A5C2D;
+    border: 1px solid #D4A574;
+    padding: 8px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    font-family: var(--font-family-base);
+}
+
+.pagination-button:hover {
+    background-color: #f5f5f5;
+}
+
+.pagination-button.active {
+    background-color: #D4A574;
+    color: white;
+    border-color: #D4A574;
+}
+
+.pagination-nav {
+    background: none;
+    border: none;
+    color: #D4A574;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+.pagination-nav:hover {
+    color: #7A5C2D;
+}
+
+/* ============================================
+   21. PROJECTS FORM
+   ============================================ */
+
+.form-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 30px;
+    max-width: 700px;
+}
+
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #7A5C2D;
+    font-weight: bold;
+    font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #D4A574;
+    border-radius: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+    font-family: var(--font-family-base);
+    transition: border-color 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #D99600;
+    box-shadow: 0 0 0 3px rgba(217, 150, 0, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.btn-submit {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: background 0.2s ease;
+    font-family: var(--font-family-base);
+}
+
+.btn-submit:hover {
+    background: #45a049;
+}
+
+.btn-cancel {
+    background: #ccc;
+    color: #333;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    text-decoration: none;
+    display: inline-block;
+    transition: background 0.2s ease;
+    font-family: var(--font-family-base);
+}
+
+.btn-cancel:hover {
+    background: #bbb;
+}
+
+.form-error {
+    background: #F44336;
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 /* ============================================

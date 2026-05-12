@@ -77,4 +77,24 @@ class Model_Users extends Model_BaseFirestore
         }
         return $staff;
     }
+
+    /**
+     * Get users by role (e.g., 'PM', 'SE', 'Staff')
+     */
+    public function getUsersByRole($role)
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        $query = $usersRef->where('role', '=', $role)->documents();
+
+        $users = [];
+        foreach ($query as $document) {
+            if ($document->exists()) {
+                $data = $document->data();
+                $data['id'] = $document->id();
+                $users[] = $data;
+            }
+        }
+        return $users;
+    }
 }
