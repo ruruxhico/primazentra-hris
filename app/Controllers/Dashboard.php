@@ -77,7 +77,7 @@ class Dashboard extends BaseController
                 'availableResources' => [],
                 'deployedResources' => [],
                 'activeProjects' => [],
-                'errorMessage' => 'Unable to load dashboard: ' . $e->getMessage(),
+                'errorMessage' => 'Unable to load dashboard right now. Please try again later.',
             ]);
         }
     }
