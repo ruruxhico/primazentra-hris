@@ -1054,7 +1054,88 @@ footer {
 }
 
 /* ============================================
-   RESPONSIVE DESIGN - SIDEBAR
+   22. STAFF PAGE
+   ============================================ */
+
+/* Staff Header */
+.staff-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.staff-header h1 {
+    color: #7A5C2D;
+    margin: 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+/* Staff Toolbar */
+.staff-toolbar {
+    margin-bottom: 25px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Staff Table Container */
+.staff-table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin-bottom: 25px;
+}
+
+.staff-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.staff-table thead tr {
+    background-color: #7A5C2D;
+    color: white;
+}
+
+.staff-table th {
+    padding: 15px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.staff-table tbody tr {
+    border-bottom: 1px solid #E8E8E8;
+    transition: background-color 0.2s ease;
+}
+
+.staff-table tbody tr:hover {
+    background-color: #FFFBF0;
+}
+
+.staff-table td {
+    padding: 15px;
+    font-size: 0.95rem;
+}
+
+.staff-table td strong {
+    font-weight: 600;
+}
+
+/* Role Badge */
+.role-badge {
+    background-color: #E8F5E9;
+    padding: 5px 10px;
+    border-radius: 5px;
+    display: inline-block;
+    color: #2e7d32;
+    font-weight: 500;
+}
+
+/* RESPONSIVE DESIGN - SIDEBAR
    ============================================ */
 
 @media (max-width: 768px) {

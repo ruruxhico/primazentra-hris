@@ -77,4 +77,66 @@ class Model_Users extends Model_BaseFirestore
         }
         return $staff;
     }
+
+    /**
+     * Get users by role (PM, SE, ADMIN, etc.)
+     */
+    public function getUsersByRole($role)
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        $query = $usersRef->where('role', '=', $role);
+        $documents = $query->documents();
+
+        $staff = [];
+        foreach ($documents as $document) {
+            if ($document->exists()) {
+                $data = $document->data();
+                $data['id'] = $document->id();
+                $staff[] = $data;
+            }
+        }
+        return $staff;
+    }
+
+    /**
+     * Get single staff member by ID
+     */
+    public function getStaffById($id)
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        $document = $usersRef->document($id)->snapshot();
+
+        if ($document->exists()) {
+            $data = $document->data();
+            $data['id'] = $document->id();
+            return $data;
+        }
+        return null;
+    }
+
+    /**
+     * Update staff member
+     */
+    public function updateStaff($id, $data)
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        
+        // Add timestamp
+        $data['updated_at'] = now();
+        
+        return $usersRef->document($id)->update($data);
+    }
+
+    /**
+     * Delete staff member
+     */
+    public function deleteStaff($id)
+    {
+        $db = $this->firestore->getDb();
+        $usersRef = $db->collection($this->collection);
+        return $usersRef->document($id)->delete();
+    }
 }
