@@ -2,8 +2,12 @@
 <div class="sidebar">
     <div class="sidebar-header">
         <div class="sidebar-logo">
-            <div class="logo-placeholder" role="img" aria-label="Logo placeholder">PrimaZentra</div>
-            <button class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+            <?php $logo = base_url('public/assets/primazentra_logo.png'); ?>
+            <a href="<?= base_url('dashboard') ?>" class="logo-link">
+                <img src="<?= $logo ?>" alt="PrimaZentra logo" class="logo-img" onerror="this.style.display='none'">
+                <div class="logo-placeholder" aria-hidden="true">PrimaZentra</div>
+            </a>
+            <button id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
         </div>
     </div>
     <nav>
@@ -33,3 +37,18 @@
         </div>
     </nav>
 </div>
+
+<script>
+// Sidebar toggle for responsive behavior
+document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('sidebarToggle');
+    var sidebar = document.querySelector('.sidebar');
+    var stored = localStorage.getItem('pz_sidebar_collapsed');
+    if (stored === 'true') sidebar.classList.add('collapsed');
+
+    btn && btn.addEventListener('click', function () {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('pz_sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    });
+});
+</script>
