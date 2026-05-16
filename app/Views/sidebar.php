@@ -2,10 +2,9 @@
 <div class="sidebar">
     <div class="sidebar-header">
         <div class="sidebar-logo">
-            <?php $logo = base_url('public/assets/primazentra_logo.png'); ?>
+            <?php $logo = base_url('public/assets/primazentra_colored.png'); ?>
             <a href="<?= base_url('dashboard') ?>" class="logo-link">
                 <img src="<?= $logo ?>" alt="PrimaZentra logo" class="logo-img" onerror="this.style.display='none'">
-                <div class="logo-placeholder" aria-hidden="true">PrimaZentra</div>
             </a>
             <button id="sidebarToggle" class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
         </div>
