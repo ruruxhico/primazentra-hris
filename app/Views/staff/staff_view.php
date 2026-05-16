@@ -16,10 +16,6 @@
 
     <header class="staff-header">
         <h1>Staff</h1>
-        <div class="user-profile">
-            <strong><?= esc($userName ?? 'User') ?></strong>
-            <small><?= strtoupper($role ?? 'USER') ?></small>
-        </div>
     </header>
 
     <!-- Search and Filter Section -->

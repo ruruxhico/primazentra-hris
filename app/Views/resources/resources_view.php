@@ -17,13 +17,9 @@
     }
 </style>
 
-<header class="resource-header">
+<div class="resource-header">
     <h1>Resources</h1>
-    <div class="user-profile">
-        <strong><?= esc($userName ?? 'User') ?></strong><br>
-        <small><?= strtoupper($role ?? 'USER') ?></small>
-    </div>
-</header>
+</div>
 
 <!-- Tabs Navigation -->
 <div class="resource-tabs">
@@ -48,7 +44,7 @@
             ▼ FILTER
         </button>
         
-        <a href="<?= base_url('resources/create') ?>" class="btn btn-success">
+        <a href="<?= base_url('resources/create?category=Equipment') ?>" class="btn btn-success">
             + ADD
         </a>
         
@@ -134,7 +130,7 @@
             ▼ FILTER
         </button>
         
-        <a href="<?= base_url('resources/create') ?>" class="btn btn-success">
+        <a href="<?= base_url('resources/create?category=Tools') ?>" class="btn btn-success">
             + ADD
         </a>
         
@@ -225,7 +221,7 @@
             ▼ FILTER
         </button>
         
-        <a href="<?= base_url('resources/create') ?>" class="btn btn-success">
+        <a href="<?= base_url('resources/create?category=Manpower') ?>" class="btn btn-success">
             + ADD
         </a>
         

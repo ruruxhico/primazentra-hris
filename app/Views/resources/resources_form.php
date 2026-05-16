@@ -42,25 +42,14 @@
                     <label for="category">Category *</label>
                     <select id="category" name="category" class="form-control" required onchange="updateFormFields()">
                         <option value="">-- Select Category --</option>
-                        <option value="Manpower" <?= isset($resource['category']) && $resource['category'] === 'Manpower' ? 'selected' : '' ?>>Manpower</option>
-                        <option value="Equipment" <?= isset($resource['category']) && $resource['category'] === 'Equipment' ? 'selected' : '' ?>>Equipment</option>
-                        <option value="Tools" <?= isset($resource['category']) && $resource['category'] === 'Tools' ? 'selected' : '' ?>>Tools</option>
+                        <option value="Manpower" <?= isset($resource['category']) && $resource['category'] === 'Manpower' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Manpower' ? 'selected' : '') ?>>Manpower</option>
+                        <option value="Equipment" <?= isset($resource['category']) && $resource['category'] === 'Equipment' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Equipment' ? 'selected' : '') ?>>Equipment</option>
+                        <option value="Tools" <?= isset($resource['category']) && $resource['category'] === 'Tools' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Tools' ? 'selected' : '') ?>>Tools</option>
                     </select>
                 </div>
             </div>
 
             <div class="form-row">
-                <div class="form-group">
-                    <label for="status">Status *</label>
-                    <select id="status" name="status" class="form-control" required>
-                        <option value="">-- Select Status --</option>
-                        <option value="Available" <?= isset($resource['status']) && $resource['status'] === 'Available' ? 'selected' : '' ?>>Available</option>
-                        <option value="Deployed" <?= isset($resource['status']) && $resource['status'] === 'Deployed' ? 'selected' : '' ?>>Deployed</option>
-                        <option value="Maintenance" <?= isset($resource['status']) && $resource['status'] === 'Maintenance' ? 'selected' : '' ?>>Maintenance</option>
-                        <option value="On-Leave" <?= isset($resource['status']) && $resource['status'] === 'On-Leave' ? 'selected' : '' ?>>On-Leave</option>
-                    </select>
-                </div>
-
                 <div class="form-group">
                     <label for="next_availability">Next Availability</label>
                     <input type="datetime-local" id="next_availability" name="next_availability" class="form-control"
@@ -114,37 +103,47 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="manpower_role">Role</label>
-                    <select id="manpower_role" name="manpower_role" class="form-control">
+                    <label for="manpower_status">Status *</label>
+                    <select id="manpower_status" name="manpower_status" class="form-control" required>
+                        <option value="">-- Select Status --</option>
+                        <option value="Available" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'Available' ? 'selected' : '' ?>>Available</option>
+                        <option value="Deployed" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'Deployed' ? 'selected' : '' ?>>Deployed</option>
+                        <option value="On-Leave" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'On-Leave' ? 'selected' : '' ?>>On-Leave</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="manpower_role">Role *</label>
+                    <select id="manpower_role" name="manpower_role" class="form-control" required>
                         <option value="">-- Select Role --</option>
                         <option value="Field Worker" <?= isset($resource['manpower_details']['role']) && $resource['manpower_details']['role'] === 'Field Worker' ? 'selected' : '' ?>>Field Worker</option>
                         <option value="Foreman" <?= isset($resource['manpower_details']['role']) && $resource['manpower_details']['role'] === 'Foreman' ? 'selected' : '' ?>>Foreman</option>
                     </select>
                 </div>
-            </div>
 
-            <div class="form-row">
                 <div class="form-group">
-                    <label for="specialization">Specialization</label>
-                    <select id="specialization" name="specialization" class="form-control">
+                    <label for="specialization">Specialization *</label>
+                    <select id="specialization" name="specialization" class="form-control" required>
                         <option value="">-- Select Specialization --</option>
                         <option value="Residential" <?= isset($resource['manpower_details']['specialization']) && $resource['manpower_details']['specialization'] === 'Residential' ? 'selected' : '' ?>>Residential</option>
                         <option value="Towers" <?= isset($resource['manpower_details']['specialization']) && $resource['manpower_details']['specialization'] === 'Towers' ? 'selected' : '' ?>>Towers</option>
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label for="contact_number">Contact Number</label>
-                    <input type="tel" id="contact_number" name="contact_number" class="form-control"
-                           value="<?= isset($resource['manpower_details']['contact_number']) ? esc($resource['manpower_details']['contact_number']) : '' ?>"
-                           placeholder="09XX-XXXX-XXX">
-                </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="assigned_project_id">Assigned Project ID (Optional)</label>
-                    <input type="text" id="assigned_project_id" name="assigned_project_id" class="form-control"
+                    <label for="contact_number">Contact Number *</label>
+                    <input type="tel" id="contact_number" name="contact_number" class="form-control"
+                           value="<?= isset($resource['manpower_details']['contact_number']) ? esc($resource['manpower_details']['contact_number']) : '' ?>"
+                           placeholder="09XX-XXXX-XXX" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="manpower_assigned_project_id">Assigned Project ID (Optional)</label>
+                    <input type="text" id="manpower_assigned_project_id" name="manpower_assigned_project_id" class="form-control"
                            value="<?= isset($resource['manpower_details']['assigned_project_id']) ? esc($resource['manpower_details']['assigned_project_id']) : '' ?>">
                 </div>
             </div>
@@ -156,10 +155,10 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="model_number">Model Number</label>
+                    <label for="model_number">Model Number *</label>
                     <input type="text" id="model_number" name="model_number" class="form-control"
                            value="<?= isset($resource['asset_details']['model_number']) ? esc($resource['asset_details']['model_number']) : '' ?>"
-                           placeholder="e.g., HD500-PRO">
+                           placeholder="e.g., HD500-PRO" required>
                 </div>
 
                 <div class="form-group">
@@ -175,16 +174,98 @@
                     <label for="available_quantity">Available Quantity *</label>
                     <input type="number" id="available_quantity" name="available_quantity" class="form-control" min="0"
                            value="<?= isset($resource['asset_details']['available_quantity']) ? esc($resource['asset_details']['available_quantity']) : '' ?>"
-                           placeholder="e.g., 8">
+                           placeholder="e.g., 8" required>
                     <small>Calculated as: Total - Deployed/Broken</small>
                 </div>
 
                 <div class="form-group">
-                    <label for="condition_summary">Condition Summary (JSON)</label>
+                    <label for="condition_summary">Condition Summary (JSON) *</label>
                     <textarea id="condition_summary" name="condition_summary" class="form-control" rows="3"
-                              placeholder='{"New": 5, "Worn": 2, "Functional": 3}'><?= isset($resource['asset_details']['condition_summary']) ? json_encode($resource['asset_details']['condition_summary']) : '' ?></textarea>
+                              placeholder='{"New": 5, "Worn": 2, "Functional": 3}' required><?= isset($resource['asset_details']['condition_summary']) ? json_encode($resource['asset_details']['condition_summary']) : '' ?></textarea>
                     <small>Format: {"New": #, "Worn": #, "Functional": #, "Broken": #}</small>
                 </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="asset_status">Status *</label>
+                    <select id="asset_status" name="asset_status" class="form-control" required>
+                        <option value="">-- Select Status --</option>
+                        <option value="In-Storage" <?= isset($resource['asset_details']['status']) && $resource['asset_details']['status'] === 'In-Storage' ? 'selected' : '' ?>>In-Storage</option>
+                        <option value="In-Use" <?= isset($resource['asset_details']['status']) && $resource['asset_details']['status'] === 'In-Use' ? 'selected' : '' ?>>In-Use</option>
+                        <option value="Repair" <?= isset($resource['asset_details']['status']) && $resource['asset_details']['status'] === 'Repair' ? 'selected' : '' ?>>Repair</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="asset_assigned_project_id">Assigned Project ID (Optional)</label>
+                    <input type="text" id="asset_assigned_project_id" name="asset_assigned_project_id" class="form-control"
+                           value="<?= isset($resource['asset_details']['assigned_project_id']) ? esc($resource['asset_details']['assigned_project_id']) : '' ?>">
+                </div>
+            </div>
+        </div>
+
+        <!-- Individual Items Section (Equipment/Tools) -->
+        <div id="items-section" class="form-section" style="display: none;">
+            <h2>Individual Items</h2>
+            <p><small>Add individual units for this resource</small></p>
+            
+            <div class="items-container">
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Unit ID</th>
+                            <th>Serial Number</th>
+                            <th>Condition</th>
+                            <th>Status</th>
+                            <th>Address</th>
+                            <th>Location Type</th>
+                            <th>Geopoint</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="items-tbody">
+                        <?php if (isset($resource['items']) && is_array($resource['items'])): ?>
+                            <?php foreach ($resource['items'] as $index => $item): ?>
+                                <tr class="item-row" data-index="<?= $index ?>">
+                                    <td><input type="text" name="items[<?= $index ?>][unit_id]" class="form-control" value="<?= esc((string)($item['unit_id'] ?? '')) ?>" placeholder="UNIT-001"></td>
+                                    <td><input type="text" name="items[<?= $index ?>][serial_number]" class="form-control" value="<?= esc((string)($item['serial_number'] ?? '')) ?>" placeholder="SN-12345"></td>
+                                    <td>
+                                        <select name="items[<?= $index ?>][condition]" class="form-control">
+                                            <option value="">Select</option>
+                                            <option value="New" <?= isset($item['condition']) && $item['condition'] === 'New' ? 'selected' : '' ?>>New</option>
+                                            <option value="Functional" <?= isset($item['condition']) && $item['condition'] === 'Functional' ? 'selected' : '' ?>>Functional</option>
+                                            <option value="Worn" <?= isset($item['condition']) && $item['condition'] === 'Worn' ? 'selected' : '' ?>>Worn</option>
+                                            <option value="Broken" <?= isset($item['condition']) && $item['condition'] === 'Broken' ? 'selected' : '' ?>>Broken</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <select name="items[<?= $index ?>][status]" class="form-control">
+                                            <option value="">Select</option>
+                                            <option value="In-Storage" <?= isset($item['status']) && $item['status'] === 'In-Storage' ? 'selected' : '' ?>>In-Storage</option>
+                                            <option value="In-Use" <?= isset($item['status']) && $item['status'] === 'In-Use' ? 'selected' : '' ?>>In-Use</option>
+                                            <option value="Repair" <?= isset($item['status']) && $item['status'] === 'Repair' ? 'selected' : '' ?>>Repair</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" name="items[<?= $index ?>][address]" class="form-control" value="<?= isset($item['location']['address']) ? esc($item['location']['address']) : '' ?>" placeholder="Address"></td>
+                                    <td>
+                                        <select name="items[<?= $index ?>][location_type]" class="form-control">
+                                            <option value="">Select</option>
+                                            <option value="Warehouse" <?= isset($item['location']['type']) && $item['location']['type'] === 'Warehouse' ? 'selected' : '' ?>>Warehouse</option>
+                                            <option value="Project Site" <?= isset($item['location']['type']) && $item['location']['type'] === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" name="items[<?= $index ?>][geopoint]" class="form-control" value="<?= isset($item['location']['geopoint']) ? esc($item['location']['geopoint']) : '' ?>" placeholder="lat,lng"></td>
+                                    <td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="form-actions" style="margin-top: 15px;">
+                <button type="button" class="btn btn-secondary" onclick="addItem()">+ Add Item</button>
             </div>
         </div>
 
@@ -199,21 +280,73 @@
 </div>
 
 <script>
+    let itemCounter = <?= isset($resource['items']) ? count($resource['items']) : 0 ?>;
+
     function updateFormFields() {
         const category = document.getElementById('category').value;
         const manpowerSection = document.getElementById('manpower-section');
         const assetSection = document.getElementById('asset-section');
+        const itemsSection = document.getElementById('items-section');
 
-        // Hide both sections first
+        // Hide all sections first
         manpowerSection.style.display = 'none';
         assetSection.style.display = 'none';
+        itemsSection.style.display = 'none';
 
         // Show appropriate section based on category
         if (category === 'Manpower') {
             manpowerSection.style.display = 'block';
         } else if (category === 'Equipment' || category === 'Tools') {
             assetSection.style.display = 'block';
+            itemsSection.style.display = 'block';
         }
+    }
+
+    function addItem() {
+        const tbody = document.getElementById('items-tbody');
+        const newRow = document.createElement('tr');
+        newRow.className = 'item-row';
+        newRow.dataset.index = itemCounter;
+        
+        newRow.innerHTML = `
+            <td><input type="text" name="items[${itemCounter}][unit_id]" class="form-control" placeholder="UNIT-001"></td>
+            <td><input type="text" name="items[${itemCounter}][serial_number]" class="form-control" placeholder="SN-12345"></td>
+            <td>
+                <select name="items[${itemCounter}][condition]" class="form-control">
+                    <option value="">Select</option>
+                    <option value="New">New</option>
+                    <option value="Functional">Functional</option>
+                    <option value="Worn">Worn</option>
+                    <option value="Broken">Broken</option>
+                </select>
+            </td>
+            <td>
+                <select name="items[${itemCounter}][status]" class="form-control">
+                    <option value="">Select</option>
+                    <option value="In-Storage">In-Storage</option>
+                    <option value="In-Use">In-Use</option>
+                    <option value="Repair">Repair</option>
+                </select>
+            </td>
+            <td><input type="text" name="items[${itemCounter}][address]" class="form-control" placeholder="Address"></td>
+            <td>
+                <select name="items[${itemCounter}][location_type]" class="form-control">
+                    <option value="">Select</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Project Site">Project Site</option>
+                </select>
+            </td>
+            <td><input type="text" name="items[${itemCounter}][geopoint]" class="form-control" placeholder="lat,lng"></td>
+            <td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></td>
+        `;
+        
+        tbody.appendChild(newRow);
+        itemCounter++;
+    }
+
+    function removeItem(button) {
+        const row = button.closest('tr');
+        row.remove();
     }
 
     // Initialize form fields on page load
