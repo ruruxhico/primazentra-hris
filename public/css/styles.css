@@ -159,6 +159,9 @@ h1, h2, h3, h4, h5, h6 {
     cursor: pointer;
 }
 
+.logo-link { display: block; position: relative; }
+.logo-img { max-width: 160px; height: 64px; display: block; margin: 0 auto; object-fit: contain; }
+
 .sidebar-menu {
     list-style: none;
 }
@@ -221,6 +224,82 @@ h1, h2, h3, h4, h5, h6 {
 .logout-section {
     padding: 1rem;
 }
+
+/* Submenu styling */
+.submenu {
+    list-style: none;
+    margin: 0.2rem 0 0.6rem 0;
+    padding-left: 2.2rem;
+}
+
+.submenu li a {
+    display: block;
+    padding: 0.4rem 0.5rem;
+    color: #7A5C2D;
+    font-size: 0.95rem;
+    border-radius: 8px;
+}
+
+.submenu li a:hover {
+    background-color: rgba(140,112,28,0.06);
+}
+
+.sidebar-menu a.active + .submenu li a {
+    font-weight: 700;
+    color: #8C701C;
+}
+
+/* collapsed sidebar */
+.sidebar.collapsed {
+    width: 72px !important;
+}
+
+.sidebar.collapsed .sidebar-logo { padding: 0.5rem 0; }
+.sidebar.collapsed .logo-placeholder,
+.sidebar.collapsed .logo-img { width: 48px; height: 48px; }
+.sidebar.collapsed .sidebar-menu a { justify-content: center; padding-left: 0.5rem; padding-right: 0.5rem; }
+.sidebar.collapsed .sidebar-menu a .label { display: none; }
+.sidebar.collapsed .submenu { display: none; }
+
+/* TABLE IMPROVEMENTS: spacing, rounded header, row padding */
+.table-container { margin: 1rem 2rem 2rem 2rem; padding: 0.5rem; }
+.resource-table th,
+.projects-table th,
+.staff-table th {
+    background-color: #6B5D1E;
+    color: white;
+    border-bottom: 4px solid #5a4f18;
+}
+.resource-table td,
+.projects-table td,
+.staff-table td {
+    padding: 1rem 1rem;
+    vertical-align: middle;
+}
+.resource-table tbody tr:nth-child(odd),
+.projects-table tbody tr:nth-child(odd),
+.staff-table tbody tr:nth-child(odd) {
+    background-color: #fff;
+}
+.resource-table tbody tr:nth-child(even),
+.projects-table tbody tr:nth-child(even),
+.staff-table tbody tr:nth-child(even) {
+    background-color: #FBF7F0;
+}
+.table-actions { display: flex; gap: 0.5rem; justify-content: center; }
+
+/* toolbar spacing above tables */
+.projects-toolbar, .resource-controls, .staff-toolbar { display:flex; justify-content:space-between; align-items:center; padding: 1rem 2rem; gap:1rem; }
+
+/* Make pager centered and spaced */
+.pager-wrapper { margin: 2rem auto; }
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+    .sidebar.collapsed { width: 72px; }
+    .table-container { margin-left: 1rem; margin-right: 1rem; }
+}
+
 
 .main-content {
     margin-left: 225px;
