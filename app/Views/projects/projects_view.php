@@ -15,10 +15,6 @@
 
     <header class="projects-header">
         <h1>Projects</h1>
-        <div class="user-profile">
-            <strong><?= esc($userName ?? 'User') ?></strong>
-            <small><?= strtoupper($role ?? 'USER') ?></small>
-        </div>
     </header>
 
     <!-- Search and Filter Section -->
@@ -90,19 +86,6 @@
                 <?php endif; ?>
             </tbody>
         </table>
-    </div>
-
-    <!-- Pagination -->
-    <div class="pagination-container">
-        <button class="pagination-nav">← Previous</button>
-        
-        <button class="pagination-button active">1</button>
-        <button class="pagination-button">2</button>
-        <button class="pagination-button">3</button>
-        <button class="pagination-button">4</button>
-        <button class="pagination-button">5</button>
-        
-        <button class="pagination-nav">Next →</button>
     </div>
 
 <?= $this->endSection() ?>

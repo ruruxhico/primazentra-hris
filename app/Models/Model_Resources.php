@@ -32,6 +32,58 @@ class Model_Resources extends Model_BaseFirestore
     }
 
     /**
+     * Get resource by ID
+     */
+    public function getResourceById($resourceId)
+    {
+        $db = $this->firestore->getDb();
+        $document = $db->collection($this->collection)->document($resourceId)->snapshot();
+
+        if ($document->exists()) {
+            $data = $document->data();
+            $data['id'] = $document->id();
+            return $data;
+        }
+        return null;
+    }
+
+    /**
+     * Create a new resource
+     */
+    public function createResource($data)
+    {
+        $db = $this->firestore->getDb();
+        $data['created_at'] = \Google\Cloud\Firestore\FieldValue::serverTimestamp();
+        
+        $reference = $db->collection($this->collection)->add($data);
+        return $reference->id();
+    }
+
+    /**
+     * Update a resource
+     */
+    public function updateResource($resourceId, $data)
+    {
+        $db = $this->firestore->getDb();
+        $updates = [];
+        foreach ($data as $key => $value) {
+            $updates[] = ['path' => $key, 'value' => $value];
+        }
+        $db->collection($this->collection)->document($resourceId)->update($updates);
+        return true;
+    }
+
+    /**
+     * Delete a resource
+     */
+    public function deleteResource($resourceId)
+    {
+        $db = $this->firestore->getDb();
+        $db->collection($this->collection)->document($resourceId)->delete();
+        return true;
+    }
+
+    /**
      * Get resources by category
      */
     public function getByCategory($category)
@@ -95,11 +147,27 @@ class Model_Resources extends Model_BaseFirestore
     }
 
     /**
-     * Get tools only (Equipment category)
+     * Get equipment and tools (Equipment/Tools category)
+     */
+    public function getEquipment()
+    {
+        return $this->getByCategory('Equipment');
+    }
+
+    /**
+     * Get tools only (Tools category)
      */
     public function getTools()
     {
-        return $this->getByCategory('Equipment');
+        return $this->getByCategory('Tools');
+    }
+
+    /**
+     * Get manpower resources
+     */
+    public function getManpower()
+    {
+        return $this->getByCategory('Manpower');
     }
 
     /**
@@ -116,5 +184,40 @@ class Model_Resources extends Model_BaseFirestore
     public function getDeployedResources()
     {
         return $this->getByStatus('Deployed');
+    }
+
+    /**
+     * Get resource items (subcollection)
+     */
+    public function getResourceItems($resourceId)
+    {
+        $db = $this->firestore->getDb();
+        $documents = $db->collection($this->collection)
+                        ->document($resourceId)
+                        ->collection('items')
+                        ->documents();
+
+        $items = [];
+        foreach ($documents as $document) {
+            if ($document->exists()) {
+                $data = $document->data();
+                $data['id'] = $document->id();
+                $items[] = $data;
+            }
+        }
+        return $items;
+    }
+
+    /**
+     * Create resource item
+     */
+    public function createResourceItem($resourceId, $itemData)
+    {
+        $db = $this->firestore->getDb();
+        $reference = $db->collection($this->collection)
+                        ->document($resourceId)
+                        ->collection('items')
+                        ->add($itemData);
+        return $reference->id();
     }
 }

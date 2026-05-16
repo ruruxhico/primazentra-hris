@@ -27,6 +27,7 @@ $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 // Resources Routes
 $routes->get('resources', 'Resources::index');
 $routes->get('resources/requests', 'Resources::requests');
+$routes->get('resources/create', 'Resources::create');
 // Equipment CRUD
 $routes->post('resources/equipment/create', 'Resources::createEquipment');
 $routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');
