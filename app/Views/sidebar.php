@@ -1,27 +1,33 @@
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-header">
-        <h1>PrimaZentra</h1>
+        <div class="sidebar-logo">
+            <div class="logo-placeholder" role="img" aria-label="Logo placeholder">PrimaZentra</div>
+            <button class="sidebar-toggle" aria-label="Toggle sidebar">☰</button>
+        </div>
     </div>
     <nav>
-        <ul>
-            <li><a href="<?= base_url('dashboard') ?>" class="active">Dashboard</a></li>
-                <ul class="submenu">
-                    <li><a href="#summary">Summary</a></li>
-                    <li><a href="#monitor">Monitor</a></li>                    
-                </ul>
-            <li><a href="<?= base_url('projects') ?>">Projects</a></li>
-            <li><a href="<?= base_url('resources') ?>">Resources</a></li>
-                <ul class="submenu">
-                    <li><a href="#summary">Resource Requests & Transfers</a></li>
-                </ul>
-            <li><a href="<?= base_url('staff') ?>">Staff Management</a></li>
-            <li class="logout-section">
-                <form action="<?= base_url('auth/logout') ?>" method="post">
-                    <?= csrf_field() ?>
-                    <button type="submit">Logout</button>
-                </form>
-            </li>
+        <ul class="sidebar-menu top-menu">
+            <li><a href="<?= base_url('dashboard') ?>" class="active"><span class="icon">▦</span><span class="label">Dashboard</span></a></li>
+            <li><a href="<?= base_url('summary') ?>"><span class="icon">📊</span><span class="label">Summary</span></a></li>
+            <li><a href="<?= base_url('monitor') ?>"><span class="icon">🖥️</span><span class="label">Monitor</span></a></li>
         </ul>
+
+        <div class="menu-section">
+            <h4>MANAGE</h4>
+            <ul class="sidebar-menu">
+                <li><a href="<?= base_url('projects') ?>"><span class="icon">📁</span><span class="label">Projects</span></a></li>
+                <li><a href="<?= base_url('resources') ?>"><span class="icon">🔧</span><span class="label">Resources</span></a></li>
+                <li><a href="<?= base_url('requests') ?>"><span class="icon">❓</span><span class="label">Resource Requests & Transfers</span></a></li>
+                <li><a href="<?= base_url('staff') ?>"><span class="icon">👥</span><span class="label">Staff</span></a></li>
+            </ul>
+        </div>
+
+        <div class="logout-section">
+            <form action="<?= base_url('auth/logout') ?>" method="post">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-export">LOGOUT</button>
+            </form>
+        </div>
     </nav>
 </div>

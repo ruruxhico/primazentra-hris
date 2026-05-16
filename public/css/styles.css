@@ -128,6 +128,37 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
 }
 
+/* New sidebar header / logo placeholder */
+.sidebar-header {
+    padding: 0 1rem 1rem 1rem;
+}
+
+.logo-placeholder {
+    width: 160px;
+    height: 64px;
+    background: linear-gradient(0deg, #FFF6DF 0%, #F2D888 100%);
+    border: 2px solid #E7C86A;
+    color: #8C701C;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.25rem;
+    border-radius: 6px;
+    margin: 0 auto;
+}
+
+.sidebar-toggle {
+    position: absolute;
+    right: 14px;
+    top: 18px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    color: #8C701C;
+    cursor: pointer;
+}
+
 .sidebar-menu {
     list-style: none;
 }
@@ -148,10 +179,47 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: var(--border-radius-md);
 }
 
-.sidebar-menu a:hover,
+.sidebar-menu a:hover {
+    background-color: rgba(140,112,28,0.08);
+}
+
+.sidebar-menu a .icon {
+    width: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #8C701C;
+    font-size: 1.1rem;
+}
+
+.sidebar-menu a .label {
+    flex: 1;
+}
+
+/* active item with rounded pill background */
 .sidebar-menu a.active {
-    background-color: #8C701C;
-    color: white;
+    background-color: #F2D888;
+    color: #8C701C;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    border-radius: 14px;
+    font-weight: 700;
+}
+
+.menu-section {
+    padding: 1rem 0.5rem 0 0.5rem;
+}
+
+.menu-section h4 {
+    color: #8C701C;
+    font-size: 0.9rem;
+    margin: 0.75rem 0;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}
+
+.logout-section {
+    padding: 1rem;
 }
 
 .main-content {
