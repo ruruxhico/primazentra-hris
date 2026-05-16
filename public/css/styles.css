@@ -222,6 +222,30 @@ h1, h2, h3, h4, h5, h6 {
     padding: 1rem;
 }
 
+/* Submenu styling */
+.submenu {
+    list-style: none;
+    margin: 0.2rem 0 0.6rem 0;
+    padding-left: 2.2rem;
+}
+
+.submenu li a {
+    display: block;
+    padding: 0.4rem 0.5rem;
+    color: #7A5C2D;
+    font-size: 0.95rem;
+    border-radius: 8px;
+}
+
+.submenu li a:hover {
+    background-color: rgba(140,112,28,0.06);
+}
+
+.sidebar-menu a.active + .submenu li a {
+    font-weight: 700;
+    color: #8C701C;
+}
+
 .main-content {
     margin-left: 225px;
     flex: 1;
