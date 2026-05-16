@@ -122,17 +122,6 @@
             </tbody>
         </table>
     </div>
-
-    <!-- Pagination -->
-    <div class="pagination">
-        <button class="pagination-btn">< </button>
-        <button class="pagination-btn pagination-btn-active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">4</button>
-        <button class="pagination-btn">5</button>
-        <button class="pagination-btn"> ></button>
-    </div>
 </div>
 
 <!-- TOOLS TAB -->
@@ -224,17 +213,6 @@
             </tbody>
         </table>
     </div>
-
-    <!-- Pagination -->
-    <div class="pagination">
-        <button class="pagination-btn">< </button>
-        <button class="pagination-btn pagination-btn-active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">4</button>
-        <button class="pagination-btn">5</button>
-        <button class="pagination-btn"> ></button>
-    </div>
 </div>
 
 <!-- MANPOWER TAB -->
@@ -312,17 +290,6 @@
                 <?php endif; ?>
             </tbody>
         </table>
-    </div>
-
-    <!-- Pagination -->
-    <div class="pagination">
-        <button class="pagination-btn">< </button>
-        <button class="pagination-btn pagination-btn-active">1</button>
-        <button class="pagination-btn">2</button>
-        <button class="pagination-btn">3</button>
-        <button class="pagination-btn">4</button>
-        <button class="pagination-btn">5</button>
-        <button class="pagination-btn"> ></button>
     </div>
 </div>
 
