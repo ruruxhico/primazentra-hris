@@ -79,22 +79,32 @@ class Model_Users extends Model_BaseFirestore
     }
 
     /**
-     * Get users by role (e.g., 'PM', 'SE', 'Staff')
+     * Get users by role.
+     * Accepts a single role string or an array of aliases.
      */
     public function getUsersByRole($role)
     {
         $db = $this->firestore->getDb();
         $usersRef = $db->collection($this->collection);
-        $query = $usersRef->where('role', '=', $role)->documents();
+        $roles = is_array($role) ? array_values(array_filter(array_map('strval', $role))) : [trim((string) $role)];
 
         $users = [];
-        foreach ($query as $document) {
-            if ($document->exists()) {
-                $data = $document->data();
-                $data['id'] = $document->id();
-                $users[] = $data;
+        foreach (array_unique($roles) as $roleName) {
+            if ($roleName === '') {
+                continue;
+            }
+
+            $query = $usersRef->where('role', '=', $roleName)->documents();
+
+            foreach ($query as $document) {
+                if ($document->exists()) {
+                    $data = $document->data();
+                    $data['id'] = $document->id();
+                    $users[] = $data;
+                }
             }
         }
+
         return $users;
     }
 

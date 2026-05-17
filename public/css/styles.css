@@ -538,6 +538,64 @@ textarea:focus {
     margin-bottom: 1rem;
 }
 
+/* Custom date picker styles */
+.date-picker {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.date-picker .date-display {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #D4A574;
+    border-radius: var(--border-radius-md);
+    background: var(--color-white);
+}
+.date-picker .date-toggle {
+    background: var(--color-primary-light);
+    border: 1px solid #D4A574;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+}
+.calendar-popup {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 280px;
+    background: var(--color-white);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-lg);
+    padding: 0.5rem;
+    border-radius: 6px;
+    display: none;
+    z-index: 50;
+}
+.calendar-popup.open { display: block; }
+.calendar-popup .cal-header {
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;
+}
+.calendar-popup .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap:4px; }
+.calendar-popup .cal-day { text-align:center; padding:6px; border-radius:4px; cursor:pointer; }
+.calendar-popup .cal-day:hover { background: #f4e7c8; }
+.calendar-popup .cal-day.disabled { color: #ccc; cursor:default; }
+.calendar-popup .cal-title { font-weight:600; color:var(--color-primary-dark); }
+
+/* Months and Years views */
+.calendar-popup .months-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap:6px; }
+.calendar-popup .month-cell { padding:10px; text-align:center; border-radius:6px; cursor:pointer; }
+.calendar-popup .month-cell:hover { background:#f4e7c8; }
+.calendar-popup .year-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap:8px; }
+.calendar-popup .year-cell { padding:8px; text-align:center; border-radius:6px; cursor:pointer; }
+.calendar-popup .year-cell.active { background: var(--color-primary); color: #fff; }
+.calendar-popup .year-cell:hover { background:#f4e7c8; }
+
+/* Header clickable title */
+.calendar-popup .cal-header .cal-title { cursor: pointer; }
+
+
+
 .form-row.full {
     grid-template-columns: 1fr;
 }

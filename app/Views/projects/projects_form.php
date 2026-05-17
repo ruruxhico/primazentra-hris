@@ -61,8 +61,9 @@
                     <select id="project_manager_id" name="project_manager_id" required>
                         <option value="">Select Project Manager</option>
                         <?php foreach ($projectManagers ?? [] as $manager): ?>
+                            <?php $mgrLabel = trim((string)($manager['first_name'] ?? '') . ' ' . (string)($manager['last_name'] ?? '')); ?>
                             <option value="<?= esc((string)($manager['id'] ?? '')) ?>" <?= (($project['personnel']['project_manager_id'] ?? '') === ($manager['id'] ?? '')) ? 'selected' : '' ?>>
-                                <?= esc((string)($manager['name'] ?? $manager['full_name'] ?? $manager['email'] ?? 'N/A')) ?>
+                                <?= esc($mgrLabel !== '' ? $mgrLabel : (string)($manager['name'] ?? $manager['full_name'] ?? $manager['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -73,8 +74,9 @@
                     <select id="site_engineer_id" name="site_engineer_id" required>
                         <option value="">Select Site Engineer</option>
                         <?php foreach ($siteEngineers ?? [] as $engineer): ?>
+                            <?php $engLabel = trim((string)($engineer['first_name'] ?? '') . ' ' . (string)($engineer['last_name'] ?? '')); ?>
                             <option value="<?= esc((string)($engineer['id'] ?? '')) ?>" <?= (($project['personnel']['site_engineer_id'] ?? '') === ($engineer['id'] ?? '')) ? 'selected' : '' ?>>
-                                <?= esc((string)($engineer['name'] ?? $engineer['full_name'] ?? $engineer['email'] ?? 'N/A')) ?>
+                                <?= esc($engLabel !== '' ? $engLabel : (string)($engineer['name'] ?? $engineer['full_name'] ?? $engineer['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -96,12 +98,22 @@
             <div class="form-row">
                 <div class="form-group">
                     <label for="start_date">Start Date</label>
-                    <input type="date" id="start_date" name="start_date" value="<?= esc((string)($project['start_date_value'] ?? $project['start_date'] ?? '')) ?>">
+                    <div class="date-picker" data-target="start">
+                        <input type="text" id="start_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc((string)((($project['start_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime($project['start_date_value'])) : '')) ?>" readonly>
+                        <input type="hidden" id="start_date" name="start_date" value="<?= esc((string)($project['start_date_value'] ?? $project['start_date'] ?? '')) ?>">
+                        <button type="button" class="date-toggle">📅</button>
+                        <div class="calendar-popup" aria-hidden="true"></div>
+                    </div>
                 </div>
 
                 <div class="form-group">
                     <label for="end_date">End Date</label>
-                    <input type="date" id="end_date" name="end_date" value="<?= esc((string)($project['end_date_value'] ?? $project['end_date'] ?? '')) ?>">
+                    <div class="date-picker" data-target="end">
+                        <input type="text" id="end_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc((string)((($project['end_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime($project['end_date_value'])) : '')) ?>" readonly>
+                        <input type="hidden" id="end_date" name="end_date" value="<?= esc((string)($project['end_date_value'] ?? $project['end_date'] ?? '')) ?>">
+                        <button type="button" class="date-toggle">📅</button>
+                        <div class="calendar-popup" aria-hidden="true"></div>
+                    </div>
                 </div>
             </div>
 
@@ -286,6 +298,149 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     recalculateOverallProgress();
+});
+</script>
+
+<script>
+// Lightweight custom date picker
+document.addEventListener('DOMContentLoaded', function () {
+    function createCalendar(container, inputHidden, inputDisplay) {
+        const now = new Date();
+        let viewYear = now.getFullYear();
+        let viewMonth = now.getMonth();
+        let mode = 'days'; // 'days' | 'months' | 'years'
+        let yearsStart = Math.floor(viewYear / 12) * 12; // starting year for years grid
+
+        const header = document.createElement('div'); header.className = 'cal-header';
+        const prev = document.createElement('button'); prev.type='button'; prev.textContent='◀';
+        const title = document.createElement('div'); title.className='cal-title';
+        const next = document.createElement('button'); next.type='button'; next.textContent='▶';
+        header.appendChild(prev); header.appendChild(title); header.appendChild(next);
+
+        const grid = document.createElement('div'); grid.className = 'cal-grid';
+        container.appendChild(header);
+        container.appendChild(grid);
+
+        function renderDays() {
+            title.textContent = new Date(viewYear, viewMonth).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+            title.setAttribute('data-mode','days');
+            grid.className = 'cal-grid';
+            grid.innerHTML = '';
+            ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d => {
+                const el = document.createElement('div'); el.className='cal-day'; el.style.fontWeight='600'; el.textContent=d; el.style.cursor='default'; grid.appendChild(el);
+            });
+            const first = new Date(viewYear, viewMonth, 1);
+            const start = first.getDay();
+            const days = new Date(viewYear, viewMonth + 1, 0).getDate();
+            for (let i=0;i<start;i++) { const el = document.createElement('div'); el.className='cal-day disabled'; grid.appendChild(el); }
+            for (let d=1; d<=days; d++) {
+                const el = document.createElement('div'); el.className='cal-day'; el.textContent = d;
+                el.addEventListener('click', function () {
+                    const day = String(d).padStart(2,'0');
+                    const month = String(viewMonth+1).padStart(2,'0');
+                    const y = viewYear;
+                    inputHidden.value = `${y}-${month}-${day}`;
+                    inputDisplay.value = `${day}/${month}/${y}`;
+                    container.classList.remove('open');
+                    container.setAttribute('aria-hidden','true');
+                });
+                grid.appendChild(el);
+            }
+        }
+
+        function renderMonths() {
+            title.textContent = String(viewYear);
+            title.setAttribute('data-mode','months');
+            grid.className = 'months-grid';
+            grid.innerHTML = '';
+            const monthNames = Array.from({length:12}, (_,i)=> new Date(0,i).toLocaleString(undefined,{month:'short'}));
+            monthNames.forEach((mname, mi) => {
+                const cell = document.createElement('div'); cell.className='month-cell'; cell.textContent = mname;
+                cell.addEventListener('click', function () {
+                    viewMonth = mi;
+                    mode = 'days';
+                    render();
+                });
+                grid.appendChild(cell);
+            });
+        }
+
+        function renderYears() {
+            title.textContent = `${yearsStart} - ${yearsStart + 11}`;
+            title.setAttribute('data-mode','years');
+            grid.className = 'year-grid';
+            grid.innerHTML = '';
+            for (let y = yearsStart; y < yearsStart + 12; y++) {
+                const cell = document.createElement('div'); cell.className='year-cell'; cell.textContent = y;
+                if (y === viewYear) cell.classList.add('active');
+                cell.addEventListener('click', function () {
+                    viewYear = y;
+                    mode = 'months';
+                    render();
+                });
+                grid.appendChild(cell);
+            }
+        }
+
+        function render() {
+            if (mode === 'days') return renderDays();
+            if (mode === 'months') return renderMonths();
+            if (mode === 'years') return renderYears();
+        }
+
+        prev.addEventListener('click', function () {
+            if (mode === 'days') { viewMonth--; if (viewMonth<0){viewMonth=11; viewYear--;} }
+            else if (mode === 'months') { viewYear--; }
+            else { yearsStart -= 12; }
+            render();
+        });
+
+        next.addEventListener('click', function () {
+            if (mode === 'days') { viewMonth++; if (viewMonth>11){viewMonth=0; viewYear++;} }
+            else if (mode === 'months') { viewYear++; }
+            else { yearsStart += 12; }
+            render();
+        });
+
+        // clicking the title toggles between modes
+        title.addEventListener('click', function () {
+            if (mode === 'days') { mode = 'months'; }
+            else if (mode === 'months') { mode = 'years'; yearsStart = Math.floor(viewYear / 12) * 12; }
+            else { mode = 'days'; }
+            render();
+        });
+
+        // initialize display from hidden input if present
+        if (inputHidden.value) {
+            try {
+                const dt = new Date(inputHidden.value);
+                if (!isNaN(dt)) {
+                    viewYear = dt.getFullYear(); viewMonth = dt.getMonth();
+                    inputDisplay.value = (`0${dt.getDate()}`).slice(-2) + '/' + (`0${dt.getMonth()+1}`).slice(-2) + '/' + dt.getFullYear();
+                }
+            } catch (e) {}
+        }
+
+        render();
+    }
+
+    document.querySelectorAll('.date-picker').forEach(wrapper => {
+        const hidden = wrapper.querySelector('input[type="hidden"]');
+        const display = wrapper.querySelector('.date-display');
+        const toggle = wrapper.querySelector('.date-toggle');
+        const popup = wrapper.querySelector('.calendar-popup');
+        createCalendar(popup, hidden, display);
+
+        toggle.addEventListener('click', function () {
+            const open = popup.classList.toggle('open');
+            popup.setAttribute('aria-hidden', !open);
+        });
+
+        // close when clicking outside
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden','true'); }
+        });
+    });
 });
 </script>
 

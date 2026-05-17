@@ -22,6 +22,9 @@ $routes->get('projects/create', 'Projects::create');
 $routes->post('projects/create', 'Projects::create');
 $routes->get('projects/update/(:segment)', 'Projects::update/$1');
 $routes->post('projects/update/(:segment)', 'Projects::update/$1');
+$routes->get('projects/show/(:segment)', 'Projects::show/$1');
+$routes->post('projects/delete', 'Projects::delete');
+// Backwards-compatible GET delete
 $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 
 // Resources Routes

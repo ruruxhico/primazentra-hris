@@ -38,6 +38,116 @@
         </button>
     </div>
 
+    <div id="customToast" class="custom-toast" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Custom confirmation dialog -->
+    <meta name="csrf-name" content="<?= csrf_token() ?>">
+    <meta name="csrf-hash" content="<?= csrf_hash() ?>">
+
+    <div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+        <div class="confirm-backdrop"></div>
+        <div class="confirm-box">
+            <div class="confirm-content">
+                <p id="confirmMessage">Are you sure?</p>
+            </div>
+            <div class="confirm-actions">
+                <button id="confirmCancel" class="btn-toolbar">Cancel</button>
+                <button id="confirmOk" class="btn-toolbar btn-add">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Simple client-side search
+        const search = document.getElementById('searchProjects');
+        const table = document.querySelector('.projects-table tbody');
+        if (search && table) {
+            search.addEventListener('input', function () {
+                const q = this.value.trim().toLowerCase();
+                table.querySelectorAll('tr').forEach(row => {
+                    const text = row.innerText.toLowerCase();
+                    row.style.display = q === '' || text.includes(q) ? '' : 'none';
+                });
+            });
+        }
+
+        // Delete via POST with CSRF protection, animate row removal
+        const confirmDialog = document.getElementById('confirmDialog');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmOk = document.getElementById('confirmOk');
+        const confirmCancel = document.getElementById('confirmCancel');
+
+        const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
+        const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
+
+        let pendingDeleteId = null;
+        let pendingRow = null;
+
+        document.querySelectorAll('.action-delete').forEach(btn => {
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const id = this.dataset.id;
+                const name = this.datasetName || this.dataset.name || this.getAttribute('data-name') || 'this project';
+                pendingDeleteId = id;
+                pendingRow = this.closest('tr');
+                confirmMessage.innerText = `Delete ${name}?`;
+                confirmDialog.classList.add('open');
+            });
+        });
+
+        confirmCancel?.addEventListener('click', function () {
+            pendingDeleteId = null;
+            pendingRow = null;
+            confirmDialog.classList.remove('open');
+        });
+
+        confirmOk?.addEventListener('click', function () {
+            if (!pendingDeleteId) return;
+            const id = pendingDeleteId;
+            const row = pendingRow;
+            pendingDeleteId = null;
+            pendingRow = null;
+            confirmDialog.classList.remove('open');
+
+            const body = new URLSearchParams();
+            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+            body.append('id', id);
+
+            fetch('<?= base_url('projects/delete') ?>', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success) {
+                    showToast('Project deleted', 'success');
+                    if (row) {
+                        row.classList.add('removing');
+                        setTimeout(() => { row.remove(); }, 350);
+                    }
+                } else {
+                    showToast(data.message || 'Delete failed', 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast('Error deleting project', 'error');
+            });
+        });
+
+        function showToast(message, type='info') {
+            const t = document.getElementById('customToast');
+            if (!t) return;
+            t.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+            t.innerText = message;
+            setTimeout(() => { t.className = 'custom-toast'; }, 3000);
+        }
+    });
+    </script>
+
     <!-- Projects Table -->
     <div class="table-container">
         <table class="projects-table">
@@ -77,9 +187,9 @@
                             <td><?= esc((string)($project['project_manager_name'] ?? 'N/A')) ?></td>
                             <td><?= esc((string)($project['site_engineer_name'] ?? 'N/A')) ?></td>
                             <td style="text-align: center;">
-                                <button class="action-button" title="View" onclick="alert('View functionality coming soon')">👁️</button>
+                                <a href="<?= base_url('projects/show/' . $project['id']) ?>" class="action-button" title="View">👁️</a>
                                 <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-button" title="Edit">✏️</a>
-                                <a href="<?= base_url('projects/delete/' . $project['id']) ?>" class="action-button" title="Delete" onclick="return confirm('Are you sure?');">🗑️</a>
+                                <a href="#" data-id="<?= esc((string)$project['id']) ?>" data-name="<?= esc((string)($project['project_name'] ?? '')) ?>" class="action-button action-delete" title="Delete">🗑️</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

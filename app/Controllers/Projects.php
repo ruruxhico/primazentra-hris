@@ -21,7 +21,7 @@ class Projects extends BaseController
         try {
             $projects = [];
 
-            foreach ($this->firestore->getDb()->collection('projects')->documents() as $doc) {
+            foreach ($this->firestore->getDb()->collection('project')->documents() as $doc) {
                 if (!$doc->exists()) {
                     continue;
                 }
@@ -58,18 +58,31 @@ class Projects extends BaseController
 
     public function create()
     {
-        if ($this->request->getMethod() === 'post') {
+        if (strtolower($this->request->getMethod()) === 'post') {
             try {
-
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
-                $projectData['created_at'] = now();
-                $projectData['updated_at'] = now();
+                $projectData['created_at'] = time();
+                $projectData['updated_at'] = time();
+
+                log_message('info', 'Projects::create - POST received. Preparing to write project: ' . ($projectData['project_name'] ?? '(no name)'));
 
                 $this->firestore->getDb()
-                    ->collection('projects')
+                    ->collection('project')
                     ->document($projectId)
                     ->set($projectData);
+
+                // verify write
+                try {
+                    $snapshot = $this->firestore->getDb()->collection('project')->document($projectId)->snapshot();
+                    if ($snapshot->exists()) {
+                        log_message('info', 'Projects::create - Firestore write verified. ID: ' . $projectId);
+                    } else {
+                        log_message('error', 'Projects::create - Firestore write verification failed for ID: ' . $projectId);
+                    }
+                } catch (\Throwable $t) {
+                    log_message('error', 'Projects::create - verification error: ' . $t->getMessage());
+                }
 
                 // Only sync tasks if the user opted to add phases/tasks now
                 if ($this->request->getPost('add_tasks_now')) {
@@ -88,8 +101,8 @@ class Projects extends BaseController
             'activePage' => 'projects',
             'project' => [],
             'tasks' => $this->defaultTaskRows(),
-            'projectManagers' => $this->usersModel->getUsersByRole('PM'),
-            'siteEngineers' => $this->usersModel->getUsersByRole('SE'),
+            'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
+            'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
             'userName' => session()->get('userName') ?? 'User',
             'role' => session()->get('role') ?? 'Staff'
         ]);
@@ -98,7 +111,7 @@ class Projects extends BaseController
     public function update($id)
     {
         try {
-                if ($this->request->getMethod() === 'post') {
+                if (strtolower($this->request->getMethod()) === 'post') {
                 $existing = $this->getProjectById($id);
 
                 if (!$existing) {
@@ -106,8 +119,8 @@ class Projects extends BaseController
                 }
 
                 $projectData = $this->buildProjectPayload();
-                $projectData['created_at'] = $existing['created_at'] ?? now();
-                $projectData['updated_at'] = now();
+                $projectData['created_at'] = $existing['created_at'] ?? time();
+                $projectData['updated_at'] = time();
 
                 // If user did not opt to add/update tasks now, preserve existing overall progress
                 $addTasksNow = (bool) $this->request->getPost('add_tasks_now');
@@ -116,10 +129,14 @@ class Projects extends BaseController
                     $projectData['completion_percent'] = $projectData['overall_progress'];
                 }
 
+                log_message('info', 'Projects::update - POST received for project id: ' . $id . '; name: ' . ($projectData['project_name'] ?? '(no name)'));
+
                 $this->firestore->getDb()
-                    ->collection('projects')
+                    ->collection('project')
                     ->document($id)
                     ->set($projectData);
+
+                log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
                 if ($addTasksNow) {
                     $this->syncProjectTasks($id, $this->request->getPost('tasks') ?? []);
@@ -140,8 +157,8 @@ class Projects extends BaseController
                 'project' => $project,
                 'projectId' => $id,
                 'tasks' => $this->getProjectTasks($id),
-                'projectManagers' => $this->usersModel->getUsersByRole('PM'),
-                'siteEngineers' => $this->usersModel->getUsersByRole('SE'),
+                'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
+                'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff'
             ]);
@@ -151,15 +168,58 @@ class Projects extends BaseController
         }
     }
 
-    public function delete($id)
+    public function delete($id = null)
     {
+        // Support POST delete via AJAX and GET fallback with segment
         try {
-            $this->deleteProjectTasks($id);
-            $this->firestore->getDb()->collection('projects')->document($id)->delete();
-            return redirect()->to('projects')->with('success', 'Project deleted successfully!');
+            if (strtolower($this->request->getMethod()) === 'post') {
+                $id = $this->request->getPost('id');
+                if (!$id) {
+                    return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
+                }
+
+                $this->deleteProjectTasks($id);
+                $this->firestore->getDb()->collection('project')->document($id)->delete();
+
+                return $this->response->setJSON(['success' => true]);
+            }
+
+            // GET fallback when id passed as parameter
+            if ($id) {
+                $this->deleteProjectTasks($id);
+                $this->firestore->getDb()->collection('project')->document($id)->delete();
+                return redirect()->to('projects')->with('success', 'Project deleted successfully!');
+            }
+
+            return redirect()->to('projects')->with('error', 'Invalid request');
         } catch (\Exception $e) {
             log_message('error', 'Projects::delete - ' . $e->getMessage());
+            if (strtolower($this->request->getMethod()) === 'post') {
+                return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Failed to delete project']);
+            }
             return redirect()->back()->with('error', 'Failed to delete project');
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $project = $this->getProjectById($id);
+            if (!$project) {
+                return redirect()->to('projects')->with('error', 'Project not found');
+            }
+
+            return view('projects/projects_show', [
+                'pageTitle' => 'Project Detail',
+                'activePage' => 'projects',
+                'project' => $project,
+                'projectId' => $id,
+                'userName' => session()->get('userName') ?? 'User',
+                'role' => session()->get('role') ?? 'Staff'
+            ]);
+        } catch (\Exception $e) {
+            log_message('error', 'Projects::show - ' . $e->getMessage());
+            return redirect()->to('projects')->with('error', 'Unable to fetch project');
         }
     }
 
@@ -200,7 +260,7 @@ class Projects extends BaseController
 
     private function getProjectById(string $id): ?array
     {
-        $snapshot = $this->firestore->getDb()->collection('projects')->document($id)->snapshot();
+        $snapshot = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
 
         if (!$snapshot->exists()) {
             return null;
@@ -216,7 +276,7 @@ class Projects extends BaseController
     {
         $tasks = [];
 
-        foreach ($this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks')->documents() as $doc) {
+        foreach ($this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks')->documents() as $doc) {
             if (!$doc->exists()) {
                 continue;
             }
@@ -232,7 +292,7 @@ class Projects extends BaseController
     private function syncProjectTasks(string $projectId, array $rawTasks): void
     {
         $tasks = $this->normalizeTasks($rawTasks);
-        $tasksRef = $this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks');
+        $tasksRef = $this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks');
 
         foreach ($tasksRef->documents() as $existingTask) {
             if ($existingTask->exists()) {
@@ -242,8 +302,8 @@ class Projects extends BaseController
 
         foreach ($tasks as $task) {
             $taskId = $task['id'] ?? bin2hex(random_bytes(8));
-            $task['created_at'] = $task['created_at'] ?? now();
-            $task['updated_at'] = now();
+            $task['created_at'] = $task['created_at'] ?? time();
+            $task['updated_at'] = time();
 
             $tasksRef->document($taskId)->set($task);
         }
@@ -251,7 +311,7 @@ class Projects extends BaseController
 
     private function deleteProjectTasks(string $projectId): void
     {
-        $tasksRef = $this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks');
+        $tasksRef = $this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks');
 
         foreach ($tasksRef->documents() as $task) {
             if ($task->exists()) {
@@ -345,13 +405,30 @@ class Projects extends BaseController
             return 'N/A';
         }
 
-        $user = $this->usersModel->getUserById((string) $userId);
+        $rawUserId = trim((string) $userId);
+        $normalizedId = preg_replace('#^.*/#', '', $rawUserId) ?: $rawUserId;
 
-        if (!$user) {
-            return (string) $userId;
+        $user = $this->usersModel->getUserById($normalizedId);
+
+        // Backward compatibility: older records may store email in *_id fields.
+        if (!$user && filter_var($rawUserId, FILTER_VALIDATE_EMAIL)) {
+            $userByEmail = $this->usersModel->getUserByEmail($rawUserId);
+            $user = is_array($userByEmail['data'] ?? null) ? $userByEmail['data'] : null;
         }
 
-        return (string) ($user['name'] ?? $user['full_name'] ?? $user['email'] ?? $userId);
+        if (!$user) {
+            return $rawUserId;
+        }
+
+        $firstName = trim((string) ($user['first_name'] ?? ''));
+        $lastName = trim((string) ($user['last_name'] ?? ''));
+        $fullName = trim($firstName . ' ' . $lastName);
+
+        if ($fullName !== '') {
+            return $fullName;
+        }
+
+        return (string) ($user['name'] ?? $user['full_name'] ?? $user['email'] ?? $rawUserId);
     }
 
     private function normalizeDateValue($value): string
