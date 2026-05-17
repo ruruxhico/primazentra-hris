@@ -542,6 +542,102 @@ textarea:focus {
     grid-template-columns: 1fr;
 }
 
+.form-hint {
+    display: block;
+    margin-top: 0.35rem;
+    color: #7A5C2D;
+    font-size: 0.85rem;
+}
+
+.project-form-container {
+    margin: 0 2rem 2rem 2rem;
+    max-width: none;
+}
+
+.section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.section-title-row h2 {
+    margin-bottom: 0;
+}
+
+.tasks-table-wrap {
+    overflow-x: auto;
+}
+
+.tasks-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.tasks-table th {
+    background-color: #6B5D1E;
+    color: white;
+    padding: 0.9rem;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+.tasks-table td {
+    padding: 0.75rem;
+    border-top: 1px solid #eadfc7;
+    vertical-align: middle;
+    background: #fff;
+}
+
+.tasks-table tr:nth-child(even) td {
+    background: #FBF7F0;
+}
+
+.tasks-table input,
+.tasks-table select {
+    width: 100%;
+    min-width: 120px;
+}
+
+.btn-toolbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    text-decoration: none;
+    border: none;
+}
+
+.btn-toolbar.btn-filter {
+    background: #FFF3D1;
+    color: #8C701C;
+    border: 2px solid #8C701C;
+}
+
+.btn-toolbar.btn-add {
+    background: #2F8A2C;
+    color: #fff;
+}
+
+.btn-toolbar.btn-import {
+    background: #D4A22B;
+    color: #fff;
+}
+
+.btn-toolbar.btn-export {
+    background: #FF9F2D;
+    color: #fff;
+}
+
 /* ============================================
    7. RESOURCE PAGES STYLES
    ============================================ */
@@ -742,6 +838,17 @@ textarea:focus {
     font-weight: 600;
     font-size: 0.85rem;
     text-transform: uppercase;
+}
+
+.progress-badge {
+    display: inline-block;
+    padding: 0.4rem 0.85rem;
+    border-radius: 9999px;
+    background: #F2D888;
+    color: #8C701C;
+    font-weight: 700;
+    font-size: 0.85rem;
+    border: 1px solid #D4A574;
 }
 
 .status-available {

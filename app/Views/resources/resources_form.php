@@ -4,10 +4,6 @@
 
 <header class="resource-header">
     <h1><?= isset($resource) && $resource ? 'Edit Resource' : 'Create New Resource' ?></h1>
-    <div class="user-profile">
-        <strong><?= esc($userName ?? 'User') ?></strong><br>
-        <small><?= strtoupper($role ?? 'USER') ?></small>
-    </div>
 </header>
 
 <?php if (session()->getFlashdata('error')): ?>
