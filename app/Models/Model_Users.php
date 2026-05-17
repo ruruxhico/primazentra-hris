@@ -97,4 +97,25 @@ class Model_Users extends Model_BaseFirestore
         }
         return $users;
     }
+
+    /**
+     * Get a single user by document ID.
+     */
+    public function getUserById($userId)
+    {
+        if (!$userId) {
+            return null;
+        }
+
+        $db = $this->firestore->getDb();
+        $snapshot = $db->collection($this->collection)->document($userId)->snapshot();
+
+        if ($snapshot->exists()) {
+            $data = $snapshot->data();
+            $data['id'] = $snapshot->id();
+            return $data;
+        }
+
+        return null;
+    }
 }

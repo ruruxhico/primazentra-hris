@@ -10,7 +10,8 @@ class Projects extends BaseController
     protected FirestoreService $firestore;
     protected Model_Users $usersModel;
 
-    public function __construct() {
+    public function __construct()
+    {
         $this->firestore = new FirestoreService();
         $this->usersModel = new Model_Users();
     }
@@ -18,16 +19,16 @@ class Projects extends BaseController
     public function index()
     {
         try {
-            // Fetch projects from Firestore
-            $projectsCollection = $this->firestore->getDb()->collection('projects');
             $projects = [];
-            
-            foreach ($projectsCollection->documents() as $doc) {
-                if ($doc->exists()) {
-                    $projectData = $doc->data();
-                    $projectData['id'] = $doc->id();
-                    $projects[] = $projectData;
+
+            foreach ($this->firestore->getDb()->collection('projects')->documents() as $doc) {
+                if (!$doc->exists()) {
+                    continue;
                 }
+
+                $projectData = $doc->data();
+                $projectData['id'] = $doc->id();
+                $projects[] = $this->enrichProjectForView($projectData);
             }
 
             $data = [
@@ -59,22 +60,21 @@ class Projects extends BaseController
     {
         if ($this->request->getMethod() === 'post') {
             try {
-                $data = [
-                    'project_name' => $this->request->getPost('project_name'),
-                    'project_type' => $this->request->getPost('project_type'),
-                    'location' => $this->request->getPost('location'),
-                    'status' => $this->request->getPost('status') ?? 'Planned',
-                    'project_manager_id' => $this->request->getPost('project_manager_id'),
-                    'site_engineer_id' => $this->request->getPost('site_engineer_id'),
-                    'start_date' => $this->request->getPost('start_date'),
-                    'end_date' => $this->request->getPost('end_date'),
-                    'budget' => (int)$this->request->getPost('budget') ?? 0,
-                    'created_at' => now(),
-                    'updated_at' => now()
-                ];
 
-                $collection = $this->firestore->getDb()->collection('projects');
-                $collection->add($data);
+                $projectId = bin2hex(random_bytes(8));
+                $projectData = $this->buildProjectPayload();
+                $projectData['created_at'] = now();
+                $projectData['updated_at'] = now();
+
+                $this->firestore->getDb()
+                    ->collection('projects')
+                    ->document($projectId)
+                    ->set($projectData);
+
+                // Only sync tasks if the user opted to add phases/tasks now
+                if ($this->request->getPost('add_tasks_now')) {
+                    $this->syncProjectTasks($projectId, $this->request->getPost('tasks') ?? []);
+                }
 
                 return redirect()->to('projects')->with('success', 'Project created successfully!');
             } catch (\Exception $e) {
@@ -87,6 +87,7 @@ class Projects extends BaseController
             'pageTitle' => 'Add Project',
             'activePage' => 'projects',
             'project' => [],
+            'tasks' => $this->defaultTaskRows(),
             'projectManagers' => $this->usersModel->getUsersByRole('PM'),
             'siteEngineers' => $this->usersModel->getUsersByRole('SE'),
             'userName' => session()->get('userName') ?? 'User',
@@ -97,36 +98,48 @@ class Projects extends BaseController
     public function update($id)
     {
         try {
-            if ($this->request->getMethod() === 'post') {
-                $data = [
-                    'project_name' => $this->request->getPost('project_name'),
-                    'project_type' => $this->request->getPost('project_type'),
-                    'location' => $this->request->getPost('location'),
-                    'status' => $this->request->getPost('status'),
-                    'project_manager_id' => $this->request->getPost('project_manager_id'),
-                    'site_engineer_id' => $this->request->getPost('site_engineer_id'),
-                    'start_date' => $this->request->getPost('start_date'),
-                    'end_date' => $this->request->getPost('end_date'),
-                    'budget' => (int)$this->request->getPost('budget') ?? 0,
-                    'updated_at' => now()
-                ];
+                if ($this->request->getMethod() === 'post') {
+                $existing = $this->getProjectById($id);
 
-                $this->firestore->getDb()->collection('projects')->document($id)->update($data);
+                if (!$existing) {
+                    return redirect()->to('projects')->with('error', 'Project not found');
+                }
+
+                $projectData = $this->buildProjectPayload();
+                $projectData['created_at'] = $existing['created_at'] ?? now();
+                $projectData['updated_at'] = now();
+
+                // If user did not opt to add/update tasks now, preserve existing overall progress
+                $addTasksNow = (bool) $this->request->getPost('add_tasks_now');
+                if (!$addTasksNow) {
+                    $projectData['overall_progress'] = $existing['overall_progress'] ?? $existing['completion_percent'] ?? 0;
+                    $projectData['completion_percent'] = $projectData['overall_progress'];
+                }
+
+                $this->firestore->getDb()
+                    ->collection('projects')
+                    ->document($id)
+                    ->set($projectData);
+
+                if ($addTasksNow) {
+                    $this->syncProjectTasks($id, $this->request->getPost('tasks') ?? []);
+                }
 
                 return redirect()->to('projects')->with('success', 'Project updated successfully!');
             }
 
-            $project = $this->firestore->getDb()->collection('projects')->document($id)->snapshot();
-            
-            if (!$project->exists()) {
+            $project = $this->getProjectById($id);
+
+            if (!$project) {
                 return redirect()->to('projects')->with('error', 'Project not found');
             }
 
             return view('projects/projects_form', [
                 'pageTitle' => 'Edit Project',
                 'activePage' => 'projects',
-                'project' => $project->data(),
+                'project' => $project,
                 'projectId' => $id,
+                'tasks' => $this->getProjectTasks($id),
                 'projectManagers' => $this->usersModel->getUsersByRole('PM'),
                 'siteEngineers' => $this->usersModel->getUsersByRole('SE'),
                 'userName' => session()->get('userName') ?? 'User',
@@ -141,11 +154,246 @@ class Projects extends BaseController
     public function delete($id)
     {
         try {
+            $this->deleteProjectTasks($id);
             $this->firestore->getDb()->collection('projects')->document($id)->delete();
             return redirect()->to('projects')->with('success', 'Project deleted successfully!');
         } catch (\Exception $e) {
             log_message('error', 'Projects::delete - ' . $e->getMessage());
             return redirect()->back()->with('error', 'Failed to delete project');
         }
+    }
+
+    private function buildProjectPayload(): array
+    {
+        $projectName = trim((string) $this->request->getPost('project_name'));
+        $projectType = (string) $this->request->getPost('project_type');
+        $status = (string) ($this->request->getPost('status') ?: 'Planned');
+        $budget = (float) ($this->request->getPost('budget') ?: 0);
+
+        $tasks = $this->normalizeTasks($this->request->getPost('tasks') ?? []);
+        $overallProgress = $this->calculateOverallProgress($tasks);
+
+        return [
+            'project_name' => $projectName,
+            'project_type' => $projectType,
+            'status' => $status,
+            'budget' => $budget,
+            'start_date' => $this->normalizeDateValue($this->request->getPost('start_date')),
+            'end_date' => $this->normalizeDateValue($this->request->getPost('end_date')),
+            'overall_progress' => $overallProgress,
+            'completion_percent' => $overallProgress,
+            'project_manager_id' => $this->request->getPost('project_manager_id'),
+            'site_engineer_id' => $this->request->getPost('site_engineer_id'),
+            'personnel' => [
+                'project_manager_id' => $this->request->getPost('project_manager_id'),
+                'site_engineer_id' => $this->request->getPost('site_engineer_id')
+            ],
+            'location' => [
+                'address' => trim((string) $this->request->getPost('location_address')),
+                'geopoint' => [
+                    'lat' => $this->normalizeNumberOrNull($this->request->getPost('location_lat')),
+                    'lng' => $this->normalizeNumberOrNull($this->request->getPost('location_lng'))
+                ]
+            ]
+        ];
+    }
+
+    private function getProjectById(string $id): ?array
+    {
+        $snapshot = $this->firestore->getDb()->collection('projects')->document($id)->snapshot();
+
+        if (!$snapshot->exists()) {
+            return null;
+        }
+
+        $project = $snapshot->data();
+        $project['id'] = $snapshot->id();
+
+        return $this->enrichProjectForView($project);
+    }
+
+    private function getProjectTasks(string $projectId): array
+    {
+        $tasks = [];
+
+        foreach ($this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks')->documents() as $doc) {
+            if (!$doc->exists()) {
+                continue;
+            }
+
+            $task = $doc->data();
+            $task['id'] = $doc->id();
+            $tasks[] = $task;
+        }
+
+        return $tasks ?: $this->defaultTaskRows();
+    }
+
+    private function syncProjectTasks(string $projectId, array $rawTasks): void
+    {
+        $tasks = $this->normalizeTasks($rawTasks);
+        $tasksRef = $this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks');
+
+        foreach ($tasksRef->documents() as $existingTask) {
+            if ($existingTask->exists()) {
+                $tasksRef->document($existingTask->id())->delete();
+            }
+        }
+
+        foreach ($tasks as $task) {
+            $taskId = $task['id'] ?? bin2hex(random_bytes(8));
+            $task['created_at'] = $task['created_at'] ?? now();
+            $task['updated_at'] = now();
+
+            $tasksRef->document($taskId)->set($task);
+        }
+    }
+
+    private function deleteProjectTasks(string $projectId): void
+    {
+        $tasksRef = $this->firestore->getDb()->collection('projects')->document($projectId)->collection('tasks');
+
+        foreach ($tasksRef->documents() as $task) {
+            if ($task->exists()) {
+                $tasksRef->document($task->id())->delete();
+            }
+        }
+    }
+
+    private function normalizeTasks(array $rawTasks): array
+    {
+        $tasks = [];
+
+        foreach ($rawTasks as $task) {
+            $taskName = trim((string) ($task['task_name'] ?? ''));
+            $phaseName = trim((string) ($task['phase_name'] ?? ''));
+
+            if ($taskName === '' && $phaseName === '') {
+                continue;
+            }
+
+            $tasks[] = [
+                'id' => trim((string) ($task['id'] ?? '')) ?: bin2hex(random_bytes(8)),
+                'task_name' => $taskName,
+                'phase_name' => $phaseName,
+                'weight_percent' => $this->normalizeNumberOrNull($task['weight_percent'] ?? 0) ?? 0,
+                'completion_percent' => $this->normalizeNumberOrNull($task['completion_percent'] ?? 0) ?? 0,
+                'status' => $this->normalizeTaskStatus((string) ($task['status'] ?? 'Pending'))
+            ];
+        }
+
+        return $tasks;
+    }
+
+    private function calculateOverallProgress(array $tasks): float
+    {
+        if (empty($tasks)) {
+            return 0.0;
+        }
+
+        $totalWeight = 0.0;
+        $weightedCompletion = 0.0;
+
+        foreach ($tasks as $task) {
+            $weight = (float) ($task['weight_percent'] ?? 0);
+            $completion = (float) ($task['completion_percent'] ?? 0);
+            $totalWeight += $weight;
+            $weightedCompletion += ($weight * $completion);
+        }
+
+        if ($totalWeight <= 0) {
+            return 0.0;
+        }
+
+        return round($weightedCompletion / $totalWeight, 2);
+    }
+
+    private function enrichProjectForView(array $project): array
+    {
+        $personnel = is_array($project['personnel'] ?? null) ? $project['personnel'] : [];
+        if (!$personnel) {
+            $personnel = [
+                'project_manager_id' => $project['project_manager_id'] ?? null,
+                'site_engineer_id' => $project['site_engineer_id'] ?? null
+            ];
+        }
+
+        $location = is_array($project['location'] ?? null) ? $project['location'] : [];
+        if (!$location && isset($project['location']) && is_string($project['location'])) {
+            $location = ['address' => $project['location']];
+        }
+
+        $geopoint = is_array($location['geopoint'] ?? null) ? $location['geopoint'] : [];
+
+        $project['location'] = $location;
+        $project['location_label'] = trim((string) ($location['address'] ?? ''));
+        $project['project_manager_name'] = $this->resolveUserName($personnel['project_manager_id'] ?? null);
+        $project['site_engineer_name'] = $this->resolveUserName($personnel['site_engineer_id'] ?? null);
+        $project['progress_label'] = number_format((float) ($project['overall_progress'] ?? $project['completion_percent'] ?? 0), 2);
+        $project['start_date_value'] = $this->normalizeDateValue($project['start_date'] ?? '');
+        $project['end_date_value'] = $this->normalizeDateValue($project['end_date'] ?? '');
+        $project['location_address_value'] = (string) ($location['address'] ?? '');
+        $project['location_lat_value'] = (string) ($geopoint['lat'] ?? '');
+        $project['location_lng_value'] = (string) ($geopoint['lng'] ?? '');
+
+        return $project;
+    }
+
+    private function resolveUserName($userId): string
+    {
+        if (!$userId) {
+            return 'N/A';
+        }
+
+        $user = $this->usersModel->getUserById((string) $userId);
+
+        if (!$user) {
+            return (string) $userId;
+        }
+
+        return (string) ($user['name'] ?? $user['full_name'] ?? $user['email'] ?? $userId);
+    }
+
+    private function normalizeDateValue($value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (is_numeric($value)) {
+            return date('Y-m-d', (int) $value);
+        }
+
+        $timestamp = strtotime((string) $value);
+
+        return $timestamp ? date('Y-m-d', $timestamp) : '';
+    }
+
+    private function normalizeNumberOrNull($value): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (float) $value;
+    }
+
+    private function normalizeTaskStatus(string $status): string
+    {
+        $allowed = ['Pending', 'In Progress', 'Done'];
+
+        return in_array($status, $allowed, true) ? $status : 'Pending';
+    }
+
+    private function defaultTaskRows(): array
+    {
+        return [[
+            'id' => '',
+            'task_name' => '',
+            'phase_name' => '',
+            'weight_percent' => '',
+            'completion_percent' => '',
+            'status' => 'Pending'
+        ]];
     }
 }

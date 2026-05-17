@@ -39,7 +39,7 @@
     </div>
 
     <!-- Projects Table -->
-    <div class="projects-table-container">
+    <div class="table-container">
         <table class="projects-table">
             <thead>
                 <tr>
@@ -68,14 +68,14 @@
                                 <strong><?= esc((string)($project['project_name'] ?? 'N/A')) ?></strong>
                             </td>
                             <td><?= esc((string)($project['project_type'] ?? 'N/A')) ?></td>
-                            <td><?= esc((string)($project['location'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string)($project['location_label'] ?? $project['location']['address'] ?? 'N/A')) ?></td>
                             <td style="text-align: center;">
-                                <span class="status-badge">
-                                    <?= esc((string)($project['status'] ?? 'N/A')) ?>
+                                <span class="progress-badge">
+                                    <?= esc((string)($project['progress_label'] ?? $project['overall_progress'] ?? 0)) ?>%
                                 </span>
                             </td>
-                            <td><?= esc((string)($project['project_manager_id'] ?? 'N/A')) ?></td>
-                            <td><?= esc((string)($project['site_engineer_id'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string)($project['project_manager_name'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string)($project['site_engineer_name'] ?? 'N/A')) ?></td>
                             <td style="text-align: center;">
                                 <button class="action-button" title="View" onclick="alert('View functionality coming soon')">👁️</button>
                                 <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-button" title="Edit">✏️</a>
