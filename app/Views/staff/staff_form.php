@@ -43,24 +43,34 @@
             </div>
 
             <div class="form-group">
+                <label>Contact No</label>
+                <input type="text" name="contact_no" value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
+            </div>
+
+            <div class="form-group">
                 <label>Role *</label>
                 <select name="role" required>
                     <option value="">Select Role</option>
-                    <option value="ADMIN" <?= ($staff['role'] ?? '') === 'ADMIN' ? 'selected' : '' ?>>ADMIN</option>
-                    <option value="SE" <?= ($staff['role'] ?? '') === 'SE' ? 'selected' : '' ?>>SITE ENGINEER</option>
-                    <option value="PM" <?= ($staff['role'] ?? '') === 'PM' ? 'selected' : '' ?>>PROJECT MANAGER</option>
-                    <option value="CREW WORKER" <?= ($staff['role'] ?? '') === 'CREW WORKER' ? 'selected' : '' ?>>CREW WORKER</option>
-                    <option value="ELECTRICIAN" <?= ($staff['role'] ?? '') === 'ELECTRICIAN' ? 'selected' : '' ?>>ELECTRICIAN</option>
-                    <option value="WELDER" <?= ($staff['role'] ?? '') === 'WELDER' ? 'selected' : '' ?>>WELDER</option>
+                    <option value="Administrator" <?= ($staff['role'] ?? '') === 'Administrator' ? 'selected' : '' ?>>Administrator</option>
+                    <option value="Operations Manager" <?= ($staff['role'] ?? '') === 'Operations Manager' ? 'selected' : '' ?>>Operations Manager</option>
+                    <option value="Project Manager" <?= ($staff['role'] ?? '') === 'Project Manager' ? 'selected' : '' ?>>Project Manager</option>
+                    <option value="Site Engineer" <?= ($staff['role'] ?? '') === 'Site Engineer' ? 'selected' : '' ?>>Site Engineer</option>
                 </select>
+            </div>
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="must_change_password" value="1" <?= (($staff['must_change_password'] ?? true) ? 'checked' : '') ?> />
+                    Users must change password on first login
+                </label>
             </div>
 
             <!-- Form Actions -->
             <div class="form-actions">
-                <button type="submit" class="btn-submit">
+                <button type="submit" class="btn btn-add">
                     <?= isset($staffId) ? 'Update Staff' : 'Create Staff' ?>
                 </button>
-                <a href="<?= base_url('staff') ?>" class="btn-cancel">
+                <a href="<?= base_url('staff') ?>" class="btn btn-secondary">
                     Cancel
                 </a>
             </div>

@@ -43,4 +43,7 @@ $routes->get('staff/create', 'Staff::create');
 $routes->post('staff/create', 'Staff::create');
 $routes->get('staff/update/(:segment)', 'Staff::update/$1');
 $routes->post('staff/update/(:segment)', 'Staff::update/$1');
+$routes->get('staff/show/(:segment)', 'Staff::show/$1');
+$routes->post('staff/delete', 'Staff::delete');
+// Backwards-compatible GET delete (optional) - keeps previous behavior when called with segment
 $routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
