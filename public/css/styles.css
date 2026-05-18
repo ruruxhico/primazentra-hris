@@ -538,6 +538,485 @@ textarea:focus {
     margin-bottom: 1rem;
 }
 
+/* Manpower mobile form */
+.manpower-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
+}
+
+.manpower-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.manpower-back {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid #d4a574;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #8C701C;
+    text-decoration: none;
+    flex: 0 0 auto;
+}
+
+.manpower-title {
+    margin: 0;
+    color: #8C701C;
+    font-size: clamp(1.5rem, 4vw, 2.1rem);
+    font-weight: 700;
+}
+
+.manpower-card {
+    background: linear-gradient(180deg, #fffaf0 0%, #fff 100%);
+    border: 1px solid rgba(212, 165, 116, 0.45);
+    border-radius: 24px;
+    box-shadow: 0 16px 32px rgba(140, 112, 28, 0.12);
+    padding: 1.2rem;
+}
+
+.manpower-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.manpower-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.manpower-field label {
+    color: #8C701C;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.manpower-field input,
+.manpower-field select {
+    width: 100%;
+    border: 1px solid #d4a574;
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    font-size: 1rem;
+    background: #f6f7fb;
+    color: #232323;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.manpower-field input:focus,
+.manpower-field select:focus {
+    border-color: #8C701C;
+    box-shadow: 0 0 0 4px rgba(140, 112, 28, 0.12);
+    background: #fff;
+}
+
+.manpower-span-2 {
+    grid-column: span 2;
+}
+
+.manpower-actions {
+    display: flex;
+    gap: .9rem;
+    justify-content: center;
+    margin-top: 1.6rem;
+    flex-wrap: wrap;
+}
+
+.manpower-actions .btn {
+    min-width: 132px;
+    border-radius: 14px;
+    padding: .9rem 1.3rem;
+    font-weight: 700;
+    border: none;
+}
+
+.btn-save-mobile {
+    background: linear-gradient(180deg, #4ba44b 0%, #2f7d32 100%);
+    color: #fff;
+}
+
+.btn-cancel-mobile {
+    background: linear-gradient(180deg, #ff8b26 0%, #e46a09 100%);
+    color: #fff;
+}
+
+.manpower-note {
+    margin: .9rem 0 0;
+    color: #7d6a49;
+    font-size: .92rem;
+    line-height: 1.45;
+}
+
+/* Equipment mobile form */
+.equipment-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
+}
+
+.equipment-topbar {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.equipment-back {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid #d4a574;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    color: #8C701C;
+    text-decoration: none;
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+}
+
+.equipment-title {
+    margin: 0;
+    color: #8C701C;
+    font-size: clamp(1.5rem, 4vw, 2.15rem);
+    font-weight: 700;
+}
+
+.equipment-subtitle {
+    margin: .45rem 0 0;
+    color: #8b8b8b;
+    font-size: .98rem;
+    line-height: 1.5;
+    max-width: 52ch;
+}
+
+.equipment-card {
+    background: linear-gradient(180deg, #fffaf0 0%, #fff 100%);
+    border: 1px solid rgba(212, 165, 116, 0.45);
+    border-radius: 24px;
+    box-shadow: 0 16px 32px rgba(140, 112, 28, 0.12);
+    padding: 1.2rem;
+}
+
+.equipment-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+}
+
+.equipment-field label {
+    color: #8C701C;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.equipment-field input,
+.equipment-field select {
+    width: 100%;
+    border: 1px solid #d4a574;
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    font-size: 1rem;
+    background: #f6f7fb;
+    color: #232323;
+    outline: none;
+    transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.equipment-field input:focus,
+.equipment-field select:focus {
+    border-color: #8C701C;
+    box-shadow: 0 0 0 4px rgba(140, 112, 28, 0.12);
+    background: #fff;
+}
+
+.equipment-toggle-card {
+    background: #fff;
+    border: 1px solid rgba(212, 165, 116, 0.55);
+    border-radius: 18px;
+    padding: 1rem 1.1rem;
+    margin-top: 1.1rem;
+}
+
+.equipment-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    color: #222;
+    font-weight: 500;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.equipment-checkbox-label input {
+    width: 22px;
+    height: 22px;
+    accent-color: #8C701C;
+    flex: 0 0 auto;
+}
+
+.equipment-units-section {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: max-height .28s ease, opacity .2s ease, transform .2s ease;
+}
+
+.equipment-units-section.open {
+    max-height: 1200px;
+    opacity: 1;
+    transform: translateY(0);
+    margin-top: 1rem;
+}
+
+.equipment-section-head {
+    margin: 1rem 0 0.8rem;
+}
+
+.equipment-section-head h2 {
+    margin: 0 0 .25rem;
+    color: #8C701C;
+    font-size: 1.15rem;
+}
+
+.equipment-section-head p {
+    margin: 0;
+    color: #7d6a49;
+    font-size: .92rem;
+}
+
+.equipment-items-wrap {
+    overflow-x: auto;
+}
+
+.equipment-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+    background: #fff;
+    border: 1px solid rgba(212, 165, 116, 0.35);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.equipment-items-table thead th {
+    background: #f6e1ae;
+    color: #6f5313;
+    text-align: left;
+    padding: .85rem .8rem;
+    font-size: .92rem;
+}
+
+.equipment-items-table td {
+    padding: .65rem .8rem;
+    border-top: 1px solid #f0e2c4;
+    vertical-align: top;
+}
+
+.equipment-items-table input,
+.equipment-items-table select {
+    width: 100%;
+    border: 1px solid #d4a574;
+    border-radius: 14px;
+    padding: .75rem .85rem;
+    background: #f6f7fb;
+}
+
+.equipment-remove-btn {
+    width: 100%;
+    border: 1px solid #d4a574;
+    background: #fff3e4;
+    color: #8C701C;
+    border-radius: 14px;
+    padding: .75rem .85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.equipment-address-group {
+    display: none;
+}
+
+.equipment-address-group select,
+.equipment-address-group input {
+    width: 100%;
+}
+
+.equipment-address-project {
+    display: block;
+}
+
+.equipment-warehouse-input-wrap {
+    display: flex;
+    gap: .5rem;
+    align-items: stretch;
+}
+
+.equipment-warehouse-input-wrap input {
+    flex: 1 1 auto;
+}
+
+.equipment-map-btn {
+    flex: 0 0 auto;
+    min-width: 72px;
+    border: 1px solid #d4a574;
+    border-radius: 14px;
+    background: #fff7e8;
+    color: #8C701C;
+    font-weight: 600;
+    padding: .75rem .9rem;
+    cursor: pointer;
+}
+
+.equipment-map-btn:hover {
+    background: #f4e1b9;
+}
+
+.equipment-map-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    z-index: 2000;
+}
+
+.equipment-map-modal.open {
+    display: block;
+}
+
+.equipment-map-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.48);
+}
+
+.equipment-map-dialog {
+    position: relative;
+    width: min(920px, calc(100vw - 1.5rem));
+    margin: 5vh auto 0;
+    background: #fffdf7;
+    border-radius: 24px;
+    border: 1px solid rgba(212, 165, 116, 0.45);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);
+    padding: 1rem;
+}
+
+.equipment-map-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: .75rem;
+}
+
+.equipment-map-header h2 {
+    margin: 0;
+    color: #8C701C;
+    font-size: 1.2rem;
+}
+
+.equipment-map-header p {
+    margin: .25rem 0 0;
+    color: #7d6a49;
+    font-size: .92rem;
+}
+
+.equipment-map-close {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    border: 1px solid #d4a574;
+    background: #fff;
+    color: #8C701C;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.equipment-map-search {
+    width: 100%;
+    border: 1px solid #d4a574;
+    border-radius: 16px;
+    padding: .85rem 1rem;
+    margin-bottom: .75rem;
+    background: #fff;
+}
+
+.equipment-map-canvas {
+    height: min(55vh, 420px);
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid rgba(212, 165, 116, 0.45);
+    background: #f4efe0;
+}
+
+.equipment-map-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: .75rem;
+    margin-top: .9rem;
+    flex-wrap: wrap;
+}
+
+.equipment-map-footer .btn {
+    min-width: 160px;
+}
+
+.equipment-actions-row {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: .9rem;
+}
+
+.equipment-actions {
+    display: flex;
+    gap: .9rem;
+    justify-content: center;
+    margin-top: 1.6rem;
+    flex-wrap: wrap;
+}
+
+.equipment-actions .btn {
+    min-width: 132px;
+    border-radius: 14px;
+    padding: .9rem 1.3rem;
+    font-weight: 700;
+    border: none;
+}
+
+@media (max-width: 640px) {
+    .equipment-shell { padding-top: .25rem; }
+    .equipment-card { padding: 1rem; border-radius: 22px; }
+    .equipment-topbar { gap: 0.75rem; }
+    .equipment-subtitle { font-size: .94rem; }
+    .equipment-actions { justify-content: stretch; }
+    .equipment-actions .btn { flex: 1 1 calc(50% - .45rem); }
+    .equipment-warehouse-input-wrap { flex-direction: column; }
+    .equipment-map-btn { width: 100%; }
+    .equipment-map-dialog { margin-top: 2vh; width: calc(100vw - 1rem); padding: .85rem; border-radius: 20px; }
+    .equipment-map-footer .btn { min-width: 0; flex: 1 1 calc(50% - .375rem); }
+}
+
+@media (max-width: 640px) {
+    .manpower-shell { padding-top: .25rem; }
+    .manpower-card { padding: 1rem; border-radius: 22px; }
+    .manpower-grid { grid-template-columns: 1fr; }
+    .manpower-span-2 { grid-column: span 1; }
+    .manpower-actions { justify-content: stretch; }
+    .manpower-actions .btn { flex: 1 1 calc(50% - .45rem); }
+}
+
 /* Custom date picker styles */
 .date-picker {
     position: relative;

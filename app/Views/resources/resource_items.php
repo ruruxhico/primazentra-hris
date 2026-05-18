@@ -35,7 +35,6 @@
     <table class="resource-table">
         <thead>
             <tr>
-                <th>Unit ID</th>
                 <th>Serial Number</th>
                 <th>Condition</th>
                 <th>Status</th>
@@ -53,7 +52,6 @@
             <?php else: ?>
                 <?php foreach ($items as $item): ?>
                     <tr>
-                        <td><?= isset($item['unit_id']) ? esc((string)$item['unit_id']) : 'N/A' ?></td>
                         <td><?= isset($item['serial_number']) ? esc((string)$item['serial_number']) : 'N/A' ?></td>
                         <td>
                             <span class="status-badge status-<?= isset($item['condition']) ? strtolower($item['condition']) : 'n/a' ?>">
@@ -85,12 +83,6 @@
         
         <form method="POST" action="<?= base_url('resources/addItem/' . (isset($resource['id']) ? $resource['id'] : '')) ?>">
             <?= csrf_field() ?>
-
-            <div class="form-group">
-                <label for="unit_id">Unit ID *</label>
-                <input type="text" id="unit_id" name="unit_id" class="form-control" 
-                       placeholder="e.g., UNIT-001" required>
-            </div>
 
             <div class="form-group">
                 <label for="serial_number">Serial Number *</label>

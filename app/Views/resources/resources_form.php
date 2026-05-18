@@ -1,9 +1,14 @@
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
+<?php
+    $resource = $resource ?? [];
+    $isEdit = !empty($resource['id'] ?? null);
+    $formAction = $isEdit ? base_url('resources/update/' . $resource['id']) : base_url('resources/store');
+?>
 
 <header class="resource-header">
-    <h1><?= isset($resource) && $resource ? 'Edit Resource' : 'Create New Resource' ?></h1>
+    <h1><?= $isEdit ? 'Edit Resource' : 'Create New Resource' ?></h1>
 </header>
 
 <?php if (session()->getFlashdata('error')): ?>
@@ -19,7 +24,7 @@
 <?php endif; ?>
 
 <div class="resource-form-container">
-    <form method="POST" action="<?= isset($resource) && $resource ? base_url('resources/update/' . $resource['id']) : base_url('resources/store') ?>" id="resourceForm">
+    <form method="POST" action="<?= $formAction ?>" id="resourceForm">
         <?= csrf_field() ?>
 
         <!-- Basic Information Section -->
@@ -41,6 +46,17 @@
                         <option value="Manpower" <?= isset($resource['category']) && $resource['category'] === 'Manpower' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Manpower' ? 'selected' : '') ?>>Manpower</option>
                         <option value="Equipment" <?= isset($resource['category']) && $resource['category'] === 'Equipment' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Equipment' ? 'selected' : '') ?>>Equipment</option>
                         <option value="Tools" <?= isset($resource['category']) && $resource['category'] === 'Tools' ? 'selected' : (isset($_GET['category']) && $_GET['category'] === 'Tools' ? 'selected' : '') ?>>Tools</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="status">Status *</label>
+                    <select id="status" name="status" class="form-control" required>
+                        <option value="">-- Select Status --</option>
+                        <option value="Available" <?= isset($resource['status']) && $resource['status'] === 'Available' ? 'selected' : '' ?>>Available</option>
+                        <option value="Deployed" <?= isset($resource['status']) && $resource['status'] === 'Deployed' ? 'selected' : '' ?>>Deployed</option>
+                        <option value="Under Maintenance" <?= isset($resource['status']) && $resource['status'] === 'Under Maintenance' ? 'selected' : '' ?>>Under Maintenance</option>
+                        <option value="Unavailable" <?= isset($resource['status']) && $resource['status'] === 'Unavailable' ? 'selected' : '' ?>>Unavailable</option>
                     </select>
                 </div>
             </div>
@@ -73,16 +89,6 @@
                         <option value="Warehouse" <?= isset($resource['location']['type']) && $resource['location']['type'] === 'Warehouse' ? 'selected' : '' ?>>Warehouse</option>
                         <option value="Project Site" <?= isset($resource['location']['type']) && $resource['location']['type'] === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
                     </select>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="geopoint">Geopoint (Lat/Lng)</label>
-                    <input type="text" id="geopoint" name="geopoint" class="form-control" 
-                           value="<?= isset($resource['location']['geopoint']) ? esc($resource['location']['geopoint']) : '' ?>"
-                           placeholder="e.g., 14.5994,-120.9842">
-                    <small>Format: latitude,longitude</small>
                 </div>
             </div>
         </div>
@@ -173,13 +179,6 @@
                            placeholder="e.g., 8" required>
                     <small>Calculated as: Total - Deployed/Broken</small>
                 </div>
-
-                <div class="form-group">
-                    <label for="condition_summary">Condition Summary (JSON) *</label>
-                    <textarea id="condition_summary" name="condition_summary" class="form-control" rows="3"
-                              placeholder='{"New": 5, "Worn": 2, "Functional": 3}' required><?= isset($resource['asset_details']['condition_summary']) ? json_encode($resource['asset_details']['condition_summary']) : '' ?></textarea>
-                    <small>Format: {"New": #, "Worn": #, "Functional": #, "Broken": #}</small>
-                </div>
             </div>
 
             <div class="form-row">
@@ -216,7 +215,6 @@
                             <th>Status</th>
                             <th>Address</th>
                             <th>Location Type</th>
-                            <th>Geopoint</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -251,7 +249,6 @@
                                             <option value="Project Site" <?= isset($item['location']['type']) && $item['location']['type'] === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
                                         </select>
                                     </td>
-                                    <td><input type="text" name="items[<?= $index ?>][geopoint]" class="form-control" value="<?= isset($item['location']['geopoint']) ? esc($item['location']['geopoint']) : '' ?>" placeholder="lat,lng"></td>
                                     <td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -283,18 +280,37 @@
         const manpowerSection = document.getElementById('manpower-section');
         const assetSection = document.getElementById('asset-section');
         const itemsSection = document.getElementById('items-section');
+        const manpowerFields = manpowerSection.querySelectorAll('input, select, textarea');
+        const assetFields = assetSection.querySelectorAll('input, select, textarea');
+        const itemFields = itemsSection.querySelectorAll('input, select, textarea');
+
+        function setSectionState(fields, enabled) {
+            fields.forEach(field => {
+                if (field.hasAttribute('data-base-required')) {
+                    field.required = enabled;
+                }
+                field.disabled = !enabled;
+            });
+        }
 
         // Hide all sections first
         manpowerSection.style.display = 'none';
         assetSection.style.display = 'none';
         itemsSection.style.display = 'none';
 
+        setSectionState(manpowerFields, false);
+        setSectionState(assetFields, false);
+        setSectionState(itemFields, false);
+
         // Show appropriate section based on category
         if (category === 'Manpower') {
             manpowerSection.style.display = 'block';
+            setSectionState(manpowerFields, true);
         } else if (category === 'Equipment' || category === 'Tools') {
             assetSection.style.display = 'block';
             itemsSection.style.display = 'block';
+            setSectionState(assetFields, true);
+            setSectionState(itemFields, true);
         }
     }
 
@@ -332,7 +348,6 @@
                     <option value="Project Site">Project Site</option>
                 </select>
             </td>
-            <td><input type="text" name="items[${itemCounter}][geopoint]" class="form-control" placeholder="lat,lng"></td>
             <td><button type="button" class="btn btn-sm btn-danger" onclick="removeItem(this)">Remove</button></td>
         `;
         
@@ -347,6 +362,11 @@
 
     // Initialize form fields on page load
     document.addEventListener('DOMContentLoaded', function() {
+        // Record which fields are meant to be required when their section is active.
+        document.querySelectorAll('#manpower-section input[required], #manpower-section select[required], #manpower-section textarea[required], #asset-section input[required], #asset-section select[required], #asset-section textarea[required], #items-section input[required], #items-section select[required], #items-section textarea[required]').forEach(field => {
+            field.setAttribute('data-base-required', '1');
+        });
+
         updateFormFields();
     });
 </script>
