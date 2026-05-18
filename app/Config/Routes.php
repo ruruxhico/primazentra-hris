@@ -31,6 +31,14 @@ $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 $routes->get('resources', 'Resources::index');
 $routes->get('resources/requests', 'Resources::requests');
 $routes->get('resources/create', 'Resources::create');
+$routes->post('resources/store', 'Resources::store');
+$routes->get('resources/show/(:segment)', 'Resources::show/$1');
+$routes->get('resources/edit/(:segment)', 'Resources::edit/$1');
+$routes->post('resources/update/(:segment)', 'Resources::update/$1');
+$routes->post('resources/delete', 'Resources::delete');
+$routes->get('resources/delete/(:segment)', 'Resources::delete/$1');
+$routes->get('resources/viewItems/(:segment)', 'Resources::viewItems/$1');
+$routes->post('resources/addItem/(:segment)', 'Resources::addItem/$1');
 // Equipment CRUD
 $routes->post('resources/equipment/create', 'Resources::createEquipment');
 $routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');

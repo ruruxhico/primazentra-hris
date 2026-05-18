@@ -4,7 +4,7 @@ namespace App\Models;
 
 class Model_Resources extends Model_BaseFirestore
 {
-    protected $collection = 'resources';
+    protected $collection = 'resource';
 
     public function __construct()
     {
@@ -53,7 +53,8 @@ class Model_Resources extends Model_BaseFirestore
     public function createResource($data)
     {
         $db = $this->firestore->getDb();
-        $data['created_at'] = \Google\Cloud\Firestore\FieldValue::serverTimestamp();
+        $data['created_at'] = time();
+        $data['updated_at'] = time();
         
         $reference = $db->collection($this->collection)->add($data);
         return $reference->id();
@@ -65,11 +66,7 @@ class Model_Resources extends Model_BaseFirestore
     public function updateResource($resourceId, $data)
     {
         $db = $this->firestore->getDb();
-        $updates = [];
-        foreach ($data as $key => $value) {
-            $updates[] = ['path' => $key, 'value' => $value];
-        }
-        $db->collection($this->collection)->document($resourceId)->update($updates);
+        $db->collection($this->collection)->document($resourceId)->set($data);
         return true;
     }
 
@@ -214,6 +211,8 @@ class Model_Resources extends Model_BaseFirestore
     public function createResourceItem($resourceId, $itemData)
     {
         $db = $this->firestore->getDb();
+        $itemData['created_at'] = time();
+        $itemData['updated_at'] = time();
         $reference = $db->collection($this->collection)
                         ->document($resourceId)
                         ->collection('items')
