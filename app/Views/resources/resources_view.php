@@ -266,7 +266,8 @@
                                     <?= esc((string)($person['status'] ?? 'N/A')) ?>
                                 </span>
                             </td>
-                            <td><?= isset($person['location']['address']) ? esc((string)$person['location']['address']) : 'N/A' ?></td>
+                            <?php $displaySite = $person['manpower_details']['current_site_deployment'] ?? $person['location']['address'] ?? 'N/A'; ?>
+                            <td><?= esc((string)$displaySite) ?></td>
                             <td><?= isset($person['manpower_details']['specialization']) ? esc((string)$person['manpower_details']['specialization']) : 'N/A' ?></td>
                             <td class="text-center">
                                 <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View">👁️</a>

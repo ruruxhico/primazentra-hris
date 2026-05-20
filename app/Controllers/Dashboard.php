@@ -5,18 +5,21 @@ namespace App\Controllers;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
 use App\Models\Model_Users;
+use App\Models\Model_Manpower;
 
 class Dashboard extends BaseController
 {
     protected $projectModel;
     protected $resourceModel;
     protected $userModel;
+    protected $manpowerModel;
 
     public function __construct()
     {
         $this->projectModel = new Model_Projects();
         $this->resourceModel = new Model_Resources();
         $this->userModel = new Model_Users();
+        $this->manpowerModel = new Model_Manpower();
     }
 
     /**
@@ -45,6 +48,19 @@ class Dashboard extends BaseController
             $deployedResources = $this->resourceModel->getDeployedResources();
             $tools = $this->resourceModel->getTools();
 
+            // Get manpower separately (manpower collection)
+            $allManpower = [];
+            try {
+                $allManpower = $this->manpowerModel->getAllManpower();
+            } catch (\Exception $e) {
+                $allManpower = [];
+            }
+
+            // Filter available manpower
+            $availableManpower = array_values(array_filter($allManpower, function ($m) {
+                return (isset($m['status']) && $m['status'] === 'Available');
+            }));
+
             // Get staff count
             $staffCount = $this->userModel->countStaff();
 
@@ -59,6 +75,7 @@ class Dashboard extends BaseController
                 'tools' => $tools,
                 'availableResources' => $availableResources,
                 'deployedResources' => $deployedResources,
+                'availableManpower' => $availableManpower,
                 'activeProjects' => $activeProjects,
             ];
 
@@ -76,6 +93,7 @@ class Dashboard extends BaseController
                 'tools' => [],
                 'availableResources' => [],
                 'deployedResources' => [],
+                'availableManpower' => [],
                 'activeProjects' => [],
                 'errorMessage' => 'Unable to load dashboard right now. Please try again later.',
             ]);

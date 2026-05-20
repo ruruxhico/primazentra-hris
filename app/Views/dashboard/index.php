@@ -255,12 +255,7 @@
     <!-- MANPOWER SECTION -->
     <div class="section">
         <h3>Available Manpower</h3>
-        <?php 
-        $manpower = array_filter($availableResources ?? [], function($resource) {
-            return ($resource['category'] ?? null) === 'Manpower';
-        });
-        ?>
-        <?php if (!empty($manpower)): ?>
+        <?php if (!empty($availableManpower)): ?>
             <table>
                 <thead>
                     <tr>
@@ -271,7 +266,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($manpower as $worker): ?>
+                    <?php foreach ($availableManpower as $worker): ?>
                         <tr>
                             <td><?= esc((string) ($worker['name'] ?? 'N/A')) ?></td>
                             <td><?= esc((string) ($worker['role'] ?? 'Field Worker')) ?></td>

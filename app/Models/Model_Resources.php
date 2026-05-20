@@ -223,4 +223,45 @@ class Model_Resources extends Model_BaseFirestore
                         ->add($itemData);
         return $reference->id();
     }
+
+    /**
+     * Generate next serial number for a resource
+     * Uses running_serial_count and model_code to generate serial like "CON_MIXER-001"
+     */
+    public function generateNextSerialNumber($resourceId, $modelCode)
+    {
+        $db = $this->firestore->getDb();
+        $resourceRef = $db->collection($this->collection)->document($resourceId);
+        
+        // Increment running_serial_count atomically
+        $resourceRef->update([
+            ['path' => 'running_serial_count', 'value' => \Google\Cloud\Firestore\FieldValue::increment(1)]
+        ]);
+        
+        // Get updated document to get the new count
+        $snapshot = $resourceRef->snapshot();
+        if ($snapshot->exists()) {
+            $count = $snapshot->get('running_serial_count') ?? 1;
+            $serialNumber = $modelCode . '-' . str_pad($count, 3, '0', STR_PAD_LEFT);
+            return $serialNumber;
+        }
+        
+        return null;
+    }
+
+    /**
+     * Initialize running_serial_count if not present
+     */
+    public function initializeRunningSerialCount($resourceId)
+    {
+        $db = $this->firestore->getDb();
+        $resourceRef = $db->collection($this->collection)->document($resourceId);
+        
+        $snapshot = $resourceRef->snapshot();
+        if ($snapshot->exists() && !$snapshot->get('running_serial_count')) {
+            $resourceRef->update([
+                ['path' => 'running_serial_count', 'value' => 0]
+            ]);
+        }
+    }
 }

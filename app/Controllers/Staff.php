@@ -3,14 +3,17 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Models\Model_Users;
 use Google\Cloud\Core\Timestamp;
 
 class Staff extends BaseController
 {
     protected FirestoreService $firestore;
+    protected \App\Models\Model_Users $usersModel;
 
     public function __construct() {
         $this->firestore = new FirestoreService();
+        $this->usersModel = new Model_Users();
     }
 
     public function index()
@@ -91,6 +94,11 @@ class Staff extends BaseController
     public function create()
     {
         if (strtolower($this->request->getMethod()) === 'post') {
+            // Validate using named rule group 'staff'
+            if (! $this->validate('staff')) {
+                return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
+            }
+
             try {
                 log_message('info', 'Staff::create POST received');
                 $lastName = trim((string) $this->request->getPost('last_name'));
@@ -98,8 +106,10 @@ class Staff extends BaseController
                 $email = trim((string) $this->request->getPost('email'));
                 $role = trim((string) $this->request->getPost('role'));
 
-                if ($lastName === '' || $firstName === '' || $email === '' || $role === '') {
-                    return redirect()->back()->withInput()->with('error', 'Please fill in all required fields.');
+                // Uniqueness check for email in Firestore
+                $existing = $this->usersModel->getUserByEmail($email);
+                if ($existing) {
+                    return redirect()->back()->withInput()->with('error', 'Email is already in use.');
                 }
 
                 $now = new Timestamp(new \DateTime());
@@ -148,6 +158,10 @@ class Staff extends BaseController
     {
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
+                // Validate using Config\Validation 'staff' group
+                if (! $this->validate('staff')) {
+                    return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
+                }
                 $now = new Timestamp(new \DateTime());
                 $data = [
                     'last_name' => trim((string) $this->request->getPost('last_name')),
@@ -159,6 +173,14 @@ class Staff extends BaseController
                     'must_change_password' => $this->request->getPost('must_change_password') ? true : false,
                     'updated_at' => $now
                 ];
+                // If email changed, ensure uniqueness
+                $newEmail = $data['email'] ?? '';
+                if ($newEmail !== '') {
+                    $existing = $this->usersModel->getUserByEmail($newEmail);
+                    if ($existing && $existing['id'] !== $id) {
+                        return redirect()->back()->withInput()->with('error', 'Email is already in use by another staff member.');
+                    }
+                }
 
                 $this->firestore->getDb()->collection('users')->document($id)->set($data, ['merge' => true]);
                 return redirect()->to('staff')->with('success', 'Staff member updated successfully!');

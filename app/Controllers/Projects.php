@@ -59,6 +59,11 @@ class Projects extends BaseController
     public function create()
     {
         if (strtolower($this->request->getMethod()) === 'post') {
+            // validate input using Config\Validation 'projects' group
+            if (! $this->validate('projects')) {
+                return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
+            }
+
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
@@ -112,6 +117,10 @@ class Projects extends BaseController
     {
         try {
                 if (strtolower($this->request->getMethod()) === 'post') {
+                // validate using Config\Validation 'projects' group
+                if (! $this->validate('projects')) {
+                    return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
+                }
                 $existing = $this->getProjectById($id);
 
                 if (!$existing) {

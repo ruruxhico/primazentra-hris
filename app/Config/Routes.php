@@ -43,10 +43,18 @@ $routes->post('resources/addItem/(:segment)', 'Resources::addItem/$1');
 $routes->post('resources/equipment/create', 'Resources::createEquipment');
 $routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');
 $routes->get('resources/equipment/delete/(:segment)', 'Resources::deleteEquipment/$1');
-// Manpower CRUD
-$routes->post('resources/manpower/create', 'Resources::createManpower');
-$routes->post('resources/manpower/update/(:segment)', 'Resources::updateManpower/$1');
-$routes->get('resources/manpower/delete/(:segment)', 'Resources::deleteManpower/$1');
+// Manpower CRUD (moved to dedicated controller)
+$routes->post('resources/manpower/create', 'Manpower::store');
+$routes->post('resources/manpower/update/(:segment)', 'Manpower::update/$1');
+$routes->get('resources/manpower/delete/(:segment)', 'Manpower::delete/$1');
+
+// Dedicated Manpower routes
+$routes->get('manpower/create', 'Manpower::create');
+$routes->post('manpower/store', 'Manpower::store');
+$routes->get('manpower/edit/(:segment)', 'Manpower::edit/$1');
+$routes->post('manpower/update/(:segment)', 'Manpower::update/$1');
+$routes->post('manpower/delete', 'Manpower::delete');
+$routes->get('manpower/delete/(:segment)', 'Manpower::delete/$1');
 
 // Staff Routes
 $routes->get('staff', 'Staff::index');
