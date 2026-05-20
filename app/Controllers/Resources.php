@@ -503,6 +503,8 @@ class Resources extends BaseController
     private function normalizeResourceForView(array $resource): array
     {
         $resource['location'] = is_array($resource['location'] ?? null) ? $resource['location'] : ['address' => '', 'type' => ''];
+        $resource['created_at_value'] = $this->formatDateValue($resource['created_at'] ?? '');
+        $resource['updated_at_value'] = $this->formatDateValue($resource['updated_at'] ?? '');
         $resource['next_availability_value'] = $this->normalizeDateValue($resource['next_availability'] ?? '');
         $resource['category_label'] = (string) ($resource['category'] ?? '');
         $resource['asset_details'] = is_array($resource['asset_details'] ?? null) ? $resource['asset_details'] : [];
@@ -641,5 +643,32 @@ class Resources extends BaseController
         $timestamp = strtotime((string) $value);
 
         return $timestamp ? date('Y-m-d\TH:i', $timestamp) : (string) $value;
+    }
+
+    private function formatDateValue($value): string
+    {
+        if ($value === null || $value === '') {
+            return 'N/A';
+        }
+
+        if (is_object($value) && method_exists($value, 'get')) {
+            try {
+                $value = $value->get();
+            } catch (\Throwable $e) {
+                return 'N/A';
+            }
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        if (is_numeric($value)) {
+            return date('Y-m-d H:i:s', (int) $value);
+        }
+
+        $timestamp = strtotime((string) $value);
+
+        return $timestamp ? date('Y-m-d H:i:s', $timestamp) : (string) $value;
     }
 }

@@ -1,9 +1,13 @@
 <?php
-// Migration script: move document-level `items` arrays into subcollections and normalize created_at
+// Migration script: move document-level `items` arrays into subcollections and convert legacy epoch timestamps to Firestore Timestamp objects.
+if (!defined('WRITEPATH')) {
+    define('WRITEPATH', realpath(__DIR__ . '/../writable') . DIRECTORY_SEPARATOR);
+}
+
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Libraries\FirestoreService;
-use Google\Cloud\Firestore\FieldValue;
+use Google\Cloud\Core\Timestamp;
 
 // Simple CLI usage: php tools/migrate_resource_items.php [--dry-run]
 $dryRun = in_array('--dry-run', $argv, true);
@@ -18,17 +22,74 @@ $docs = $coll->documents();
 $moved = 0;
 $updated = 0;
 
+function toFirestoreTimestamp($value): ?Timestamp
+{
+    if ($value instanceof Timestamp) {
+        return $value;
+    }
+
+    if ($value instanceof DateTimeInterface) {
+        return new Timestamp($value);
+    }
+
+    if (is_numeric($value)) {
+        $dateTime = new DateTime('@' . (int) $value);
+        $dateTime->setTimezone(new DateTimeZone(date_default_timezone_get()));
+        return new Timestamp($dateTime);
+    }
+
+    if (is_string($value) && trim($value) !== '') {
+        $timestamp = strtotime($value);
+        if ($timestamp !== false) {
+            $dateTime = new DateTime('@' . $timestamp);
+            $dateTime->setTimezone(new DateTimeZone(date_default_timezone_get()));
+            return new Timestamp($dateTime);
+        }
+    }
+
+    return null;
+}
+
+function describeTimestamp($value): string
+{
+    if ($value instanceof Timestamp) {
+        try {
+            return $value->get()->format('Y-m-d H:i:s');
+        } catch (Throwable $e) {
+            return 'Timestamp';
+        }
+    }
+
+    if ($value instanceof DateTimeInterface) {
+        return $value->format('Y-m-d H:i:s');
+    }
+
+    if (is_numeric($value)) {
+        return date('Y-m-d H:i:s', (int) $value);
+    }
+
+    return (string) $value;
+}
+
 foreach ($docs as $doc) {
     if (!$doc->exists()) continue;
     $id = $doc->id();
     $data = $doc->data();
 
-    // Normalize created_at: ensure numeric epoch
-    $created = $data['created_at'] ?? null;
-    $needCreatedUpdate = false;
-    if (empty($created) || !is_numeric($created)) {
-        $data['created_at'] = time();
-        $needCreatedUpdate = true;
+    $docPatch = [];
+    $createdAt = $data['created_at'] ?? null;
+    $updatedAt = $data['updated_at'] ?? null;
+
+    $createdTimestamp = toFirestoreTimestamp($createdAt);
+    if ($createdTimestamp !== null && !($createdAt instanceof Timestamp)) {
+        $docPatch['created_at'] = $createdTimestamp;
+    }
+
+    $updatedTimestamp = toFirestoreTimestamp($updatedAt);
+    if ($updatedTimestamp !== null && !($updatedAt instanceof Timestamp)) {
+        $docPatch['updated_at'] = $updatedTimestamp;
+    } elseif ($updatedTimestamp === null && empty($updatedAt) && $createdTimestamp !== null) {
+        $docPatch['updated_at'] = $createdTimestamp;
     }
 
     // Migrate items array -> subcollection
@@ -40,8 +101,21 @@ foreach ($docs as $doc) {
             $item = is_array($rawItem) ? $rawItem : [];
             $itemId = $item['id'] ?? bin2hex(random_bytes(8));
             $item['id'] = $itemId;
-            $item['created_at'] = $item['created_at'] ?? time();
-            $item['updated_at'] = time();
+
+            $itemCreated = toFirestoreTimestamp($item['created_at'] ?? null);
+            $itemUpdated = toFirestoreTimestamp($item['updated_at'] ?? null);
+
+            if ($itemCreated !== null) {
+                $item['created_at'] = $itemCreated;
+            } elseif (empty($item['created_at'])) {
+                $item['created_at'] = new Timestamp(new DateTime());
+            }
+
+            if ($itemUpdated !== null) {
+                $item['updated_at'] = $itemUpdated;
+            } else {
+                $item['updated_at'] = new Timestamp(new DateTime());
+            }
 
             if ($dryRun) {
                 echo "  would create item {$itemId}\n";
@@ -67,13 +141,21 @@ foreach ($docs as $doc) {
         $updated++;
     }
 
-    // Persist created_at fix if needed
-    if ($needCreatedUpdate) {
+    // Persist top-level timestamp fixes if needed
+    if (!empty($docPatch)) {
         if ($dryRun) {
-            echo "Document {$id}: would set created_at={$data['created_at']}\n";
+            $pairs = [];
+            foreach ($docPatch as $field => $value) {
+                $pairs[] = $field . '=' . describeTimestamp($value);
+            }
+            echo "Document {$id}: would set " . implode(', ', $pairs) . "\n";
         } else {
-            $coll->document($id)->set(['created_at' => $data['created_at']], ['merge' => true]);
-            echo "Document {$id}: set created_at={$data['created_at']}\n";
+            $coll->document($id)->set($docPatch, ['merge' => true]);
+            $pairs = [];
+            foreach ($docPatch as $field => $value) {
+                $pairs[] = $field . '=' . describeTimestamp($value);
+            }
+            echo "Document {$id}: set " . implode(', ', $pairs) . "\n";
         }
         $updated++;
     }

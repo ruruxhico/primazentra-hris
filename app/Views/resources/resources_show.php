@@ -22,6 +22,12 @@
         <dt>Status</dt>
         <dd><?= esc((string)($resource['status'] ?? '')) ?></dd>
 
+        <dt>Created At</dt>
+        <dd><?= esc((string)($resource['created_at_value'] ?? 'N/A')) ?></dd>
+
+        <dt>Updated At</dt>
+        <dd><?= esc((string)($resource['updated_at_value'] ?? 'N/A')) ?></dd>
+
         <dt>Next Availability</dt>
         <dd><?= esc((string)($resource['next_availability_value'] ?? $resource['next_availability'] ?? '')) ?></dd>
 

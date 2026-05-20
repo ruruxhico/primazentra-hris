@@ -78,7 +78,6 @@
             <tbody>
                 <?php if (empty($equipment)): ?>
                     <tr>
-                        <td colspan="8" class="text-center text-muted">
                             No equipment found.
                         </td>
                     </tr>
@@ -167,7 +166,6 @@
                 ?>
                 <?php if (empty($tools)): ?>
                     <tr>
-                        <td colspan="8" class="text-center text-muted">
                             No tools found.
                         </td>
                     </tr>
@@ -253,7 +251,6 @@
             <tbody>
                 <?php if (empty($manpower)): ?>
                     <tr>
-                        <td colspan="9" class="text-center text-muted">
                             No manpower records found.
                         </td>
                     </tr>

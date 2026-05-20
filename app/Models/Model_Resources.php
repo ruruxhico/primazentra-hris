@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Google\Cloud\Core\Timestamp;
+
 class Model_Resources extends Model_BaseFirestore
 {
     protected $collection = 'resource';
@@ -53,8 +55,9 @@ class Model_Resources extends Model_BaseFirestore
     public function createResource($data)
     {
         $db = $this->firestore->getDb();
-        $data['created_at'] = time();
-        $data['updated_at'] = time();
+        $now = new Timestamp(new \DateTime());
+        $data['created_at'] = $now;
+        $data['updated_at'] = $now;
         
         $reference = $db->collection($this->collection)->add($data);
         return $reference->id();
@@ -211,8 +214,9 @@ class Model_Resources extends Model_BaseFirestore
     public function createResourceItem($resourceId, $itemData)
     {
         $db = $this->firestore->getDb();
-        $itemData['created_at'] = time();
-        $itemData['updated_at'] = time();
+        $now = new Timestamp(new \DateTime());
+        $itemData['created_at'] = $now;
+        $itemData['updated_at'] = $now;
         $reference = $db->collection($this->collection)
                         ->document($resourceId)
                         ->collection('items')
