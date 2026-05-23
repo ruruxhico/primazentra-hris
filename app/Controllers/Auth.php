@@ -6,7 +6,7 @@ use App\Libraries\FirestoreService;
 use Google\Cloud\Core\Timestamp;
 
 class Auth extends BaseController {
-    protected $firestore;
+    protected FirestoreService $firestore;
 
     public function __construct() {
         $this->firestore = new FirestoreService();

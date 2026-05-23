@@ -4,11 +4,12 @@ namespace App\Libraries;
 
 // These 'use' statements are critical to stop the "Undefined type" errors
 use Google\Cloud\Firestore\FirestoreClient;
+use Kreait\Firebase\Contract\Auth;
 use Kreait\Firebase\Factory;
 
 class FirestoreService {
-    protected $db;
-    protected $auth;
+    protected FirestoreClient $db;
+    protected Auth $auth;
 
     public function __construct() {
         // 1. Point exactly to the writable/credentials folder
@@ -36,11 +37,11 @@ class FirestoreService {
         }
     }
 
-    public function getDb() {
+    public function getDb(): FirestoreClient {
         return $this->db;
     }
 
-    public function getAuth() {
+    public function getAuth(): Auth {
         return $this->auth;
     }
 }
