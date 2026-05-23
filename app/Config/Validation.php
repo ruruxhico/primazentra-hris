@@ -2,6 +2,7 @@
 
 namespace Config;
 
+use App\Validation\AuthRules;
 use CodeIgniter\Config\BaseConfig;
 use CodeIgniter\Validation\StrictRules\CreditCardRules;
 use CodeIgniter\Validation\StrictRules\FileRules;
@@ -25,6 +26,7 @@ class Validation extends BaseConfig
         FormatRules::class,
         FileRules::class,
         CreditCardRules::class,
+        AuthRules::class,
     ];
 
     /**
@@ -207,6 +209,35 @@ class Validation extends BaseConfig
             'errors' => [
                 'required' => 'Role is required.'
             ]
+        ],
+    ];
+
+    // --------------------------------------------------------------------
+    // AUTH Rules
+    // --------------------------------------------------------------------
+    public array $authRegister = [
+        'email' => [
+            'label' => 'Email Address',
+            'rules' => 'required|valid_email|email_domain_accepts_mail',
+            'errors' => [
+                'required' => 'Email is required.',
+                'valid_email' => 'Email entered is invalid.',
+            ],
+        ],
+        'password' => [
+            'label' => 'Password',
+            'rules' => 'required|strong_password',
+            'errors' => [
+                'required' => 'Password is required.',
+            ],
+        ],
+        'confirm_password' => [
+            'label' => 'Confirm Password',
+            'rules' => 'required|matches[password]',
+            'errors' => [
+                'required' => 'Confirm Password is required.',
+                'matches' => 'Passwords do not match.',
+            ],
         ],
     ];
 }

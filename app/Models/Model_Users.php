@@ -121,9 +121,10 @@ class Model_Users extends Model_BaseFirestore
         $snapshot = $db->collection($this->collection)->document($userId)->snapshot();
 
         if ($snapshot->exists()) {
-            $data = $snapshot->data();
-            $data['id'] = $snapshot->id();
-            return $data;
+            return [
+                'id'   => $snapshot->id(),
+                'data' => $snapshot->data(),
+            ];
         }
 
         return null;

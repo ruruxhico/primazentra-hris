@@ -25,7 +25,7 @@
         <div class="form-section">
             <div class="form-group">
                 <label for="project_name">Project Name *</label>
-                <input type="text" id="project_name" name="project_name" value="<?= esc((string)($project['project_name'] ?? '')) ?>" required>
+                <input type="text" id="project_name" name="project_name" value="<?= esc(view_text($project['project_name'] ?? '')) ?>" required>
             </div>
                 
             <div class="form-row">
@@ -34,7 +34,7 @@
                     <select id="project_type" name="project_type" required>
                         <option value="">Select Type</option>
                         <?php foreach (['Residential', 'Towers', 'Commercial'] as $type): ?>
-                            <option value="<?= esc($type) ?>" <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>><?= esc($type) ?></option>
+                            <option value="<?= esc(view_text($type)) ?>" <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>><?= esc(view_text($type)) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -44,7 +44,7 @@
                     <select id="status" name="status" required>
                         <option value="">Select Status</option>
                         <?php foreach (['Planned', 'On-going', 'Completed', 'Halted'] as $status): ?>
-                            <option value="<?= esc($status) ?>" <?= ($project['status'] ?? '') === $status ? 'selected' : '' ?>><?= esc($status) ?></option>
+                            <option value="<?= esc(view_text($status)) ?>" <?= ($project['status'] ?? '') === $status ? 'selected' : '' ?>><?= esc(view_text($status)) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -52,7 +52,7 @@
 
             <div class="form-group">
                 <label for="location_address">Address *</label>
-                <input type="text" id="location_address" name="location_address" value="<?= esc((string)($project['location_address_value'] ?? $project['location']['address'] ?? '')) ?>" required>
+                <input type="text" id="location_address" name="location_address" value="<?= esc(view_text($project['location_address_value'] ?? ($project['location']['address'] ?? ''))) ?>" required>
             </div>
 
             <div class="form-row">
@@ -62,8 +62,8 @@
                         <option value="">Select Project Manager</option>
                         <?php foreach ($projectManagers ?? [] as $manager): ?>
                             <?php $mgrLabel = trim((string)($manager['first_name'] ?? '') . ' ' . (string)($manager['last_name'] ?? '')); ?>
-                            <option value="<?= esc((string)($manager['id'] ?? '')) ?>" <?= (($project['personnel']['project_manager_id'] ?? '') === ($manager['id'] ?? '')) ? 'selected' : '' ?>>
-                                <?= esc($mgrLabel !== '' ? $mgrLabel : (string)($manager['name'] ?? $manager['full_name'] ?? $manager['email'] ?? 'N/A')) ?>
+                            <option value="<?= esc(view_text($manager['id'] ?? '')) ?>" <?= (($project['personnel']['project_manager_id'] ?? '') === ($manager['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= esc(view_text($mgrLabel !== '' ? $mgrLabel : ($manager['name'] ?? $manager['full_name'] ?? $manager['email'] ?? 'N/A'), 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -75,8 +75,8 @@
                         <option value="">Select Site Engineer</option>
                         <?php foreach ($siteEngineers ?? [] as $engineer): ?>
                             <?php $engLabel = trim((string)($engineer['first_name'] ?? '') . ' ' . (string)($engineer['last_name'] ?? '')); ?>
-                            <option value="<?= esc((string)($engineer['id'] ?? '')) ?>" <?= (($project['personnel']['site_engineer_id'] ?? '') === ($engineer['id'] ?? '')) ? 'selected' : '' ?>>
-                                <?= esc($engLabel !== '' ? $engLabel : (string)($engineer['name'] ?? $engineer['full_name'] ?? $engineer['email'] ?? 'N/A')) ?>
+                            <option value="<?= esc(view_text($engineer['id'] ?? '')) ?>" <?= (($project['personnel']['site_engineer_id'] ?? '') === ($engineer['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= esc(view_text($engLabel !== '' ? $engLabel : ($engineer['name'] ?? $engineer['full_name'] ?? $engineer['email'] ?? 'N/A'), 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -86,12 +86,12 @@
             <!-- <div class="form-row">
                 <div class="form-group">
                     <label for="location_lat">Latitude</label>
-                    <input type="text" id="location_lat" name="location_lat" value="<?= esc((string)($project['location_lat_value'] ?? $project['location']['geopoint']['lat'] ?? '')) ?>" placeholder="14.5995">
+                    <input type="text" id="location_lat" name="location_lat" value="<?= esc(view_text($project['location_lat_value'] ?? ($project['location']['geopoint']['lat'] ?? ''))) ?>" placeholder="14.5995">
                 </div>
 
                 <div class="form-group">
                     <label for="location_lng">Longitude</label>
-                    <input type="text" id="location_lng" name="location_lng" value="<?= esc((string)($project['location_lng_value'] ?? $project['location']['geopoint']['lng'] ?? '')) ?>" placeholder="120.9842">
+                    <input type="text" id="location_lng" name="location_lng" value="<?= esc(view_text($project['location_lng_value'] ?? ($project['location']['geopoint']['lng'] ?? ''))) ?>" placeholder="120.9842">
                 </div>
             </div> -->
 
@@ -99,8 +99,8 @@
                 <div class="form-group">
                     <label for="start_date">Start Date</label>
                     <div class="date-picker" data-target="start">
-                        <input type="text" id="start_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc((string)((($project['start_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime($project['start_date_value'])) : '')) ?>" readonly>
-                        <input type="hidden" id="start_date" name="start_date" value="<?= esc((string)($project['start_date_value'] ?? $project['start_date'] ?? '')) ?>">
+                        <input type="text" id="start_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc(view_text((($project['start_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string) $project['start_date_value'])) : '')) ?>" readonly>
+                        <input type="hidden" id="start_date" name="start_date" value="<?= esc(view_text($project['start_date_value'] ?? ($project['start_date'] ?? ''))) ?>">
                         <button type="button" class="date-toggle">📅</button>
                         <div class="calendar-popup" aria-hidden="true"></div>
                     </div>
@@ -109,8 +109,8 @@
                 <div class="form-group">
                     <label for="end_date">End Date</label>
                     <div class="date-picker" data-target="end">
-                        <input type="text" id="end_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc((string)((($project['end_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime($project['end_date_value'])) : '')) ?>" readonly>
-                        <input type="hidden" id="end_date" name="end_date" value="<?= esc((string)($project['end_date_value'] ?? $project['end_date'] ?? '')) ?>">
+                        <input type="text" id="end_date_display" class="date-display" placeholder="dd/mm/yyyy" value="<?= esc(view_text((($project['end_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string) $project['end_date_value'])) : '')) ?>" readonly>
+                        <input type="hidden" id="end_date" name="end_date" value="<?= esc(view_text($project['end_date_value'] ?? ($project['end_date'] ?? ''))) ?>">
                         <button type="button" class="date-toggle">📅</button>
                         <div class="calendar-popup" aria-hidden="true"></div>
                     </div>
@@ -119,7 +119,7 @@
 
             <div class="form-group">
                 <label for="budget">Budget *</label>
-                <input type="number" id="budget" name="budget" min="0" step="0.01" value="<?= esc((string)($project['budget'] ?? '')) ?>" required>
+                <input type="number" id="budget" name="budget" min="0" step="0.01" value="<?= esc(view_text($project['budget'] ?? '')) ?>" required>
             </div>
             
         </div>
@@ -144,7 +144,7 @@
                 </label>
             </div>
 
-            <input type="hidden" id="overall_progress" name="overall_progress" value="<?= esc((string)($project['overall_progress'] ?? $project['completion_percent'] ?? 0)) ?>">
+            <input type="hidden" id="overall_progress" name="overall_progress" value="<?= esc(view_text($project['overall_progress'] ?? ($project['completion_percent'] ?? 0))) ?>">
 
             <div class="section-title-row">
                 <h2>Tasks</h2>
@@ -167,16 +167,16 @@
                         <?php foreach ($tasks as $index => $task): ?>
                             <tr class="task-row">
                                 <td>
-                                    <input type="hidden" name="tasks[<?= $index ?>][id]" value="<?= esc((string)($task['id'] ?? '')) ?>">
-                                    <input type="text" name="tasks[<?= $index ?>][task_name]" value="<?= esc((string)($task['task_name'] ?? '')) ?>" placeholder="Task name">
+                                    <input type="hidden" name="tasks[<?= $index ?>][id]" value="<?= esc(view_text($task['id'] ?? '')) ?>">
+                                    <input type="text" name="tasks[<?= $index ?>][task_name]" value="<?= esc(view_text($task['task_name'] ?? '')) ?>" placeholder="Task name">
                                 </td>
-                                <td><input type="text" name="tasks[<?= $index ?>][phase_name]" value="<?= esc((string)($task['phase_name'] ?? '')) ?>" placeholder="Foundation"></td>
-                                <td><input type="number" name="tasks[<?= $index ?>][weight_percent]" value="<?= esc((string)($task['weight_percent'] ?? '')) ?>" min="0" max="100" step="0.01" class="task-weight"></td>
-                                <td><input type="number" name="tasks[<?= $index ?>][completion_percent]" value="<?= esc((string)($task['completion_percent'] ?? '')) ?>" min="0" max="100" step="0.01" class="task-completion"></td>
+                                <td><input type="text" name="tasks[<?= $index ?>][phase_name]" value="<?= esc(view_text($task['phase_name'] ?? '')) ?>" placeholder="Foundation"></td>
+                                <td><input type="number" name="tasks[<?= $index ?>][weight_percent]" value="<?= esc(view_text($task['weight_percent'] ?? '')) ?>" min="0" max="100" step="0.01" class="task-weight"></td>
+                                <td><input type="number" name="tasks[<?= $index ?>][completion_percent]" value="<?= esc(view_text($task['completion_percent'] ?? '')) ?>" min="0" max="100" step="0.01" class="task-completion"></td>
                                 <td>
                                     <select name="tasks[<?= $index ?>][status]">
                                         <?php foreach (['Pending', 'In Progress', 'Done'] as $taskStatus): ?>
-                                            <option value="<?= esc($taskStatus) ?>" <?= ($task['status'] ?? 'Pending') === $taskStatus ? 'selected' : '' ?>><?= esc($taskStatus) ?></option>
+                                            <option value="<?= esc(view_text($taskStatus)) ?>" <?= ($task['status'] ?? 'Pending') === $taskStatus ? 'selected' : '' ?>><?= esc(view_text($taskStatus)) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </td>

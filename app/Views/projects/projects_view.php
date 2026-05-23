@@ -175,21 +175,21 @@
                         <tr>
                             <td><?= $index + 1 ?></td>
                             <td>
-                                <strong><?= esc((string)($project['project_name'] ?? 'N/A')) ?></strong>
+                                <strong><?= esc(view_text($project['project_name'] ?? 'N/A', 'N/A')) ?></strong>
                             </td>
-                            <td><?= esc((string)($project['project_type'] ?? 'N/A')) ?></td>
-                            <td><?= esc((string)($project['location_label'] ?? $project['location']['address'] ?? 'N/A')) ?></td>
+                            <td><?= esc(view_text($project['project_type'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><?= esc(view_text($project['location_label'] ?? ($project['location']['address'] ?? 'N/A'), 'N/A')) ?></td>
                             <td style="text-align: center;">
                                 <span class="progress-badge">
-                                    <?= esc((string)($project['progress_label'] ?? $project['overall_progress'] ?? 0)) ?>%
+                                    <?= esc(view_text($project['progress_label'] ?? ($project['overall_progress'] ?? 0))) ?>%
                                 </span>
                             </td>
-                            <td><?= esc((string)($project['project_manager_name'] ?? 'N/A')) ?></td>
-                            <td><?= esc((string)($project['site_engineer_name'] ?? 'N/A')) ?></td>
+                            <td><?= esc(view_text($project['project_manager_name'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><?= esc(view_text($project['site_engineer_name'] ?? 'N/A', 'N/A')) ?></td>
                             <td style="text-align: center;">
                                 <a href="<?= base_url('projects/show/' . $project['id']) ?>" class="action-button" title="View">👁️</a>
                                 <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-button" title="Edit">✏️</a>
-                                <a href="#" data-id="<?= esc((string)$project['id']) ?>" data-name="<?= esc((string)($project['project_name'] ?? '')) ?>" class="action-button action-delete" title="Delete">🗑️</a>
+                                <a href="#" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" class="action-button action-delete" title="Delete">🗑️</a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

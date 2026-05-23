@@ -8,34 +8,34 @@
     <div class="detail-container">
         <dl>
             <dt>Project Name</dt>
-            <dd><?= esc((string)($project['project_name'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['project_name'] ?? '')) ?></dd>
 
             <dt>Type</dt>
-            <dd><?= esc((string)($project['project_type'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['project_type'] ?? '')) ?></dd>
 
             <dt>Status</dt>
-            <dd><?= esc((string)($project['status'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['status'] ?? '')) ?></dd>
 
             <dt>Location</dt>
-            <dd><?= esc((string)($project['location_label'] ?? ($project['location']['address'] ?? ''))) ?></dd>
+            <dd><?= esc(view_text($project['location_label'] ?? ($project['location']['address'] ?? ''))) ?></dd>
 
             <dt>Start Date</dt>
-            <dd><?= esc((string)($project['start_date_value'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['start_date_value'] ?? '')) ?></dd>
 
             <dt>End Date</dt>
-            <dd><?= esc((string)($project['end_date_value'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['end_date_value'] ?? '')) ?></dd>
 
             <dt>Budget</dt>
-            <dd><?= esc((string)($project['budget'] ?? '')) ?></dd>
+            <dd><?= esc(view_text($project['budget'] ?? '')) ?></dd>
 
             <dt>Overall Progress</dt>
-            <dd><?= esc((string)($project['progress_label'] ?? $project['overall_progress'] ?? 0)) ?>%</dd>
+            <dd><?= esc(view_text($project['progress_label'] ?? ($project['overall_progress'] ?? 0))) ?>%</dd>
 
             <dt>Project Manager</dt>
-            <dd><?= esc((string)($project['project_manager_name'] ?? 'N/A')) ?></dd>
+            <dd><?= esc(view_text($project['project_manager_name'] ?? 'N/A', 'N/A')) ?></dd>
 
             <dt>Site Engineer</dt>
-            <dd><?= esc((string)($project['site_engineer_name'] ?? 'N/A')) ?></dd>
+            <dd><?= esc(view_text($project['site_engineer_name'] ?? 'N/A', 'N/A')) ?></dd>
         </dl>
 
         <div class="form-actions">

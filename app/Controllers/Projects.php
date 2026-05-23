@@ -410,11 +410,11 @@ class Projects extends BaseController
 
     private function resolveUserName($userId): string
     {
-        if (!$userId) {
+        $rawUserId = $this->normalizeReferenceValue($userId);
+
+        if ($rawUserId === '') {
             return 'N/A';
         }
-
-        $rawUserId = trim((string) $userId);
         $normalizedId = preg_replace('#^.*/#', '', $rawUserId) ?: $rawUserId;
 
         $user = $this->usersModel->getUserById($normalizedId);
@@ -438,6 +438,53 @@ class Projects extends BaseController
         }
 
         return (string) ($user['name'] ?? $user['full_name'] ?? $user['email'] ?? $rawUserId);
+    }
+
+    private function normalizeReferenceValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_string($value) || is_int($value) || is_float($value) || is_bool($value)) {
+            return trim((string) $value);
+        }
+
+        if (is_object($value)) {
+            if (method_exists($value, 'id')) {
+                try {
+                    $id = $value->id();
+                    if (is_string($id) || is_int($id) || is_float($id) || is_bool($id)) {
+                        return trim((string) $id);
+                    }
+                } catch (\Throwable) {
+                    // Fall through to other extraction strategies.
+                }
+            }
+
+            if (method_exists($value, 'path')) {
+                try {
+                    $path = $value->path();
+                    if (is_string($path) || is_int($path) || is_float($path) || is_bool($path)) {
+                        return trim((string) $path);
+                    }
+                } catch (\Throwable) {
+                    // Ignore and continue.
+                }
+            }
+
+            if (method_exists($value, '__toString')) {
+                try {
+                    return trim((string) $value);
+                } catch (\Throwable) {
+                    return '';
+                }
+            }
+
+            return '';
+        }
+
+        return trim((string) $value);
     }
 
     private function normalizeDateValue($value): string

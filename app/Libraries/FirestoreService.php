@@ -8,6 +8,7 @@ use Kreait\Firebase\Factory;
 
 class FirestoreService {
     protected $db;
+    protected $auth;
 
     public function __construct() {
         // 1. Point exactly to the writable/credentials folder
@@ -28,6 +29,7 @@ class FirestoreService {
             // We use the Factory method which we already proved works in your test
             $factory = (new Factory)->withServiceAccount($path);
             $this->db = $factory->createFirestore()->database();
+            $this->auth = $factory->createAuth();
             
         } catch (\Exception $e) {
             die("<b>Firestore Connection Error:</b> " . $e->getMessage());
@@ -36,5 +38,9 @@ class FirestoreService {
 
     public function getDb() {
         return $this->db;
+    }
+
+    public function getAuth() {
+        return $this->auth;
     }
 }

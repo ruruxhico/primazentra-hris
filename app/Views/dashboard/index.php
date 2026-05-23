@@ -177,7 +177,7 @@
     <div class="header">
         <h1>Dashboard Summary</h1>
         <div class="user-info">
-            <strong><?= esc($userName ?? 'User') ?></strong>
+            <strong><?= esc(view_text($userName ?? 'User', 'User')) ?></strong>
             <small><?= strtoupper($role ?? 'USER') ?></small>
         </div>
     </div>
@@ -208,10 +208,10 @@
         <?php if (!empty($blockers)): ?>
             <?php foreach ($blockers as $blocker): ?>
                 <div class="blocker-item">
-                    <strong><?= esc((string)$blocker['project_name'] ?? 'N/A') ?></strong>
-                    <p><strong>Status:</strong> <?= esc((string)$blocker['status'] ?? 'N/A') ?></p>
+                    <strong><?= esc(view_text($blocker['project_name'] ?? 'N/A', 'N/A')) ?></strong>
+                    <p><strong>Status:</strong> <?= esc(view_text($blocker['status'] ?? 'N/A', 'N/A')) ?></p>
                     <p><strong>Completion:</strong> <?= ($blocker['completion_percent'] ?? 0) ?>%</p>
-                    <p><strong>Project Type:</strong> <?= esc((string)$blocker['project_type'] ?? 'N/A') ?></p>
+                    <p><strong>Project Type:</strong> <?= esc(view_text($blocker['project_type'] ?? 'N/A', 'N/A')) ?></p>
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
@@ -237,10 +237,10 @@
                 <tbody>
                     <?php foreach ($tools as $tool): ?>
                         <tr>
-                            <td><?= esc((string)$tool['name'] ?? 'N/A') ?></td>
-                            <td><?= esc((string)$tool['category'] ?? 'Equipment') ?></td>
-                            <td><?= esc((string)$tool['condition'] ?? 'Functional') ?></td>
-                            <td><span class="status-badge"><?= esc((string)$tool['status'] ?? 'Available') ?></span></td>
+                            <td><?= esc(view_text($tool['name'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><?= esc(view_text($tool['category'] ?? 'Equipment', 'Equipment')) ?></td>
+                            <td><?= esc(view_text($tool['condition'] ?? 'Functional', 'Functional')) ?></td>
+                            <td><span class="status-badge"><?= esc(view_text($tool['status'] ?? 'Available', 'Available')) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
@@ -268,10 +268,10 @@
                 <tbody>
                     <?php foreach ($availableManpower as $worker): ?>
                         <tr>
-                            <td><?= esc((string) ($worker['name'] ?? 'N/A')) ?></td>
-                            <td><?= esc((string) ($worker['role'] ?? 'Field Worker')) ?></td>
-                            <td><?= esc((string) ($worker['specialization'] ?? 'N/A')) ?></td>
-                            <td><span class="status-badge"><?= esc((string) ($worker['status'] ?? 'Available')) ?></span></td>
+                            <td><?= esc(view_text($worker['name'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><?= esc(view_text($worker['role'] ?? 'Field Worker', 'Field Worker')) ?></td>
+                            <td><?= esc(view_text($worker['specialization'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><span class="status-badge"><?= esc(view_text($worker['status'] ?? 'Available', 'Available')) ?></span></td>
                         </tr>
                     <?php endforeach; ?>
                 </tbody>
