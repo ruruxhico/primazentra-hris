@@ -9,6 +9,12 @@ $routes->get('/', 'Auth::login');
 $routes->get('login', 'Auth::login');
 $routes->get('auth/login', 'Auth::login');
 $routes->post('auth/processLogin', 'Auth::processLogin');
+$routes->get('forgot-password', 'Auth::forgotPassword');
+$routes->get('auth/forgot-password', 'Auth::forgotPassword');
+$routes->post('auth/processForgotPassword', 'Auth::processForgotPassword');
+// Password reset (link from email)
+$routes->get('reset-password', 'Auth::resetPassword');
+$routes->post('auth/processResetPassword', 'Auth::processResetPassword');
 $routes->get('register', 'Auth::register');
 $routes->get('auth/register', 'Auth::register');
 $routes->post('auth/processRegister', 'Auth::processRegister');

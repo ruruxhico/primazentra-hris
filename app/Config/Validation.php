@@ -240,4 +240,40 @@ class Validation extends BaseConfig
             ],
         ],
     ];
+
+    public array $authForgotPassword = [
+        'email' => [
+            'label' => 'Email Address',
+            'rules' => 'required|valid_email|email_domain_accepts_mail',
+            'errors' => [
+                'required' => 'Email is required.',
+                'valid_email' => 'Email entered is invalid.',
+            ],
+        ],
+    ];
+
+    public array $authResetPassword = [
+        'oobCode' => [
+            'label' => 'Reset Code',
+            'rules' => 'required',
+            'errors' => [
+                'required' => 'Reset code is required.'
+            ],
+        ],
+        'password' => [
+            'label' => 'Password',
+            'rules' => 'required|strong_password',
+            'errors' => [
+                'required' => 'Password is required.'
+            ],
+        ],
+        'confirm_password' => [
+            'label' => 'Confirm Password',
+            'rules' => 'required|matches[password]',
+            'errors' => [
+                'required' => 'Confirm Password is required.',
+                'matches' => 'Passwords do not match.'
+            ],
+        ],
+    ];
 }

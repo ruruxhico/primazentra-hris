@@ -22,6 +22,150 @@ class Auth extends BaseController {
         ]);
     }
 
+    public function forgotPassword() {
+        return view('auth/forgot_password');
+    }
+
+    public function processForgotPassword() {
+        $email = strtolower(trim((string) $this->request->getPost('email')));
+
+        $validationData = [
+            'email' => $email,
+        ];
+
+        if (! $this->validateData($validationData, 'authForgotPassword')) {
+            $errors = $this->validator ? $this->validator->getErrors() : [];
+            $firstError = is_array($errors) && $errors !== [] ? (string) reset($errors) : 'Please review the email address and try again.';
+
+            return redirect()->back()->withInput()->with('error', $firstError);
+        }
+
+        try {
+            $firebaseAuth = $this->firestore->getAuth();
+            $firebaseAuth->getUserByEmail($email);
+
+            $resetLink = $this->buildAppPasswordResetLink($email, $firebaseAuth);
+            $this->sendAppPasswordResetEmail($email, $resetLink);
+        } catch (\Throwable $e) {
+            log_message('error', 'Password reset request failed for ' . $email . ': ' . $e->getMessage());
+
+            if (str_contains(strtolower($e->getMessage()), 'user not found')) {
+                return redirect()->back()->withInput()->with('error', 'No Firebase Auth account was found for that email address.');
+            }
+
+            return redirect()->back()->withInput()->with('error', 'Unable to send the reset link right now. Please try again later.');
+        }
+
+        return redirect()->to('/forgot-password')->with('success', 'If an account exists for that email, a password reset link has been sent.');
+    }
+
+    private function buildAppPasswordResetLink(string $email, $firebaseAuth): string
+    {
+        $actionCodeSettings = [
+            'continueUrl' => rtrim(base_url('/reset-password'), '/'),
+            'handleCodeInApp' => true,
+        ];
+
+        $firebaseLink = $firebaseAuth->getPasswordResetLink($email, $actionCodeSettings);
+        $queryString = (string) parse_url($firebaseLink, PHP_URL_QUERY);
+        parse_str($queryString, $query);
+
+        $oobCode = (string) ($query['oobCode'] ?? '');
+
+        if ($oobCode === '') {
+            throw new \RuntimeException('Unable to generate password reset code.');
+        }
+
+        return site_url('reset-password?oobCode=' . rawurlencode($oobCode));
+    }
+
+    private function sendAppPasswordResetEmail(string $email, string $resetLink): void
+    {
+        $mailer = service('email');
+        $emailConfig = config('Email');
+
+        $mailer->initialize([
+            'protocol' => $emailConfig->protocol,
+            'mailPath' => $emailConfig->mailPath,
+            'SMTPHost' => $emailConfig->SMTPHost,
+            'SMTPUser' => $emailConfig->SMTPUser,
+            'SMTPPass' => $emailConfig->SMTPPass,
+            'SMTPPort' => $emailConfig->SMTPPort,
+            'SMTPCrypto' => $emailConfig->SMTPCrypto,
+            'SMTPAuthMethod' => $emailConfig->SMTPAuthMethod,
+            'SMTPTimeout' => $emailConfig->SMTPTimeout,
+            'mailType' => 'html',
+            'charset' => $emailConfig->charset,
+            'wordWrap' => true,
+            'validate' => false,
+            'CRLF' => $emailConfig->CRLF,
+            'newline' => $emailConfig->newline,
+        ]);
+
+        $fromEmail = $emailConfig->fromEmail ?: (string) env('EMAIL_FROM', 'no-reply@primazentra.local');
+        $fromName = $emailConfig->fromName ?: (string) env('EMAIL_FROM_NAME', 'PrimaZentra');
+
+        $mailer->setFrom($fromEmail, $fromName);
+        $mailer->setTo($email);
+        $mailer->setSubject('PrimaZentra password reset');
+        $mailer->setMessage(view('emails/password_reset', [
+            'email' => $email,
+            'resetLink' => $resetLink,
+        ]));
+
+        if (! $mailer->send(false)) {
+            throw new \RuntimeException($mailer->printDebugger(['headers']));
+        }
+    }
+
+    /**
+     * Show reset form (linked from email). Expects ?oobCode=...
+     */
+    public function resetPassword() {
+        $oobCode = (string) $this->request->getGet('oobCode');
+
+        if ($oobCode === '') {
+            return redirect()->to('/forgot-password')->with('error', 'Invalid or missing reset code.');
+        }
+
+        try {
+            $email = $this->firestore->getAuth()->verifyPasswordResetCode($oobCode);
+        } catch (\Throwable $e) {
+            return redirect()->to('/forgot-password')->with('error', 'Invalid or expired reset link.');
+        }
+
+        return view('auth/reset_password', ['oobCode' => $oobCode, 'email' => $email]);
+    }
+
+    public function processResetPassword() {
+        $oobCode = (string) $this->request->getPost('oobCode');
+        $password = (string) $this->request->getPost('password');
+        $confirm = (string) $this->request->getPost('confirm_password');
+
+        $validationData = [
+            'oobCode' => $oobCode,
+            'password' => $password,
+            'confirm_password' => $confirm,
+        ];
+
+        if (! $this->validateData($validationData, 'authResetPassword')) {
+            $errors = $this->validator ? $this->validator->getErrors() : [];
+            $firstError = is_array($errors) && $errors !== [] ? (string) reset($errors) : 'Please review the form.';
+            return redirect()->back()->withInput()->with('error', $firstError);
+        }
+
+        try {
+            $email = $this->firestore->getAuth()->confirmPasswordReset($oobCode, $password, true);
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', 'Unable to reset password: ' . $e->getMessage());
+        }
+
+        // Do not touch must_change_password here; that flag is used for non-admin role policy.
+        // The password itself lives only in Firebase Auth, so there is no Firestore password data to sync.
+
+        return redirect()->to('/login')->with('success', 'Your password has been reset successfully. You may now sign in.');
+    }
+
     public function processLogin() {
         $email = strtolower(trim((string) $this->request->getPost('email')));
         $password = (string) $this->request->getPost('password');
@@ -122,7 +266,6 @@ class Auth extends BaseController {
             'email'       => $email,
             'country_code' => $countryCode,
             'contact_number' => $contactNumber,
-            'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'role'        => 'executive', // Hardcoded as per your rule
             'created_at'  => new Timestamp(new \DateTime()),
             'must_change_password' => false
