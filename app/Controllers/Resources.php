@@ -647,17 +647,19 @@ class Resources extends BaseController
         $resource['category_label'] = (string) ($resource['category'] ?? '');
         $resource['asset_details'] = is_array($resource['asset_details'] ?? null) ? $resource['asset_details'] : [];
         $resource['manpower_details'] = is_array($resource['manpower_details'] ?? null) ? $resource['manpower_details'] : [];
+        $resource['total_quantity_display'] = (int) ($resource['asset_details']['total_quantity'] ?? 0);
+        $resource['available_units_display'] = (int) ($resource['asset_details']['available_quantity'] ?? 0);
 
         // Ensure model_code is populated for Equipment/Tools
         if (empty($resource['model_code']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
             $resource['model_code'] = (string) ($resource['asset_details']['model_number'] ?? '');
         }
 
-        // Ensure condition_summary exists for Equipment/Tools
-        $conditionSummary = $resource['condition_summary'] ?? $resource['asset_details']['condition_summary'] ?? [];
-        if (!is_array($conditionSummary) || empty($conditionSummary)) {
-            $derivedItems = [];
-            if (!empty($resource['id'])) {
+        $derivedItems = [];
+        if (in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
+            if (!empty($resource['items']) && is_array($resource['items'])) {
+                $derivedItems = $resource['items'];
+            } elseif (!empty($resource['id'])) {
                 try {
                     $derivedItems = $this->model->getResourceItems($resource['id']);
                 } catch (\Exception $e) {
@@ -665,10 +667,17 @@ class Resources extends BaseController
                 }
             }
 
-            if (empty($derivedItems) && !empty($resource['items']) && is_array($resource['items'])) {
-                $derivedItems = $resource['items'];
+            if (!empty($derivedItems)) {
+                $resource['total_quantity_display'] = count($derivedItems);
+                $resource['available_units_display'] = $this->countAvailableUnits($derivedItems);
+                $resource['asset_details']['total_quantity'] = $resource['total_quantity_display'];
+                $resource['asset_details']['available_quantity'] = $resource['available_units_display'];
             }
+        }
 
+        // Ensure condition_summary exists for Equipment/Tools
+        $conditionSummary = $resource['condition_summary'] ?? $resource['asset_details']['condition_summary'] ?? [];
+        if (!is_array($conditionSummary) || empty($conditionSummary)) {
             $conditionSummary = $this->buildConditionSummary($derivedItems);
         }
         
@@ -746,6 +755,27 @@ class Resources extends BaseController
         }
 
         return $resource;
+    }
+
+    private function countAvailableUnits(array $items): int
+    {
+        $count = 0;
+
+        foreach ($items as $item) {
+            $status = strtolower(trim((string) ($item['status'] ?? '')));
+            $condition = strtolower(trim((string) ($item['condition'] ?? '')));
+
+            if ($status === '' && in_array($condition, ['functional', 'new'], true)) {
+                $count++;
+                continue;
+            }
+
+            if (in_array($status, ['in-storage', 'available'], true)) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     private function getProjectSiteOptions(): array

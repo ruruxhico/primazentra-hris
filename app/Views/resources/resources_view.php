@@ -65,50 +65,27 @@
         <table class="resource-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>EQUIPMENT NAME</th>
-                    <th>STATUS</th>
-                    <th>CONDITION</th>
-                    <th>NEXT AVAILABLE</th>
+                    <th>NO.</th>
+                    <th>MODEL NAME</th>
                     <th>MODEL NUMBER</th>
-                    <th>TAGS</th>
+                    <th>TOTAL QUANTITY</th>
+                    <th>AVAILABLE UNITS</th>
                     <th class="text-center">ACTIONS</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (empty($equipment)): ?>
                     <tr>
-                            No equipment found.
-                        </td>
+                        <td colspan="6" class="text-center">No equipment found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($equipment as $index => $item): ?>
                         <tr>
                             <td><?= $index + 1 ?></td>
                             <td><strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong></td>
-                            <td>
-                                <span class="status-badge status-<?= strtolower(str_replace('-', '', $item['status'] ?? 'available')) ?>">
-                                    <?= esc((string)($item['status'] ?? 'N/A')) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if (isset($item['asset_details']['condition_summary']) && is_array($item['asset_details']['condition_summary'])): ?>
-                                    <span class="condition-badge">
-                                        <?= esc((string)(array_key_first($item['asset_details']['condition_summary']) ?? 'N/A')) ?>
-                                    </span>
-                                <?php else: ?>
-                                    N/A
-                                <?php endif; ?>
-                            </td>
-                            <td><?= isset($item['next_availability']) ? esc((string)$item['next_availability']) : 'N/A' ?></td>
-                            <td><?= isset($item['asset_details']['model_number']) ? esc((string)$item['asset_details']['model_number']) : 'N/A' ?></td>
-                            <td>
-                                <?php if (isset($item['asset_details']['condition_summary']) && is_array($item['asset_details']['condition_summary'])): ?>
-                                    <?php foreach ($item['asset_details']['condition_summary'] as $condition => $count): ?>
-                                        <span class="tag-badge tag-<?= strtolower($condition) ?>"><?= esc((string)$condition) ?></span>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </td>
+                            <td><?= esc((string)($item['asset_details']['model_number'] ?? $item['model_code'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
+                            <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
                                 <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">👁️</a>
                                 <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">✏️</a>
@@ -150,13 +127,11 @@
         <table class="resource-table">
             <thead>
                 <tr>
-                    <th>ID</th>
-                    <th>TOOL NAME</th>
-                    <th>STATUS</th>
-                    <th>CONDITION</th>
-                    <th>NEXT AVAILABLE</th>
+                    <th>NO.</th>
+                    <th>MODEL NAME</th>
                     <th>MODEL NUMBER</th>
-                    <th>TAGS</th>
+                    <th>TOTAL QUANTITY</th>
+                    <th>AVAILABLE</th>
                     <th class="text-center">ACTIONS</th>
                 </tr>
             </thead>
@@ -166,37 +141,16 @@
                 ?>
                 <?php if (empty($tools)): ?>
                     <tr>
-                            No tools found.
-                        </td>
+                        <td colspan="6" class="text-center">No tools found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($tools as $index => $item): ?>
                         <tr>
                             <td><?= $index + 1 ?></td>
                             <td><strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong></td>
-                            <td>
-                                <span class="status-badge status-<?= strtolower(str_replace('-', '', $item['status'] ?? 'available')) ?>">
-                                    <?= esc((string)($item['status'] ?? 'N/A')) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if (isset($item['asset_details']['condition_summary']) && is_array($item['asset_details']['condition_summary'])): ?>
-                                    <span class="condition-badge">
-                                        <?= esc((string)(array_key_first($item['asset_details']['condition_summary']) ?? 'N/A')) ?>
-                                    </span>
-                                <?php else: ?>
-                                    N/A
-                                <?php endif; ?>
-                            </td>
-                            <td><?= isset($item['next_availability']) ? esc((string)$item['next_availability']) : 'N/A' ?></td>
-                            <td><?= isset($item['asset_details']['model_number']) ? esc((string)$item['asset_details']['model_number']) : 'N/A' ?></td>
-                            <td>
-                                <?php if (isset($item['asset_details']['condition_summary']) && is_array($item['asset_details']['condition_summary'])): ?>
-                                    <?php foreach ($item['asset_details']['condition_summary'] as $condition => $count): ?>
-                                        <span class="tag-badge tag-<?= strtolower($condition) ?>"><?= esc((string)$condition) ?></span>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </td>
+                            <td><?= esc((string)($item['asset_details']['model_number'] ?? $item['model_code'] ?? 'N/A')) ?></td>
+                            <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
+                            <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
                                 <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">👁️</a>
                                 <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">✏️</a>
