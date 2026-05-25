@@ -252,6 +252,49 @@ body.auth-page {
     padding-right: 0.25rem;
 }
 
+.auth-shell--register .auth-input-wrap,
+.auth-shell--register .iti input#contactNumber {
+    background: #fff1c8;
+}
+
+.auth-shell--register .auth-input-wrap input,
+.auth-shell--register .iti input#contactNumber {
+    border: 0;
+    outline: none;
+    box-shadow: none;
+    background: transparent;
+}
+
+.auth-shell--register .auth-input-wrap:focus-within,
+.auth-shell--register .iti input#contactNumber:focus {
+    box-shadow: none;
+}
+
+.auth-shell--register .auth-icon-button {
+    border: 0;
+    background: transparent;
+}
+
+.auth-shell--register .phone-input-group {
+    border: 1px solid #bfa46d;
+    background: #fff1c8;
+}
+
+.auth-shell--register .phone-prefix {
+    background: transparent;
+    border-right: 0;
+}
+
+.auth-shell--register .iti--separate-dial-code .iti__selected-flag {
+    border-right: 0;
+    background: transparent;
+}
+
+.auth-shell--register .iti__flag-container,
+.auth-shell--register .iti__selected-flag {
+    border-radius: 0;
+}
+
 .auth-shell--login .auth-field input::placeholder {
     color: #988767;
 }
@@ -558,6 +601,14 @@ body.auth-page {
 .iti input#contactNumber:focus {
     border-color: #9a7918;
     box-shadow: 0 0 0 3px rgba(154, 121, 24, 0.12);
+}
+
+.auth-shell--register .iti input#contactNumber {
+    border-color: transparent;
+}
+
+.auth-shell--register .iti input#contactNumber:focus {
+    border-color: transparent;
 }
 
 .iti--separate-dial-code .iti__selected-flag {
@@ -1082,7 +1133,7 @@ textarea:focus {
     display: flex;
     align-items: stretch;
     border: 1px solid #D4A574;
-    border-radius: var(--border-radius-md);
+    border-radius: 999px;
     overflow: hidden;
     background: var(--color-white);
 }
@@ -1107,6 +1158,10 @@ textarea:focus {
 
 .phone-input-group input:focus {
     box-shadow: none;
+}
+
+.auth-shell--register .iti--separate-dial-code .iti__selected-flag {
+    border-radius: 999px 0 0 999px;
 }
 
 .phone-hint {

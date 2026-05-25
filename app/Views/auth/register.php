@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - PrimaZentra</title>
     <link rel="stylesheet" href="<?= base_url('public/css/styles.css') ?>?v=<?= filemtime(FCPATH . 'public/css/styles.css') ?>">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/css/intlTelInput.css">
 </head>
 <body class="auth-page">
@@ -13,7 +14,7 @@
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
         </div>
 
-        <div class="auth-card auth-card--wide">
+        <div class="auth-card auth-card--login">
             <h1>REGISTRATION</h1>
 
             <?php if (session()->getFlashdata('success')): ?>
@@ -30,29 +31,35 @@
 
             <form action="<?= base_url('auth/processRegister') ?>" method="post" class="auth-form" novalidate id="registerForm">
                 <div class="auth-section-label">
-                    <span class="auth-section-icon">👤</span>
+                    <span class="auth-section-icon material-symbols-outlined" aria-hidden="true">person</span>
                     <span>Personal Information</span>
                 </div>
 
                 <div class="form-row form-row--auth">
                     <div class="auth-field">
                         <label for="firstName">FIRST NAME *</label>
-                        <input type="text" id="firstName" name="firstName" placeholder="FIRST NAME" required autocomplete="given-name" autocapitalize="characters" class="name-uppercase">
+                        <div class="auth-input-wrap auth-input-wrap--icon-left">
+                            <input type="text" id="firstName" name="firstName" placeholder="FIRST NAME" required autocomplete="given-name" autocapitalize="characters" class="name-uppercase">
+                        </div>
                     </div>
                     <div class="auth-field">
                         <label for="middleName">MIDDLE NAME</label>
-                        <input type="text" id="middleName" name="middleName" placeholder="MIDDLE NAME" autocomplete="additional-name" autocapitalize="characters" class="name-uppercase">
+                        <div class="auth-input-wrap auth-input-wrap--icon-left">
+                            <input type="text" id="middleName" name="middleName" placeholder="MIDDLE NAME" autocomplete="additional-name" autocapitalize="characters" class="name-uppercase">
+                        </div>
                     </div>
                     <div class="auth-field">
                         <label for="lastName">LAST NAME *</label>
-                        <input type="text" id="lastName" name="lastName" placeholder="LAST NAME" required autocomplete="family-name" autocapitalize="characters" class="name-uppercase">
+                        <div class="auth-input-wrap auth-input-wrap--icon-left">
+                            <input type="text" id="lastName" name="lastName" placeholder="LAST NAME" required autocomplete="family-name" autocapitalize="characters" class="name-uppercase">
+                        </div>
                     </div>
                 </div>
 
                 <div class="auth-divider"></div>
 
                 <div class="auth-section-label">
-                    <span class="auth-section-icon">🪪</span>
+                    <span class="auth-section-icon material-symbols-outlined" aria-hidden="true">badge</span>
                     <span>Account Credentials</span>
                 </div>
 
@@ -69,15 +76,21 @@
                 <div class="form-row form-row--auth">
                     <div class="auth-field">
                         <label for="password">PASSWORD *</label>
-                        <div class="auth-input-wrap auth-input-wrap--icon-left">
+                        <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
                             <input type="password" id="password" name="password" placeholder="PASSWORD" required>
+                            <button type="button" class="auth-icon-button" data-password-toggle="#password" aria-label="Show password">
+                                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                            </button>
                         </div>
                         <div class="field-error hidden" id="registerPasswordError"></div>
                     </div>
                     <div class="auth-field">
                         <label for="confirmPassword">CONFIRM PASSWORD *</label>
-                        <div class="auth-input-wrap auth-input-wrap--icon-left">
+                        <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
                             <input type="password" id="confirmPassword" name="confirm_password" placeholder="CONFIRM PASSWORD" required>
+                            <button type="button" class="auth-icon-button" data-password-toggle="#confirmPassword" aria-label="Show password">
+                                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                            </button>
                         </div>
                         <div class="field-error hidden" id="registerConfirmError"></div>
                     </div>
@@ -86,15 +99,17 @@
                 <div class="auth-contact-block">
                     <div class="auth-field auth-field--full">
                         <label for="contactNumber">CONTACT NUMBER *</label>
-                        <input
-                            type="tel"
-                            id="contactNumber"
-                            name="contact_number_display"
-                            placeholder="Phone number"
-                            inputmode="tel"
-                            autocomplete="tel"
-                            required
-                        >
+                        <div class="phone-input-group">
+                            <input
+                                type="tel"
+                                id="contactNumber"
+                                name="contact_number_display"
+                                placeholder="Phone number"
+                                inputmode="tel"
+                                autocomplete="tel"
+                                required
+                            >
+                        </div>
                         <input type="hidden" name="country_code" id="countryCode" value="PH">
                         <input type="hidden" name="contact_number" id="contactNumberFull" value="">
                         <small class="phone-hint" id="phoneHint">Include your active mobile number.</small>
@@ -178,6 +193,22 @@
                         el.textContent = '';
                         el.classList.add('hidden');
                     }
+
+                    document.addEventListener('click', function (event) {
+                        const toggle = event.target.closest('[data-password-toggle]');
+                        if (!toggle) return;
+
+                        const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
+                        if (!input) return;
+
+                        const icon = toggle.querySelector('.material-symbols-outlined');
+                        const isPassword = input.type === 'password';
+                        input.type = isPassword ? 'text' : 'password';
+                        if (icon) {
+                            icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+                        }
+                        toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+                    });
 
                     function isValidEmail(v) {
                         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
@@ -344,6 +375,7 @@
                         confirmError.textContent = 'Passwords do not match.';
                         confirmError.classList.remove('hidden');
                     }
+                            confirmPassword.focus();
                     return;
                 }
 

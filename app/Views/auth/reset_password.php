@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password - PrimaZentra</title>
     <link rel="stylesheet" href="<?= base_url('public/css/styles.css') ?>?v=<?= filemtime(FCPATH . 'public/css/styles.css') ?>">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap">
 </head>
 <body class="auth-page">
     <div class="auth-shell auth-shell--login">
@@ -12,7 +13,7 @@
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
         </div>
 
-        <div class="auth-card auth-card--wide">
+        <div class="auth-card auth-card--login">
             <h1>Reset Password</h1>
 
             <?php if (session()->getFlashdata('success')): ?>
@@ -29,31 +30,37 @@
 
             <p class="auth-email-display">Resetting password for <strong><?= esc($email ?? '') ?></strong></p>
 
-            <form action="<?= base_url('auth/processResetPassword') ?>" method="post" class="auth-form" id="resetForm">
+            <form action="<?= base_url('auth/processResetPassword') ?>" method="post" class="auth-form" novalidate id="resetForm">
                 <input type="hidden" name="oobCode" value="<?= esc($oobCode ?? '') ?>">
 
                 <div class="auth-field">
-                    <label for="newPassword">New password</label>
+                    <label for="newPassword">NEW PASSWORD</label>
                     <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
-                        <span class="auth-icon">🔒</span>
+                        <span class="auth-icon material-symbols-outlined" aria-hidden="true">lock</span>
                         <input type="password" id="newPassword" name="password" placeholder="Enter new password" required>
-                        <button type="button" class="auth-icon-button" data-password-toggle="#newPassword" aria-label="Show password">👁</button>
+                        <button type="button" class="auth-icon-button" data-password-toggle="#newPassword" aria-label="Show password">
+                            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                        </button>
                     </div>
+                    <div class="field-error hidden" id="newPasswordError"></div>
                 </div>
 
                 <div class="auth-field">
-                    <label for="confirmNewPassword">Confirm password</label>
+                    <label for="confirmNewPassword">CONFIRM PASSWORD</label>
                     <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
-                        <span class="auth-icon">🔁</span>
+                        <span class="auth-icon material-symbols-outlined" aria-hidden="true">password</span>
                         <input type="password" id="confirmNewPassword" name="confirm_password" placeholder="Repeat new password" required>
-                        <button type="button" class="auth-icon-button" data-password-toggle="#confirmNewPassword" aria-label="Show password">👁</button>
+                        <button type="button" class="auth-icon-button" data-password-toggle="#confirmNewPassword" aria-label="Show password">
+                            <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                        </button>
                     </div>
+                    <div class="field-error hidden" id="confirmPasswordError"></div>
                     <div class="pw-strength" aria-hidden="true"><i id="pwBar"></i></div>
                     <ul class="pw-rules" id="pwRules">
-                        <li id="ruleLength">• At least 8 characters</li>
-                        <li id="ruleUpper">• Uppercase & lowercase letters</li>
-                        <li id="ruleNumber">• At least one number</li>
-                        <li id="ruleSpecial">• At least one special character</li>
+                        <li id="ruleLength">At least 8 characters</li>
+                        <li id="ruleUpper">Uppercase & lowercase letters</li>
+                        <li id="ruleNumber">At least one number</li>
+                        <li id="ruleSpecial">At least one special character</li>
                     </ul>
                 </div>
 
@@ -75,15 +82,21 @@
             if (!toggle) return;
             const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
             if (!input) return;
+            const icon = toggle.querySelector('.material-symbols-outlined');
             const isPassword = input.type === 'password';
             input.type = isPassword ? 'text' : 'password';
-            toggle.textContent = isPassword ? '◫' : '👁';
+            if (icon) {
+                icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+            }
+            toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
         });
 
         // Strength & match validation
         (function () {
             const pw = document.getElementById('newPassword');
             const pw2 = document.getElementById('confirmNewPassword');
+            const pwErr = document.getElementById('newPasswordError');
+            const pw2Err = document.getElementById('confirmPasswordError');
             const pwBar = document.getElementById('pwBar');
             const rules = {
                 length: document.getElementById('ruleLength'),
@@ -91,6 +104,18 @@
                 number: document.getElementById('ruleNumber'),
                 special: document.getElementById('ruleSpecial')
             };
+
+            function showError(el, msg) {
+                if (!el) return;
+                el.textContent = msg;
+                el.classList.remove('hidden');
+            }
+
+            function clearError(el) {
+                if (!el) return;
+                el.textContent = '';
+                el.classList.add('hidden');
+            }
 
             function scorePassword(val) {
                 let score = 0;
@@ -115,12 +140,22 @@
             }
 
             function validateMatch() {
-                if (pw2.value === '') { pw2.setCustomValidity(''); return; }
-                if (pw.value !== pw2.value) {
-                    pw2.setCustomValidity('Passwords do not match.');
-                } else {
-                    pw2.setCustomValidity('');
+                clearError(pwErr);
+                clearError(pw2Err);
+
+                if (pw.value && pw.value.length < 8) {
+                    showError(pwErr, 'Password must be at least 8 characters long.');
+                    return false;
                 }
+
+                if (pw.value !== pw2.value) {
+                    if (pw2.value !== '') {
+                        showError(pw2Err, 'Passwords do not match.');
+                    }
+                    return false;
+                }
+
+                return true;
             }
 
             pw.addEventListener('input', function () {
@@ -132,9 +167,18 @@
             pw2.addEventListener('input', validateMatch);
 
             document.getElementById('resetForm').addEventListener('submit', function (e) {
-                if (pw.value === '' || pw2.value === '' || pw.value !== pw2.value) {
+                const valid = validateMatch();
+                if (pw.value === '' || pw2.value === '' || !valid) {
                     e.preventDefault();
-                    pw2.reportValidity();
+                    if (pw.value === '') {
+                        showError(pwErr, 'Password is required.');
+                        pw.focus();
+                    } else if (pw2.value === '') {
+                        showError(pw2Err, 'Please confirm your password.');
+                        pw2.focus();
+                    } else {
+                        pw2.focus();
+                    }
                 }
             });
         })();

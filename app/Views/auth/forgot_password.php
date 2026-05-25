@@ -12,7 +12,7 @@
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
         </div>
 
-        <div class="auth-card">
+        <div class="auth-card auth-card--login">
             <h1>FORGOT PASSWORD</h1>
 
             <?php if (session()->getFlashdata('success')): ?>
@@ -28,7 +28,7 @@
             <?php endif; ?>
 
             <p class="auth-note">
-                Enter the email address linked to your account. Password reset links are only sent to Firebase Auth users.
+                Enter the email address linked to your account. Password reset links are only sent to registered accounts.
             </p>
 
             <form action="<?= base_url('auth/processForgotPassword') ?>" method="post" class="auth-form">
