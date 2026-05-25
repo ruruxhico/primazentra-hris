@@ -85,21 +85,21 @@ class Auth extends BaseController {
         $emailConfig = config('Email');
 
         $mailer->initialize([
-            'protocol' => $emailConfig->protocol,
-            'mailPath' => $emailConfig->mailPath,
-            'SMTPHost' => $emailConfig->SMTPHost,
-            'SMTPUser' => $emailConfig->SMTPUser,
-            'SMTPPass' => $emailConfig->SMTPPass,
-            'SMTPPort' => $emailConfig->SMTPPort,
-            'SMTPCrypto' => $emailConfig->SMTPCrypto,
-            'SMTPAuthMethod' => $emailConfig->SMTPAuthMethod,
-            'SMTPTimeout' => $emailConfig->SMTPTimeout,
+            'protocol' => (string) env('EMAIL_PROTOCOL', $emailConfig->protocol),
+            'mailPath' => (string) env('EMAIL_MAIL_PATH', $emailConfig->mailPath),
+            'SMTPHost' => (string) env('EMAIL_SMTP_HOST', $emailConfig->SMTPHost),
+            'SMTPUser' => (string) env('EMAIL_SMTP_USER', $emailConfig->SMTPUser),
+            'SMTPPass' => (string) env('EMAIL_SMTP_PASS', $emailConfig->SMTPPass),
+            'SMTPPort' => (int) env('EMAIL_SMTP_PORT', $emailConfig->SMTPPort),
+            'SMTPCrypto' => (string) env('EMAIL_SMTP_CRYPTO', $emailConfig->SMTPCrypto),
+            'SMTPAuthMethod' => (string) env('EMAIL_SMTP_AUTH_METHOD', $emailConfig->SMTPAuthMethod),
+            'SMTPTimeout' => (int) env('EMAIL_SMTP_TIMEOUT', $emailConfig->SMTPTimeout),
             'mailType' => 'html',
-            'charset' => $emailConfig->charset,
+            'charset' => (string) env('EMAIL_CHARSET', $emailConfig->charset),
             'wordWrap' => true,
             'validate' => false,
-            'CRLF' => $emailConfig->CRLF,
-            'newline' => $emailConfig->newline,
+            'CRLF' => (string) env('EMAIL_CRLF', $emailConfig->CRLF),
+            'newline' => (string) env('EMAIL_NEWLINE', $emailConfig->newline),
         ]);
 
         $fromEmail = $emailConfig->fromEmail ?: (string) env('EMAIL_FROM', 'no-reply@primazentra.local');
