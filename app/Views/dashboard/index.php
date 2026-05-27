@@ -185,22 +185,54 @@
     <!-- SUMMARY CARDS -->
     <div class="summary-cards">
         <div class="summary-card">
-            <p>Active Projects</p>
+            <p>BLOCKERS (ML)</p>
             <h2><?= $projectCount ?? 0 ?></h2>
         </div>
         <div class="summary-card">
-            <p>Available Resources</p>
+            <p>Available Tools - Placeholder</p>
             <h2><?= count($availableResources ?? []) ?></h2>
         </div>
         <div class="summary-card">
-            <p>Deployed Resources</p>
+            <p>Available to Deploy</p>
             <h2><?= count($deployedResources ?? []) ?></h2>
         </div>
         <div class="summary-card">
-            <p>Total Resources</p>
+            <p>Total Resources - TO CHANGE</p>
             <h2><?= $resourceCount ?? 0 ?></h2>
         </div>
     </div>
+
+    <!-- MONITOR SECTION PLACEHOLDER-->
+    <div class="section">
+        <h3>MONITOR SECTION</h3>
+        <?php if (!empty($availableManpower)): ?>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Role</th>
+                        <th>Specialization</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($availableManpower as $worker): ?>
+                        <tr>
+                            <td><?= esc(view_text($worker['name'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><?= esc(view_text($worker['role'] ?? 'Field Worker', 'Field Worker')) ?></td>
+                            <td><?= esc(view_text($worker['specialization'] ?? 'N/A', 'N/A')) ?></td>
+                            <td><span class="status-badge"><?= esc(view_text($worker['status'] ?? 'Available', 'Available')) ?></span></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <div class="empty-message">
+                <p>No manpower available at the moment.</p>
+            </div>
+        <?php endif; ?>
+    </div>
+
 
     <!-- BLOCKERS SECTION -->
     <div class="section">
