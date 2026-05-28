@@ -16,87 +16,176 @@ class Dashboard extends BaseController
 
     public function __construct()
     {
-        $this->projectModel = new Model_Projects();
+        $this->projectModel  = new Model_Projects();
         $this->resourceModel = new Model_Resources();
-        $this->userModel = new Model_Users();
+        $this->userModel     = new Model_Users();
         $this->manpowerModel = new Model_Manpower();
     }
 
-    /**
-     * Dashboard main page
-     */
     public function index()
     {
         try {
-            // Check if user is logged in
             if (!session()->get('isLoggedIn')) {
                 return redirect()->to('auth/login');
             }
 
-            // Get user info from session
             $userName = session()->get('userName') ?? 'User';
-            $role = session()->get('role') ?? 'User';
+            $role     = session()->get('role') ?? 'User';
 
-            // Get project data
-            $activeProjects = $this->projectModel->getActiveProjects();
-            $projectCount = count($activeProjects);
-            $blockers = $this->projectModel->getProjectsWithBlockers();
+            // ── Projects ────────────────────────────────────────────
+            $rawProjects = $this->projectModel->getActiveProjects();
+            $activeProjects = [];
+            foreach ($rawProjects as $p) {
+                $activeProjects[] = $this->enrichProject($p);
+            }
 
-            // Get resource data
-            $totalResources = $this->resourceModel->countResources();
+            // ── Group projects by Philippine island group ────────────
+            $projectsByRegion = [];
+            foreach ($activeProjects as $p) {
+                $projectsByRegion[$p['_region']][] = $p;
+            }
+            ksort($projectsByRegion);
+
+            // ── Blockers: low progress or halted ────────────────────
+            $blockers = array_values(array_filter($activeProjects, function ($p) {
+                return ($p['_progress'] < 30) || (($p['status'] ?? '') === 'Halted');
+            }));
+
+            // ── Resources ───────────────────────────────────────────
+            $totalResources    = $this->resourceModel->countResources();
             $availableResources = $this->resourceModel->getAvailableResources();
-            $deployedResources = $this->resourceModel->getDeployedResources();
-            $tools = $this->resourceModel->getTools();
+            $deployedResources  = $this->resourceModel->getDeployedResources();
+            $availableTools     = $this->resourceModel->getAvailableResources();
 
-            // Get manpower separately (manpower collection)
+            // ── Manpower ─────────────────────────────────────────────
             $allManpower = [];
             try {
                 $allManpower = $this->manpowerModel->getAllManpower();
-            } catch (\Exception $e) {
-                $allManpower = [];
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: manpower fetch failed - ' . $e->getMessage());
             }
-
-            // Filter available manpower
             $availableManpower = array_values(array_filter($allManpower, function ($m) {
-                return (isset($m['status']) && $m['status'] === 'Available');
+                return ($m['status'] ?? '') === 'Available';
             }));
 
-            // Get staff count
+            // ── Staff ────────────────────────────────────────────────
             $staffCount = $this->userModel->countStaff();
 
-            // Prepare data for view
             $data = [
-                'userName' => $userName,
-                'role' => $role,
-                'projectCount' => $projectCount,
-                'resourceCount' => $totalResources,
-                'staffCount' => $staffCount,
-                'blockers' => $blockers,
-                'tools' => $tools,
-                'availableResources' => $availableResources,
-                'deployedResources' => $deployedResources,
-                'availableManpower' => $availableManpower,
-                'activeProjects' => $activeProjects,
+                'pageTitle'        => 'Dashboard',
+                'activePage'       => 'dashboard',
+                'userName'         => $userName,
+                'role'             => $role,
+                'projectCount'     => count($activeProjects),
+                'resourceCount'    => $totalResources,
+                'staffCount'       => $staffCount,
+                'activeProjects'   => $activeProjects,
+                'projectsByRegion' => $projectsByRegion,
+                'blockers'         => $blockers,
+                'availableTools'   => $availableTools,
+                'availableResources'  => $availableResources,
+                'deployedResources'   => $deployedResources,
+                'availableManpower'   => $availableManpower,
             ];
 
             return view('dashboard/index', $data);
+
         } catch (\Exception $e) {
             log_message('error', 'Dashboard::index - ' . $e->getMessage());
 
             return view('dashboard/index', [
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'User',
-                'projectCount' => 0,
-                'resourceCount' => 0,
-                'staffCount' => 0,
-                'blockers' => [],
-                'tools' => [],
-                'availableResources' => [],
-                'deployedResources' => [],
-                'availableManpower' => [],
-                'activeProjects' => [],
-                'errorMessage' => 'Unable to load dashboard right now. Please try again later.',
+                'pageTitle'        => 'Dashboard',
+                'activePage'       => 'dashboard',
+                'userName'         => session()->get('userName') ?? 'User',
+                'role'             => session()->get('role') ?? 'User',
+                'projectCount'     => 0,
+                'resourceCount'    => 0,
+                'staffCount'       => 0,
+                'activeProjects'   => [],
+                'projectsByRegion' => [],
+                'blockers'         => [],
+                'availableTools'   => [],
+                'availableResources'  => [],
+                'deployedResources'   => [],
+                'availableManpower'   => [],
+                'errorMessage'     => 'Unable to load dashboard right now.',
             ]);
         }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+
+    private function enrichProject(array $p): array
+    {
+        $p['_progress']  = min(100, max(0, (float)($p['overall_progress'] ?? $p['completion_percent'] ?? 0)));
+        $p['_start_fmt'] = $this->fmtDate($p['start_date'] ?? '');
+        $p['_end_fmt']   = $this->fmtDate($p['end_date'] ?? '');
+        $p['_region']    = $this->detectRegion($p);
+        $p['_maps_url']  = $this->mapsUrl($p);
+
+        // Resource pills: prefer project-embedded list, fall back to personnel
+        $tools    = [];
+        $manpower = [];
+
+        if (!empty($p['resources']) && is_array($p['resources'])) {
+            foreach ($p['resources'] as $res) {
+                $cat  = strtolower($res['category'] ?? 'tool');
+                $name = strtoupper(trim((string)($res['name'] ?? '')));
+                if ($name === '') continue;
+                if ($cat === 'manpower') $manpower[] = $name;
+                else $tools[] = $name;
+            }
+        }
+
+        if (empty($manpower)) {
+            $pm = trim((string)($p['project_manager_name'] ?? ''));
+            $se = trim((string)($p['site_engineer_name']   ?? ''));
+            if ($pm && $pm !== 'N/A') $manpower[] = strtoupper($pm);
+            if ($se && $se !== 'N/A') $manpower[] = strtoupper($se);
+        }
+
+        $p['_tools']    = $tools;
+        $p['_manpower'] = $manpower;
+
+        return $p;
+    }
+
+    private function detectRegion(array $p): string
+    {
+        $explicit = strtoupper(trim((string)($p['region'] ?? '')));
+        if ($explicit !== '') return $explicit;
+
+        $addr = strtolower((string)($p['location']['address'] ?? $p['location_label'] ?? ''));
+
+        $map = [
+            'LUZON'    => ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','cagayan'],
+            'VISAYAS'  => ['cebu','iloilo','bacolod','tacloban','dumaguete','ormoc','leyte','samar','bohol','negros','panay','aklan','antique','capiz','biliran'],
+            'MINDANAO' => ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao'],
+        ];
+
+        foreach ($map as $region => $keywords) {
+            foreach ($keywords as $kw) {
+                if (strpos($addr, $kw) !== false) return $region;
+            }
+        }
+
+        return 'LUZON';
+    }
+
+    private function fmtDate($val): string
+    {
+        if (!$val) return 'N/A';
+        if (is_numeric($val)) return strtoupper(date('F j, Y', (int)$val));
+        $ts = strtotime((string)$val);
+        return $ts ? strtoupper(date('F j, Y', $ts)) : strtoupper((string)$val);
+    }
+
+    private function mapsUrl(array $p): string
+    {
+        $lat  = $p['location']['geopoint']['lat'] ?? null;
+        $lng  = $p['location']['geopoint']['lng'] ?? null;
+        $addr = $p['location']['address'] ?? $p['project_name'] ?? '';
+        if ($lat && $lng) return "https://www.google.com/maps?q={$lat},{$lng}";
+        return 'https://www.google.com/maps/search/' . urlencode((string)$addr);
     }
 }

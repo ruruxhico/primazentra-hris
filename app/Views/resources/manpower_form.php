@@ -97,7 +97,7 @@
                         }
                         $displayProject = $manpower['current_site_deployment'] ?? $initialProjectLabel ?? ($manpower['location']['address'] ?? '');
                     ?>
-                    <div id="selectedProjectAddress" class="project-address-note" style="margin-top:6px;color:#555;font-size:0.95em;">
+                    <div id="selectedProjectAddress" class="project-address-note">
                         <?= esc((string)$displayProject) ?>
                     </div>
                 </div>

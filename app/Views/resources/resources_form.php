@@ -94,7 +94,7 @@
         </div>
 
         <!-- Manpower Specific Section -->
-        <div id="manpower-section" class="form-section" style="display: none;">
+        <div id="manpower-section" class="form-section d-none">
             <h2>Manpower Details</h2>
             
             <div class="form-row">
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Asset Details Section (Equipment/Tools) -->
-        <div id="asset-section" class="form-section" style="display: none;">
+        <div id="asset-section" class="form-section d-none">
             <h2>Asset Details</h2>
             
             <div class="form-row">
@@ -201,7 +201,7 @@
         </div>
 
         <!-- Individual Items Section (Equipment/Tools) -->
-        <div id="items-section" class="form-section" style="display: none;">
+        <div id="items-section" class="form-section d-none">
             <h2>Individual Items</h2>
             <p><small>Add individual units for this resource</small></p>
             
@@ -257,7 +257,7 @@
                 </table>
             </div>
             
-            <div class="form-actions" style="margin-top: 15px;">
+            <div class="form-actions mt-15">
                 <button type="button" class="btn btn-secondary" onclick="addItem()">+ Add Item</button>
             </div>
         </div>

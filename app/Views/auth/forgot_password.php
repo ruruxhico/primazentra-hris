@@ -1,12 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forgot Password - PrimaZentra</title>
-    <link rel="stylesheet" href="<?= base_url('public/css/styles.css') ?>?v=<?= filemtime(FCPATH . 'public/css/styles.css') ?>">
-</head>
-<body class="auth-page">
+<?= $this->extend('layouts/auth') ?>
+
+<?= $this->section('content') ?>
     <div class="auth-shell auth-shell--login">
         <div class="auth-brand">
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
@@ -48,5 +42,4 @@
             </div>
         </div>
     </div>
-</body>
-</html>
+<?= $this->endSection() ?>

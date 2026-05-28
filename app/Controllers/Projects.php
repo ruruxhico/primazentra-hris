@@ -31,10 +31,21 @@ class Projects extends BaseController
                 $projects[] = $this->enrichProjectForView($projectData);
             }
 
+            $perPage = config('Pager')->perPage;
+            $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $total = count($projects);
+
+            $pager = service('pager');
+            $pager->store('projects', $currentPage, $perPage, $total);
+
+            $offset = ($currentPage - 1) * $perPage;
+            $pagedProjects = array_slice($projects, $offset, $perPage);
+
             $data = [
                 'pageTitle' => 'Projects',
                 'activePage' => 'projects',
-                'projects' => $projects,
+                'projects' => $pagedProjects,
+                'pagerOffset' => $offset,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff'
             ];
@@ -42,11 +53,12 @@ class Projects extends BaseController
             return view('projects/projects_view', $data);
         } catch (\Exception $e) {
             log_message('error', 'Projects::index - ' . $e->getMessage());
-            
+
             $data = [
                 'pageTitle' => 'Projects',
                 'activePage' => 'projects',
                 'projects' => [],
+                'pagerOffset' => 0,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff',
                 'error' => 'Unable to fetch projects'

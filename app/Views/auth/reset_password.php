@@ -1,13 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password - PrimaZentra</title>
-    <link rel="stylesheet" href="<?= base_url('public/css/styles.css') ?>?v=<?= filemtime(FCPATH . 'public/css/styles.css') ?>">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap">
-</head>
-<body class="auth-page">
+<?= $this->extend('layouts/auth') ?>
+
+<?= $this->section('content') ?>
     <div class="auth-shell auth-shell--login">
         <div class="auth-brand">
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
@@ -74,114 +67,115 @@
             </div>
         </div>
     </div>
+<?= $this->endSection() ?>
 
-    <script>
-        // Password toggle handlers
-        document.addEventListener('click', function (event) {
-            const toggle = event.target.closest('[data-password-toggle]');
-            if (!toggle) return;
-            const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
-            if (!input) return;
-            const icon = toggle.querySelector('.material-symbols-outlined');
-            const isPassword = input.type === 'password';
-            input.type = isPassword ? 'text' : 'password';
-            if (icon) {
-                icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+<?= $this->section('scripts') ?>
+<script>
+    // Password toggle handlers
+    document.addEventListener('click', function (event) {
+        const toggle = event.target.closest('[data-password-toggle]');
+        if (!toggle) return;
+        const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
+        if (!input) return;
+        const icon = toggle.querySelector('.material-symbols-outlined');
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        if (icon) {
+            icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+        }
+        toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    });
+
+    // Strength & match validation
+    (function () {
+        const pw = document.getElementById('newPassword');
+        const pw2 = document.getElementById('confirmNewPassword');
+        const pwErr = document.getElementById('newPasswordError');
+        const pw2Err = document.getElementById('confirmPasswordError');
+        const pwBar = document.getElementById('pwBar');
+        const rules = {
+            length: document.getElementById('ruleLength'),
+            upper: document.getElementById('ruleUpper'),
+            number: document.getElementById('ruleNumber'),
+            special: document.getElementById('ruleSpecial')
+        };
+
+        function showError(el, msg) {
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
+
+        function clearError(el) {
+            if (!el) return;
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
+
+        function scorePassword(val) {
+            let score = 0;
+            if (val.length >= 8) score += 25;
+            if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score += 25;
+            if (/[0-9]/.test(val)) score += 25;
+            if (/[^A-Za-z0-9]/.test(val)) score += 25;
+            return score;
+        }
+
+        function updateRules(val) {
+            rules.length.style.opacity = val.length >= 8 ? '1' : '0.45';
+            rules.upper.style.opacity = /[A-Z]/.test(val) && /[a-z]/.test(val) ? '1' : '0.45';
+            rules.number.style.opacity = /[0-9]/.test(val) ? '1' : '0.45';
+            rules.special.style.opacity = /[^A-Za-z0-9]/.test(val) ? '1' : '0.45';
+        }
+
+        function updateBar(val) {
+            const s = scorePassword(val);
+            pwBar.style.width = s + '%';
+            if (s < 50) pwBar.style.background = '#f39c12'; else pwBar.style.background = '#27ae60';
+        }
+
+        function validateMatch() {
+            clearError(pwErr);
+            clearError(pw2Err);
+
+            if (pw.value && pw.value.length < 8) {
+                showError(pwErr, 'Password must be at least 8 characters long.');
+                return false;
             }
-            toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+
+            if (pw.value !== pw2.value) {
+                if (pw2.value !== '') {
+                    showError(pw2Err, 'Passwords do not match.');
+                }
+                return false;
+            }
+
+            return true;
+        }
+
+        pw.addEventListener('input', function () {
+            updateRules(pw.value);
+            updateBar(pw.value);
+            validateMatch();
         });
 
-        // Strength & match validation
-        (function () {
-            const pw = document.getElementById('newPassword');
-            const pw2 = document.getElementById('confirmNewPassword');
-            const pwErr = document.getElementById('newPasswordError');
-            const pw2Err = document.getElementById('confirmPasswordError');
-            const pwBar = document.getElementById('pwBar');
-            const rules = {
-                length: document.getElementById('ruleLength'),
-                upper: document.getElementById('ruleUpper'),
-                number: document.getElementById('ruleNumber'),
-                special: document.getElementById('ruleSpecial')
-            };
+        pw2.addEventListener('input', validateMatch);
 
-            function showError(el, msg) {
-                if (!el) return;
-                el.textContent = msg;
-                el.classList.remove('hidden');
-            }
-
-            function clearError(el) {
-                if (!el) return;
-                el.textContent = '';
-                el.classList.add('hidden');
-            }
-
-            function scorePassword(val) {
-                let score = 0;
-                if (val.length >= 8) score += 25;
-                if (/[A-Z]/.test(val) && /[a-z]/.test(val)) score += 25;
-                if (/[0-9]/.test(val)) score += 25;
-                if (/[^A-Za-z0-9]/.test(val)) score += 25;
-                return score;
-            }
-
-            function updateRules(val) {
-                rules.length.style.opacity = val.length >= 8 ? '1' : '0.45';
-                rules.upper.style.opacity = /[A-Z]/.test(val) && /[a-z]/.test(val) ? '1' : '0.45';
-                rules.number.style.opacity = /[0-9]/.test(val) ? '1' : '0.45';
-                rules.special.style.opacity = /[^A-Za-z0-9]/.test(val) ? '1' : '0.45';
-            }
-
-            function updateBar(val) {
-                const s = scorePassword(val);
-                pwBar.style.width = s + '%';
-                if (s < 50) pwBar.style.background = '#f39c12'; else pwBar.style.background = '#27ae60';
-            }
-
-            function validateMatch() {
-                clearError(pwErr);
-                clearError(pw2Err);
-
-                if (pw.value && pw.value.length < 8) {
-                    showError(pwErr, 'Password must be at least 8 characters long.');
-                    return false;
+        document.getElementById('resetForm').addEventListener('submit', function (e) {
+            const valid = validateMatch();
+            if (pw.value === '' || pw2.value === '' || !valid) {
+                e.preventDefault();
+                if (pw.value === '') {
+                    showError(pwErr, 'Password is required.');
+                    pw.focus();
+                } else if (pw2.value === '') {
+                    showError(pw2Err, 'Please confirm your password.');
+                    pw2.focus();
+                } else {
+                    pw2.focus();
                 }
-
-                if (pw.value !== pw2.value) {
-                    if (pw2.value !== '') {
-                        showError(pw2Err, 'Passwords do not match.');
-                    }
-                    return false;
-                }
-
-                return true;
             }
-
-            pw.addEventListener('input', function () {
-                updateRules(pw.value);
-                updateBar(pw.value);
-                validateMatch();
-            });
-
-            pw2.addEventListener('input', validateMatch);
-
-            document.getElementById('resetForm').addEventListener('submit', function (e) {
-                const valid = validateMatch();
-                if (pw.value === '' || pw2.value === '' || !valid) {
-                    e.preventDefault();
-                    if (pw.value === '') {
-                        showError(pwErr, 'Password is required.');
-                        pw.focus();
-                    } else if (pw2.value === '') {
-                        showError(pw2Err, 'Please confirm your password.');
-                        pw2.focus();
-                    } else {
-                        pw2.focus();
-                    }
-                }
-            });
-        })();
-    </script>
-</body>
-</html>
+        });
+    })();
+</script>
+<?= $this->endSection() ?>

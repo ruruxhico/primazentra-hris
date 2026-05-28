@@ -66,10 +66,21 @@ class Staff extends BaseController
                 });
             }
 
+            $perPage = config('Pager')->perPage;
+            $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $total = count($staff);
+
+            $pager = service('pager');
+            $pager->store('staff', $currentPage, $perPage, $total);
+
+            $offset = ($currentPage - 1) * $perPage;
+            $pagedStaff = array_slice($staff, $offset, $perPage);
+
             $data = [
                 'pageTitle' => 'Staff',
                 'activePage' => 'staff',
-                'staff' => $staff,
+                'staff' => $pagedStaff,
+                'pagerOffset' => $offset,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff'
             ];
@@ -77,11 +88,12 @@ class Staff extends BaseController
             return view('staff/staff_view', $data);
         } catch (\Exception $e) {
             log_message('error', 'Staff::index - ' . $e->getMessage());
-            
+
             $data = [
                 'pageTitle' => 'Staff',
                 'activePage' => 'staff',
                 'staff' => [],
+                'pagerOffset' => 0,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff',
                 'error' => 'Unable to fetch staff'
