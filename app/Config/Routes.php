@@ -21,6 +21,8 @@ $routes->post('auth/processRegister', 'Auth::processRegister');
 $routes->post('auth/logout', 'Auth::logout');
 
 $routes->get('dashboard', 'Dashboard::index');
+$routes->get('summary', 'Dashboard::index');
+$routes->get('monitor', 'Dashboard::index');
 
 // Projects Routes
 $routes->get('projects', 'Projects::index');

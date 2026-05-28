@@ -86,8 +86,8 @@
     </div>
 
     <?php if ($isAsset && !empty($items) && is_array($items)): ?>
-        <div style="margin-top: 2rem;">
-            <h2 style="color: #8C701C; margin-bottom: 1rem;">Items</h2>
+        <div class="mt-2rem">
+            <h2 class="items-heading">Items</h2>
             <div class="table-container">
                 <table class="resource-table">
                     <thead>

@@ -4,7 +4,7 @@ namespace App\Models;
 
 class Model_Projects extends Model_BaseFirestore
 {
-    protected $collection = 'projects';
+    protected $collection = 'project';
 
     public function __construct()
     {

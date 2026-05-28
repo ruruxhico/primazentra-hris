@@ -66,7 +66,7 @@
             <thead>
                 <tr>
                     <th>NO.</th>
-                    <th>MODEL NAME</th>
+                    <th>EQUIPMENT NAME</th>
                     <th>MODEL NUMBER</th>
                     <th>TOTAL QUANTITY</th>
                     <th>AVAILABLE UNITS</th>
@@ -87,9 +87,9 @@
                             <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
                             <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">👁️</a>
-                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">✏️</a>
-                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete">🗑️</a>
+                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -128,7 +128,7 @@
             <thead>
                 <tr>
                     <th>NO.</th>
-                    <th>MODEL NAME</th>
+                    <th>TOOL NAME</th>
                     <th>MODEL NUMBER</th>
                     <th>TOTAL QUANTITY</th>
                     <th>AVAILABLE</th>
@@ -152,9 +152,9 @@
                             <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
                             <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">👁️</a>
-                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">✏️</a>
-                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete">🗑️</a>
+                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -224,9 +224,9 @@
                             <td><?= esc((string)$displaySite) ?></td>
                             <td><?= isset($person['manpower_details']['specialization']) ? esc((string)$person['manpower_details']['specialization']) : 'N/A' ?></td>
                             <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View">👁️</a>
-                                <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit">✏️</a>
-                                <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete">🗑️</a>
+                                <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                                <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                                <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -1,13 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - PrimaZentra</title>
-    <link rel="stylesheet" href="<?= base_url('public/css/styles.css') ?>?v=<?= filemtime(FCPATH . 'public/css/styles.css') ?>">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap">
-</head>
-<body class="auth-page">
+<?= $this->extend('layouts/auth') ?>
+
+<?= $this->section('content') ?>
     <div class="auth-shell auth-shell--login">
         <div class="auth-brand">
             <img src="<?= base_url('public/assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
@@ -63,77 +56,76 @@
                 <button type="submit" class="auth-submit">LOGIN</button>
             </form>
 
-            <script>
-                // Custom client-side validation for login (no native browser tooltips)
-                (function () {
-                    const form = document.getElementById('loginForm');
-                    const email = document.getElementById('loginEmail');
-                    const pass = document.getElementById('loginPassword');
-                    const emailErr = document.getElementById('loginEmailError');
-                    const passErr = document.getElementById('loginPasswordError');
-
-                    function showError(el, msg) {
-                        if (!el) return;
-                        el.textContent = msg;
-                        el.classList.remove('hidden');
-                    }
-
-                    function clearError(el) {
-                        if (!el) return;
-                        el.textContent = '';
-                        el.classList.add('hidden');
-                    }
-
-                    function isValidEmail(v) {
-                        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-                    }
-
-                    email.addEventListener('input', function () { clearError(emailErr); });
-                    pass.addEventListener('input', function () { clearError(passErr); });
-
-                    form.addEventListener('submit', function (e) {
-                        let firstError = null;
-                        if (!email.value || !isValidEmail(email.value.trim())) {
-                            showError(emailErr, 'Please enter a valid email address.');
-                            firstError = firstError || email;
-                        }
-
-                        if (!pass.value) {
-                            showError(passErr, 'Password is required.');
-                            firstError = firstError || pass;
-                        }
-
-                        if (firstError) {
-                            e.preventDefault();
-                            firstError.focus();
-                        }
-                    });
-                })();
-            </script>
-
             <div class="auth-footer-link">
                 No account yet? <a href="<?= base_url('auth/register') ?>">Register here</a>
             </div>
         </div>
     </div>
+<?= $this->endSection() ?>
 
-    <script>
-        document.addEventListener('click', function (event) {
-            const toggle = event.target.closest('[data-password-toggle]');
-            if (!toggle) return;
+<?= $this->section('scripts') ?>
+<script>
+    // Custom client-side validation for login (no native browser tooltips)
+    (function () {
+        const form = document.getElementById('loginForm');
+        const email = document.getElementById('loginEmail');
+        const pass = document.getElementById('loginPassword');
+        const emailErr = document.getElementById('loginEmailError');
+        const passErr = document.getElementById('loginPasswordError');
 
-            const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
-            if (!input) return;
+        function showError(el, msg) {
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.remove('hidden');
+        }
 
-            const icon = toggle.querySelector('.material-symbols-outlined');
+        function clearError(el) {
+            if (!el) return;
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
 
-            const isPassword = input.type === 'password';
-            input.type = isPassword ? 'text' : 'password';
-            if (icon) {
-                icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+        function isValidEmail(v) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+        }
+
+        email.addEventListener('input', function () { clearError(emailErr); });
+        pass.addEventListener('input', function () { clearError(passErr); });
+
+        form.addEventListener('submit', function (e) {
+            let firstError = null;
+            if (!email.value || !isValidEmail(email.value.trim())) {
+                showError(emailErr, 'Please enter a valid email address.');
+                firstError = firstError || email;
             }
-            toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+
+            if (!pass.value) {
+                showError(passErr, 'Password is required.');
+                firstError = firstError || pass;
+            }
+
+            if (firstError) {
+                e.preventDefault();
+                firstError.focus();
+            }
         });
-    </script>
-</body>
-</html>
+    })();
+
+    document.addEventListener('click', function (event) {
+        const toggle = event.target.closest('[data-password-toggle]');
+        if (!toggle) return;
+
+        const input = document.querySelector(toggle.getAttribute('data-password-toggle'));
+        if (!input) return;
+
+        const icon = toggle.querySelector('.material-symbols-outlined');
+
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        if (icon) {
+            icon.textContent = isPassword ? 'visibility_off' : 'visibility';
+        }
+        toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    });
+</script>
+<?= $this->endSection() ?>
