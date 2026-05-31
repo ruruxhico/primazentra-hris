@@ -14,7 +14,7 @@
 html { scroll-behavior: smooth; }
 
 /* ── Page-level wrapper ───────────────────────────────── */
-.db-root { display: flex; flex-direction: column; gap: 0; }
+.db-root { display: flex; flex-direction: column; gap: 0; width: 100%; }
 
 /* ── Section ──────────────────────────────────────────── */
 .db-section { padding-bottom: 2rem; }
@@ -37,78 +37,96 @@ html { scroll-behavior: smooth; }
 
 /* ── Summary date header ──────────────────────────────── */
 .db-today {
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: 500;
     color: #555;
     margin-bottom: 0;
 }
 .db-today-date {
-    font-size: 1.7rem;
+    font-size: 1.35rem;
     font-weight: 800;
     color: var(--db-text);
-    margin: 0 0 1.25rem;
+    margin: 0 0 0.75rem;
     line-height: 1.2;
+}
+
+/* ── Info cards row — full-width flex ─────────────────── */
+.db-info-row {
+    display: flex;
+    gap: 0.5rem;
+    width: 100%;
+    margin-bottom: 0.5rem;
+    align-items: flex-start;
+}
+.db-info-col {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 /* ── Info cards (Blockers / Tools / Deploy) ───────────── */
 .db-info-card {
     background: var(--db-cream);
     border: 2px solid var(--db-gold);
-    border-radius: 16px;
-    padding: 1.25rem 1rem;
-    height: 100%;
-    min-height: 260px;
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
 }
 .db-info-title {
     text-align: center;
     font-weight: 800;
-    font-size: 1rem;
+    font-size: 0.75rem;
     color: var(--db-gold-dark);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin-bottom: 1rem;
+    margin-bottom: 0.45rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--db-border);
 }
 
-/* Blocker item */
+/* Blocker items — horizontal wrapping chips */
+.db-blockers-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-content: flex-start;
+}
 .db-blocker-box {
-    border: 2px solid var(--db-text);
-    border-radius: 10px;
-    padding: 0.55rem 0.8rem;
-    margin-bottom: 0.7rem;
+    border: 1.5px solid var(--db-text);
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
 }
 .db-blocker-name {
     font-weight: 800;
-    font-size: 0.76rem;
+    font-size: 0.65rem;
     color: var(--db-gold-dark);
     text-transform: uppercase;
-    text-align: center;
-    line-height: 1.3;
-    margin-bottom: 0.3rem;
 }
 .db-blocker-line {
-    font-size: 0.76rem;
-    font-weight: 700;
+    font-size: 0.62rem;
+    font-weight: 600;
     color: var(--db-gold-dark);
-    margin: 0;
-    line-height: 1.6;
 }
+.db-blocker-sep { color: var(--db-border); font-size: 0.6rem; }
 
 /* Info table (tools / manpower) */
 .db-info-tbl {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
 }
 .db-info-tbl thead th {
     background: var(--db-gold);
     color: var(--db-text);
     font-weight: 700;
     text-transform: uppercase;
-    padding: 0.3rem 0.5rem;
+    padding: 0.18rem 0.4rem;
     text-align: center;
 }
 .db-info-tbl tbody td {
-    padding: 0.3rem 0.5rem;
+    padding: 0.18rem 0.4rem;
     text-align: center;
     font-weight: 600;
     color: var(--db-text);
@@ -283,7 +301,126 @@ html { scroll-behavior: smooth; }
 .db-info-card h4,.db-info-card h5 { margin: 0; }
 .db-project-card h1,.db-project-card h2,
 .db-project-card h3,.db-project-card h4 { margin: 0; }
+
+/* ── Drag-and-drop resource pills ──────────────────────── */
+.db-pill { cursor: default; user-select: none; }
+.db-pill-icons { cursor: grab; }
+.db-pill-icons:active { cursor: grabbing; }
+/* ghost: where the pill was */
+.db-pill-ghost {
+    opacity: 0.35;
+    border-style: dashed !important;
+    background: #FBF6E8 !important;
+}
+/* dragging: the floating clone */
+.db-pill-drag {
+    box-shadow: 0 6px 18px rgba(0,0,0,0.18) !important;
+    transform: scale(1.03);
+    background: #fff !important;
+    border-color: var(--db-gold) !important;
+    z-index: 9999;
+}
+/* subtle highlight on the SOURCE container while dragging */
+.db-resources.dnd-active {
+    background: rgba(200,169,81,0.06);
+    border-radius: 8px;
+    outline: 2px dashed rgba(200,169,81,0.4);
+    outline-offset: 3px;
+}
+/* highlight on OTHER containers as potential drop targets */
+.db-resources.dnd-drop-zone {
+    background: rgba(200,169,81,0.04);
+    border-radius: 8px;
+    outline: 2px dashed rgba(200,169,81,0.22);
+    outline-offset: 3px;
+}
+/* flash the card that just received a drop */
+.db-project-card.dnd-received {
+    box-shadow: 0 0 0 3px var(--db-gold) !important;
+    transition: box-shadow .05s;
+}
+
+/* ── Right map sidebar panel (mirrors left sidebar) ───── */
+.main-content {
+    transition: margin-left 0.25s ease, margin-right 0.25s ease;
+}
+body.map-panel-open     .main-content { margin-right: 380px; }
+body.map-panel-collapsed .main-content { margin-right: 52px; }
+
+#mapSidePanel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    height: 100vh;
+    width: 380px;
+    background: var(--db-cream);
+    border-left: 2px solid var(--db-gold);
+    z-index: 1035;
+    display: flex;
+    flex-direction: column;
+    transition: width 0.25s ease;
+    overflow: hidden;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.10);
+}
+#mapSidePanel.map-panel-collapsed { width: 52px; }
+
+.map-panel-hdr {
+    background: var(--db-gold-dark);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 10px 11px 14px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    overflow: hidden;
+    flex-shrink: 0;
+    min-height: 44px;
+}
+.map-panel-hdr .material-symbols-outlined { font-size: 18px !important; flex-shrink: 0; }
+.map-panel-hdr-label {
+    flex: 1;
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.map-panel-toggle {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.map-panel-toggle .material-symbols-outlined {
+    font-size: 20px !important;
+    transition: transform 0.25s ease;
+}
+#mapSidePanel.map-panel-collapsed .map-panel-hdr-label { display: none; }
+#mapSidePanel.map-panel-collapsed .map-panel-toggle .material-symbols-outlined {
+    transform: rotate(180deg);
+}
+#mapSidePanel.map-panel-collapsed #monitorMap { display: none; }
+
+#monitorMap { flex: 1; width: 100%; min-height: 0; }
+
+/* Responsive: overlay on small screens, no content push */
+@media (max-width: 991px) {
+    body.map-panel-open .main-content,
+    body.map-panel-collapsed .main-content { margin-right: 0 !important; }
+    #mapSidePanel { z-index: 1045; box-shadow: -8px 0 30px rgba(0,0,0,0.2); }
+    #mapSidePanel:not(.map-panel-collapsed) { width: min(380px, 85vw); }
+}
 </style>
+<?php if (!empty($googleMapsBrowserKey)): ?>
+<script>
+window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
+</script>
+<?php endif; ?>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -302,34 +439,38 @@ html { scroll-behavior: smooth; }
     <p class="db-today">Today,</p>
     <p class="db-today-date"><?= date('F j, Y') ?></p>
 
-    <div class="row g-3 mb-2">
+    <div class="db-info-row">
 
         <!-- BLOCKERS ─────────────────────────────────────── -->
-        <div class="col-xl-4 col-md-12">
+        <div class="db-info-col">
             <div class="db-info-card">
                 <div class="db-info-title">Blockers</div>
                 <?php if (empty($blockers)): ?>
                     <p class="db-empty">No blockers — all projects on track.</p>
                 <?php else: ?>
-                    <?php foreach (array_slice($blockers, 0, 4) as $bl):
+                    <div class="db-blockers-list">
+                    <?php foreach (array_slice($blockers, 0, 5) as $bl):
                         $endTs     = is_numeric($bl['end_date'] ?? '') ? (int)$bl['end_date'] : @strtotime((string)($bl['end_date'] ?? ''));
                         $delayDays = ($endTs && $endTs < time()) ? (int)floor((time() - $endTs) / 86400) : 0;
                         $reason    = $bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress');
                     ?>
                     <div class="db-blocker-box">
-                        <div class="db-blocker-name"><?= esc(strtoupper($bl['project_name'] ?? 'Project')) ?></div>
+                        <span class="db-blocker-name"><?= esc(strtoupper($bl['project_name'] ?? 'Project')) ?></span>
                         <?php if ($delayDays > 0): ?>
-                        <p class="db-blocker-line">POSSIBLE DELAY/S: <?= $delayDays ?> Day<?= $delayDays > 1 ? 's' : '' ?></p>
+                        <span class="db-blocker-sep">·</span>
+                        <span class="db-blocker-line"><?= $delayDays ?>d delay</span>
                         <?php endif; ?>
-                        <p class="db-blocker-line">REASON: <?= esc(ucwords((string)$reason)) ?></p>
+                        <span class="db-blocker-sep">·</span>
+                        <span class="db-blocker-line"><?= esc(ucwords((string)$reason)) ?></span>
                     </div>
                     <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
 
         <!-- AVAILABLE TOOLS ──────────────────────────────── -->
-        <div class="col-xl-4 col-md-12">
+        <div class="db-info-col">
             <div class="db-info-card">
                 <div class="db-info-title">Available Tools</div>
                 <?php if (empty($availableTools)): ?>
@@ -351,7 +492,7 @@ html { scroll-behavior: smooth; }
         </div>
 
         <!-- AVAILABLE TO DEPLOY ──────────────────────────── -->
-        <div class="col-xl-4 col-md-12">
+        <div class="db-info-col">
             <div class="db-info-card">
                 <div class="db-info-title">Available to Deploy</div>
                 <?php if (empty($availableManpower)): ?>
@@ -372,29 +513,13 @@ html { scroll-behavior: smooth; }
             </div>
         </div>
 
-    </div><!-- /row info cards -->
-
-    <!-- Project cards by region ─────────────────────────── -->
-    <?php if (empty($projectsByRegion)): ?>
-        <p class="db-empty mt-3">No active projects.</p>
-    <?php else: ?>
-        <?php foreach ($projectsByRegion as $region => $regionProjects): ?>
-        <h3 class="db-region-title"><?= esc($region) ?></h3>
-        <div class="row g-3 mb-2">
-            <?php foreach ($regionProjects as $proj): ?>
-            <div class="col-xl-4 col-md-6 col-12">
-                <?php echo db_render_card($proj); ?>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
+    </div><!-- /db-info-row -->
 
 </section><!-- #summary -->
 
 
 <!-- ═══════════════════════════════════════════════════════════
-     MONITOR SECTION
+     MONITOR SECTION  —  cards (left) + sticky map (right)
      ═══════════════════════════════════════════════════════════ -->
 <section id="monitor" class="db-section">
 
@@ -405,8 +530,8 @@ html { scroll-behavior: smooth; }
         <h3 class="db-region-title"><?= esc($region) ?></h3>
         <div class="row g-3 mb-2">
             <?php foreach ($regionProjects as $proj): ?>
-            <div class="col-xl-4 col-md-6 col-12">
-                <?php echo db_render_card($proj); ?>
+            <div class="col-xl-6 col-12">
+                <?php echo db_render_card($proj, 'monitor'); ?>
             </div>
             <?php endforeach; ?>
         </div>
@@ -417,11 +542,23 @@ html { scroll-behavior: smooth; }
 
 </div><!-- .db-root -->
 
+<!-- ── Right map sidebar panel ───────────────────────────── -->
+<div id="mapSidePanel">
+    <div class="map-panel-hdr" onclick="toggleMapPanel()">
+        <span class="material-symbols-outlined">map</span>
+        <span class="map-panel-hdr-label">Project Sites</span>
+        <button class="map-panel-toggle" onclick="event.stopPropagation(); toggleMapPanel()" title="Toggle map panel">
+            <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+    </div>
+    <div id="monitorMap"></div>
+</div>
+
 <?php
 /**
  * Render a single project card (shared by Summary and Monitor sections).
  */
-function db_render_card(array $p): string
+function db_render_card(array $p, string $context = 'summary'): string
 {
     $name     = esc(strtoupper($p['project_name'] ?? 'Project'));
     $progress = min(100, max(0, (float)$p['_progress']));
@@ -431,6 +568,8 @@ function db_render_card(array $p): string
     $manpower = (array)($p['_manpower'] ?? []);
     $mapsUrl  = esc($p['_maps_url']);
     $cardId   = 'card-' . preg_replace('/[^a-zA-Z0-9]/', '', (string)($p['id'] ?? uniqid()));
+    $lat      = $p['_lat'] ?? null;
+    $lng      = $p['_lng'] ?? null;
 
     $toolSet  = array_flip($tools);   // for O(1) lookup
     $allRes   = array_merge($tools, $manpower);
@@ -498,7 +637,13 @@ function db_render_card(array $p): string
         <div class="db-card-footer">
             <span class="material-symbols-outlined db-icon-chat" title="Messages">chat_bubble</span>
             <span class="material-symbols-outlined db-icon-warn" title="Warnings">warning</span>
+            <?php if ($context === 'monitor' && $lat !== null && $lng !== null): ?>
+            <button class="db-btn-locate"
+                    onclick="monitorFlyTo(<?= (float)$lat ?>, <?= (float)$lng ?>, <?= json_encode($name) ?>)"
+                    title="Focus on map">Locate Site</button>
+            <?php else: ?>
             <a href="<?= $mapsUrl ?>" class="db-btn-locate" target="_blank" rel="noopener">Locate Site</a>
+            <?php endif; ?>
             <?php if ($hasExtra): ?>
             <button class="db-btn-expand"
                     onclick="dbCardToggle('<?= $cardId ?>', this)"
@@ -540,6 +685,163 @@ document.addEventListener('DOMContentLoaded', function () {
         if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     }
 });
+</script>
+
+<?php
+// Build JS-safe project locations for the monitor map
+$jsLocations = json_encode($projectLocations ?? [], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT);
+$mapsKey     = esc($googleMapsBrowserKey ?? '');
+?>
+<?php if ($mapsKey): ?>
+<script>
+(function () {
+    var PROJECT_LOCATIONS = <?= $jsLocations ?>;
+    var monitorMap = null;
+    var openInfo   = null;
+
+    window.initMonitorMap = function () {
+        var mapEl = document.getElementById('monitorMap');
+        if (!mapEl) return;
+
+        monitorMap = new google.maps.Map(mapEl, {
+            center: { lat: 12.8797, lng: 121.7740 },   // PH centre
+            zoom: 6,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true,
+        });
+        window.pzMonitorMap = monitorMap;
+
+        var bounds = new google.maps.LatLngBounds();
+        var hasMarkers = false;
+
+        PROJECT_LOCATIONS.forEach(function (proj) {
+            if (proj.lat == null || proj.lng == null) return;
+
+            var pos = { lat: parseFloat(proj.lat), lng: parseFloat(proj.lng) };
+            var marker = new google.maps.Marker({
+                position: pos,
+                map: monitorMap,
+                title: proj.name,
+                animation: google.maps.Animation.DROP,
+            });
+
+            var info = new google.maps.InfoWindow({
+                content: '<div style="max-width:200px"><strong>' + proj.name + '</strong>' +
+                         (proj.addr ? '<br><small>' + proj.addr + '</small>' : '') + '</div>',
+            });
+
+            marker.addListener('click', function () {
+                if (openInfo) openInfo.close();
+                info.open(monitorMap, marker);
+                openInfo = info;
+            });
+
+            // Store marker reference on the project for fly-to
+            proj._marker = marker;
+            proj._info   = info;
+
+            bounds.extend(pos);
+            hasMarkers = true;
+        });
+
+        if (hasMarkers) monitorMap.fitBounds(bounds);
+    };
+
+    // Called by monitor "Locate Site" buttons
+    window.monitorFlyTo = function (lat, lng, name) {
+        if (!monitorMap) return;
+        // Auto-expand the right panel if collapsed
+        var sidePanel = document.getElementById('mapSidePanel');
+        if (sidePanel && sidePanel.classList.contains('map-panel-collapsed')) {
+            toggleMapPanel();
+        }
+
+        monitorMap.panTo({ lat: lat, lng: lng });
+        monitorMap.setZoom(15);
+
+        // Open matching info window
+        PROJECT_LOCATIONS.forEach(function (proj) {
+            if (proj._marker && Math.abs(proj.lat - lat) < 0.0001 && Math.abs(proj.lng - lng) < 0.0001) {
+                if (openInfo) openInfo.close();
+                proj._info.open(monitorMap, proj._marker);
+                openInfo = proj._info;
+            }
+        });
+    };
+}());
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=<?= $mapsKey ?>&callback=initMonitorMap" async defer></script>
+<?php endif; ?>
+
+<!-- ── SortableJS — drag-to-reorder/reassign resource pills ── -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var allContainers = document.querySelectorAll('.db-resources');
+
+    allContainers.forEach(function (container) {
+        new Sortable(container, {
+            group:       { name: 'project-resources', pull: true, put: true },
+            handle:      '.db-pill-icons',
+            draggable:   '.db-pill',
+            filter:      '.db-empty',
+            animation:   150,
+            ghostClass:  'db-pill-ghost',
+            dragClass:   'db-pill-drag',
+
+            onStart: function () {
+                container.classList.add('dnd-active');
+                allContainers.forEach(function (c) {
+                    if (c !== container) c.classList.add('dnd-drop-zone');
+                });
+            },
+
+            onEnd: function () {
+                allContainers.forEach(function (c) {
+                    c.classList.remove('dnd-active', 'dnd-drop-zone');
+                });
+            },
+
+            onAdd: function (evt) {
+                // Flash the receiving card to confirm the drop
+                var card = evt.to.closest('.db-project-card');
+                if (card) {
+                    card.classList.add('dnd-received');
+                    setTimeout(function () { card.classList.remove('dnd-received'); }, 600);
+                }
+            },
+        });
+    });
+});
+
+// Restore right map panel state (like sidebar)
+(function () {
+    var panel = document.getElementById('mapSidePanel');
+    if (!panel) return;
+    var collapsed = localStorage.getItem('pz_map_collapsed') === 'true';
+    if (collapsed) {
+        panel.classList.add('map-panel-collapsed');
+        document.body.classList.add('map-panel-collapsed');
+    } else {
+        document.body.classList.add('map-panel-open');
+    }
+}());
+
+function toggleMapPanel() {
+    var panel = document.getElementById('mapSidePanel');
+    if (!panel) return;
+    var isNowCollapsed = panel.classList.toggle('map-panel-collapsed');
+    document.body.classList.toggle('map-panel-open',     !isNowCollapsed);
+    document.body.classList.toggle('map-panel-collapsed',  isNowCollapsed);
+    localStorage.setItem('pz_map_collapsed', isNowCollapsed);
+    // Trigger map resize after the slide animation
+    if (!isNowCollapsed) {
+        setTimeout(function () {
+            if (window.pzMonitorMap) google.maps.event.trigger(window.pzMonitorMap, 'resize');
+        }, 280);
+    }
+}
 </script>
 
 <?= $this->endSection() ?>

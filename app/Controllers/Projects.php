@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
 use App\Models\Model_Users;
+use Config\GoogleMaps;
 
 class Projects extends BaseController
 {
@@ -101,9 +102,9 @@ class Projects extends BaseController
                     log_message('error', 'Projects::create - verification error: ' . $t->getMessage());
                 }
 
-                // Only sync tasks if the user opted to add phases/tasks now
                 if ($this->request->getPost('add_tasks_now')) {
-                    $this->syncProjectTasks($projectId, $this->request->getPost('tasks') ?? []);
+                    $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
+                    $this->writeTasksFlat($projectId, $flatTasks);
                 }
 
                 return redirect()->to('projects')->with('success', 'Project created successfully!');
@@ -117,11 +118,12 @@ class Projects extends BaseController
             'pageTitle' => 'Add Project',
             'activePage' => 'projects',
             'project' => [],
-            'tasks' => $this->defaultTaskRows(),
+            'phases' => [],   // JS auto-fills from project type selection
             'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
             'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
             'userName' => session()->get('userName') ?? 'User',
-            'role' => session()->get('role') ?? 'Staff'
+            'role' => session()->get('role') ?? 'Staff',
+            'googleMapsBrowserKey' => (new GoogleMaps())->browserKey,
         ]);
     }
 
@@ -160,7 +162,8 @@ class Projects extends BaseController
                 log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
                 if ($addTasksNow) {
-                    $this->syncProjectTasks($id, $this->request->getPost('tasks') ?? []);
+                    $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
+                    $this->writeTasksFlat($id, $flatTasks);
                 }
 
                 return redirect()->to('projects')->with('success', 'Project updated successfully!');
@@ -177,11 +180,12 @@ class Projects extends BaseController
                 'activePage' => 'projects',
                 'project' => $project,
                 'projectId' => $id,
-                'tasks' => $this->getProjectTasks($id),
+                'phases' => $this->getProjectPhases($id),
                 'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
                 'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
                 'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff'
+                'role' => session()->get('role') ?? 'Staff',
+                'googleMapsBrowserKey' => (new GoogleMaps())->browserKey,
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Projects::update - ' . $e->getMessage());
@@ -251,7 +255,7 @@ class Projects extends BaseController
         $status = (string) ($this->request->getPost('status') ?: 'Planned');
         $budget = (float) ($this->request->getPost('budget') ?: 0);
 
-        $tasks = $this->normalizeTasks($this->request->getPost('tasks') ?? []);
+        $tasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
         $overallProgress = $this->calculateOverallProgress($tasks);
 
         return [
@@ -338,6 +342,138 @@ class Projects extends BaseController
             if ($task->exists()) {
                 $tasksRef->document($task->id())->delete();
             }
+        }
+    }
+
+    /**
+     * Convert phases[index][name|weight|tasks[...]] POST data into
+     * the flat task array that Firestore stores.
+     * Each phase's weight is divided equally across its tasks so the
+     * total always sums to 100 % (matching calculateOverallProgress).
+     */
+    private function normalizePhases(array $rawPhases): array
+    {
+        $flat = [];
+
+        foreach ($rawPhases as $phase) {
+            $phaseName   = trim((string)($phase['name']   ?? ''));
+            $phaseWeight = (float)($phase['weight'] ?? 0);
+            $rawTasks    = $phase['tasks'] ?? [];
+
+            if ($phaseName === '') continue;
+
+            // Filter to non-empty tasks only
+            $validTasks = array_values(array_filter($rawTasks, function ($t) {
+                return trim((string)($t['task_name'] ?? '')) !== '';
+            }));
+
+            if (empty($validTasks)) {
+                // Phase with no tasks: store as a single phase-level entry
+                $flat[] = [
+                    'id'                 => bin2hex(random_bytes(8)),
+                    'phase_name'         => $phaseName,
+                    'task_name'          => '',
+                    'weight_percent'     => $phaseWeight,
+                    'qty'                => 0,
+                    'unit'               => 'pcs',
+                    'completion_percent' => 0.0,
+                    'status'             => 'Pending',
+                ];
+                continue;
+            }
+
+            // Distribute phase weight evenly across its tasks
+            $count         = count($validTasks);
+            $perTaskWeight = round($phaseWeight / $count, 4);
+
+            foreach ($validTasks as $task) {
+                $flat[] = [
+                    'id'                 => trim((string)($task['id'] ?? '')) ?: bin2hex(random_bytes(8)),
+                    'phase_name'         => $phaseName,
+                    'task_name'          => trim((string)($task['task_name'] ?? '')),
+                    'weight_percent'     => $perTaskWeight,
+                    'qty'                => max(0, (int)($task['qty'] ?? 0)),
+                    'unit'               => trim((string)($task['unit'] ?? 'pcs')) ?: 'pcs',
+                    'completion_percent' => (float)($task['completion_percent'] ?? 0),
+                    'status'             => $this->normalizeTaskStatus((string)($task['status'] ?? 'Pending')),
+                ];
+            }
+        }
+
+        return $flat;
+    }
+
+    /**
+     * Group the flat task array (from Firestore) back into a
+     * phases array that the form view expects.
+     */
+    private function groupTasksIntoPhases(array $tasks): array
+    {
+        $phases   = [];
+        $phaseMap = [];
+
+        foreach ($tasks as $task) {
+            $phaseName = trim((string)($task['phase_name'] ?? 'General'));
+
+            if (!isset($phaseMap[$phaseName])) {
+                $phaseMap[$phaseName] = count($phases);
+                $phases[] = ['name' => $phaseName, 'weight' => 0.0, 'tasks' => []];
+            }
+
+            $pIdx = $phaseMap[$phaseName];
+            $phases[$pIdx]['weight'] += (float)($task['weight_percent'] ?? 0);
+
+            $taskName = trim((string)($task['task_name'] ?? ''));
+            if ($taskName !== '') {
+                $phases[$pIdx]['tasks'][] = [
+                    'id'                 => $task['id'] ?? '',
+                    'task_name'          => $taskName,
+                    'qty'                => $task['qty'] ?? 0,
+                    'unit'               => $task['unit'] ?? 'pcs',
+                    'completion_percent' => $task['completion_percent'] ?? 0,
+                    'status'             => $task['status'] ?? 'Pending',
+                ];
+            }
+        }
+
+        // Round accumulated weights to 1 decimal
+        foreach ($phases as &$p) {
+            $p['weight'] = round($p['weight'], 1);
+        }
+
+        return $phases;
+    }
+
+    /** Load saved tasks and return them as a phase-grouped array. */
+    private function getProjectPhases(string $projectId): array
+    {
+        $tasks = [];
+
+        foreach ($this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks')->documents() as $doc) {
+            if ($doc->exists()) {
+                $data       = $doc->data();
+                $data['id'] = $doc->id();
+                $tasks[]    = $data;
+            }
+        }
+
+        return $this->groupTasksIntoPhases($tasks);
+    }
+
+    /** Write an already-normalised flat task array to Firestore. */
+    private function writeTasksFlat(string $projectId, array $flatTasks): void
+    {
+        $ref = $this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks');
+
+        foreach ($ref->documents() as $existing) {
+            if ($existing->exists()) $ref->document($existing->id())->delete();
+        }
+
+        foreach ($flatTasks as $task) {
+            $taskId = $task['id'] ?? bin2hex(random_bytes(8));
+            $task['created_at'] = $task['created_at'] ?? time();
+            $task['updated_at'] = time();
+            $ref->document($taskId)->set($task);
         }
     }
 
@@ -429,7 +565,9 @@ class Projects extends BaseController
         }
         $normalizedId = preg_replace('#^.*/#', '', $rawUserId) ?: $rawUserId;
 
-        $user = $this->usersModel->getUserById($normalizedId);
+        $raw = $this->usersModel->getUserById($normalizedId);
+        // getUserById returns ['id' => ..., 'data' => [...]] — unwrap the data array
+        $user = is_array($raw['data'] ?? null) ? $raw['data'] : $raw;
 
         // Backward compatibility: older records may store email in *_id fields.
         if (!$user && filter_var($rawUserId, FILTER_VALIDATE_EMAIL)) {
