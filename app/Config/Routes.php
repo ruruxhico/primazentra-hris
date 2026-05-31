@@ -21,6 +21,11 @@ $routes->post('auth/processRegister', 'Auth::processRegister');
 $routes->post('auth/logout', 'Auth::logout');
 
 $routes->get('dashboard', 'Dashboard::index');
+
+// Google Maps API proxy (server-side; keeps API key out of the browser)
+$routes->get('maps/geocode',  'Maps::geocode');
+$routes->get('maps/reverse',  'Maps::reverse');
+$routes->get('maps/distance', 'Maps::distance');
 $routes->get('summary', 'Dashboard::index');
 $routes->get('monitor', 'Dashboard::index');
 

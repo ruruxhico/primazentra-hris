@@ -71,21 +71,37 @@ class Dashboard extends BaseController
             // ── Staff ────────────────────────────────────────────────
             $staffCount = $this->userModel->countStaff();
 
+            // Build a flat list of project locations for the monitor map JS
+            $projectLocations = [];
+            foreach ($activeProjects as $p) {
+                if ($p['_lat'] !== null && $p['_lng'] !== null) {
+                    $projectLocations[] = [
+                        'id'   => $p['id'] ?? '',
+                        'name' => $p['project_name'] ?? '',
+                        'addr' => $p['location']['address'] ?? '',
+                        'lat'  => $p['_lat'],
+                        'lng'  => $p['_lng'],
+                    ];
+                }
+            }
+
             $data = [
-                'pageTitle'        => 'Dashboard',
-                'activePage'       => 'dashboard',
-                'userName'         => $userName,
-                'role'             => $role,
-                'projectCount'     => count($activeProjects),
-                'resourceCount'    => $totalResources,
-                'staffCount'       => $staffCount,
-                'activeProjects'   => $activeProjects,
-                'projectsByRegion' => $projectsByRegion,
-                'blockers'         => $blockers,
-                'availableTools'   => $availableTools,
+                'pageTitle'           => 'Dashboard',
+                'activePage'          => 'dashboard',
+                'userName'            => $userName,
+                'role'                => $role,
+                'projectCount'        => count($activeProjects),
+                'resourceCount'       => $totalResources,
+                'staffCount'          => $staffCount,
+                'activeProjects'      => $activeProjects,
+                'projectsByRegion'    => $projectsByRegion,
+                'projectLocations'    => $projectLocations,
+                'blockers'            => $blockers,
+                'availableTools'      => $availableTools,
                 'availableResources'  => $availableResources,
                 'deployedResources'   => $deployedResources,
                 'availableManpower'   => $availableManpower,
+                'googleMapsBrowserKey' => (new \Config\GoogleMaps())->browserKey,
             ];
 
             return view('dashboard/index', $data);
@@ -117,10 +133,14 @@ class Dashboard extends BaseController
 
     private function enrichProject(array $p): array
     {
+        // Normalise the location field so downstream helpers always get a plain array
+        $p['location'] = $this->normaliseLocation($p['location'] ?? null);
+
         $p['_progress']  = min(100, max(0, (float)($p['overall_progress'] ?? $p['completion_percent'] ?? 0)));
         $p['_start_fmt'] = $this->fmtDate($p['start_date'] ?? '');
         $p['_end_fmt']   = $this->fmtDate($p['end_date'] ?? '');
         $p['_region']    = $this->detectRegion($p);
+        [$p['_lat'], $p['_lng']] = $this->extractLatLng($p);
         $p['_maps_url']  = $this->mapsUrl($p);
 
         // Resource pills: prefer project-embedded list, fall back to personnel
@@ -150,12 +170,58 @@ class Dashboard extends BaseController
         return $p;
     }
 
+    // ── Normalise a raw Firestore location value into a plain PHP array ──
+    private function normaliseLocation($raw): array
+    {
+        if (!$raw) return [];
+
+        // Already a plain array (most common case from CI4 form saves)
+        if (is_array($raw)) {
+            // Geopoint inside may still be a GeoPoint object — flatten it
+            if (isset($raw['geopoint'])) {
+                $raw['geopoint'] = $this->flattenGeoPoint($raw['geopoint']);
+            }
+            return $raw;
+        }
+
+        // Firestore GeoPoint stored directly as the location field
+        if ($raw instanceof \Google\Cloud\Core\GeoPoint) {
+            return [
+                'address'  => '',
+                'geopoint' => ['lat' => $raw->latitude(), 'lng' => $raw->longitude()],
+            ];
+        }
+
+        // String address
+        if (is_string($raw)) {
+            return ['address' => $raw, 'geopoint' => []];
+        }
+
+        return [];
+    }
+
+    private function flattenGeoPoint($geopoint): array
+    {
+        if ($geopoint instanceof \Google\Cloud\Core\GeoPoint) {
+            return ['lat' => $geopoint->latitude(), 'lng' => $geopoint->longitude()];
+        }
+        return is_array($geopoint) ? $geopoint : [];
+    }
+
+    private function extractLatLng(array $p): array
+    {
+        $geopoint = $p['location']['geopoint'] ?? [];
+        $lat = isset($geopoint['lat']) ? (float)$geopoint['lat'] : null;
+        $lng = isset($geopoint['lng']) ? (float)$geopoint['lng'] : null;
+        return [$lat, $lng];
+    }
+
     private function detectRegion(array $p): string
     {
         $explicit = strtoupper(trim((string)($p['region'] ?? '')));
         if ($explicit !== '') return $explicit;
 
-        $addr = strtolower((string)($p['location']['address'] ?? $p['location_label'] ?? ''));
+        $addr = strtolower((string)($p['location']['address'] ?? ''));
 
         $map = [
             'LUZON'    => ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','cagayan'],
@@ -175,6 +241,16 @@ class Dashboard extends BaseController
     private function fmtDate($val): string
     {
         if (!$val) return 'N/A';
+
+        // Firestore Timestamp object
+        if ($val instanceof \Google\Cloud\Core\Timestamp) {
+            try {
+                return strtoupper(date('F j, Y', $val->get()->getTimestamp()));
+            } catch (\Throwable $e) {
+                return 'N/A';
+            }
+        }
+
         if (is_numeric($val)) return strtoupper(date('F j, Y', (int)$val));
         $ts = strtotime((string)$val);
         return $ts ? strtoupper(date('F j, Y', $ts)) : strtoupper((string)$val);
@@ -182,10 +258,11 @@ class Dashboard extends BaseController
 
     private function mapsUrl(array $p): string
     {
-        $lat  = $p['location']['geopoint']['lat'] ?? null;
-        $lng  = $p['location']['geopoint']['lng'] ?? null;
+        [$lat, $lng] = $this->extractLatLng($p);
         $addr = $p['location']['address'] ?? $p['project_name'] ?? '';
-        if ($lat && $lng) return "https://www.google.com/maps?q={$lat},{$lng}";
+        if ($lat !== null && $lng !== null) {
+            return "https://www.google.com/maps?q={$lat},{$lng}";
+        }
         return 'https://www.google.com/maps/search/' . urlencode((string)$addr);
     }
 }

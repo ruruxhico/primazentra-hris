@@ -3095,3 +3095,223 @@ textarea:focus {
 .confirm-actions { display:flex; gap:0.5rem; justify-content:flex-end; }
 .confirm-actions .btn-toolbar { background:#333; color:#fff; border:1px solid rgba(255,255,255,0.06); }
 .confirm-actions .btn-toolbar.btn-add { background:#8C701C; border-color:#8C701C; }
+
+/* ============================================
+   15. PROJECTS MODULE
+   ============================================ */
+
+/* ── Location field ───────────────────────── */
+.location-wrap { position: relative; }
+
+.location-input-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+.location-input-row input[type="text"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.btn-locate-me {
+    flex-shrink: 0;
+    background: #8C701C;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background .15s;
+}
+.btn-locate-me:hover { background: #6b5214; }
+.btn-locate-me .material-symbols-outlined { font-size: 18px !important; }
+
+.location-coords {
+    font-size: 0.72rem;
+    color: #888;
+    margin-top: 0.3rem;
+    min-height: 1.1em;
+}
+.location-coords.has-coords { color: #4caf50; }
+
+/* ── Map preview ──────────────────────────── */
+.map-preview-wrap {
+    margin-top: 0.6rem;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #ddd;
+}
+#locationMap {
+    width: 100%;
+    height: 300px;
+    cursor: crosshair !important;
+}
+#locationMap * { cursor: crosshair !important; }
+.map-hint {
+    font-size: 0.73rem;
+    color: #666;
+    padding: 0.35rem 0.6rem;
+    background: #f9f6ef;
+    border-top: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Google Autocomplete dropdown z-index fix */
+.pac-container { z-index: 99999 !important; }
+
+/* ── Phase Schedule ───────────────────────── */
+.phase-schedule {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #E8D9A8;
+}
+.schedule-hdr {
+    display: grid;
+    grid-template-columns: 1fr 90px 76px;
+    gap: 0;
+    background: #6B5D1E;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 12px;
+}
+.schedule-total-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 76px;
+    padding: 8px 12px;
+    background: #F6F0E4;
+    border-top: 2px solid #8C701C;
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: #1a1a1a;
+    align-items: center;
+}
+#totalWeightDisplay { font-variant-numeric: tabular-nums; }
+
+.phase-item {
+    border-top: 1px solid #E8D9A8;
+    background: #fff;
+}
+.phase-item:first-child { border-top: none; }
+
+.phase-hdr-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 76px;
+    align-items: center;
+    padding: 6px 12px;
+    gap: 0;
+    min-height: 44px;
+}
+.phase-name-inp {
+    border: none;
+    background: transparent;
+    font-size: 0.88rem;
+    color: #1a1a1a;
+    width: 100%;
+    font-weight: 500;
+    padding: 4px 0;
+}
+.phase-name-inp:focus { outline: none; border-bottom: 1px solid #C8A951; }
+
+.phase-weight-cell { display: flex; align-items: center; gap: 3px; }
+.phase-weight-inp {
+    width: 58px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 0.85rem;
+    text-align: right;
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.phase-weight-inp::-webkit-inner-spin-button,
+.phase-weight-inp::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+.pct-label { font-size: 0.8rem; color: #888; }
+
+.phase-actions {
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+    align-items: center;
+}
+.phase-del-btn,
+.phase-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    color: #888;
+    transition: color .15s, background .15s;
+}
+.phase-del-btn:hover  { color: #e53935; background: #fdecea; }
+.phase-toggle-btn:hover { color: #8C701C; background: #FBF6E8; }
+.phase-del-btn .material-symbols-outlined,
+.phase-toggle-btn .material-symbols-outlined { font-size: 18px !important; }
+
+.phase-tasks-wrap {
+    background: #FDFAF3;
+    border-top: 1px solid #F0E8D0;
+    padding: 8px 14px 10px;
+}
+.phase-task-row { margin-bottom: 8px; }
+
+.task-name-inp {
+    width: 100%;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    margin-bottom: 5px;
+    box-sizing: border-box;
+}
+.task-meta-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.task-field-label { font-size: 0.78rem; font-weight: 600; color: #666; white-space: nowrap; }
+.task-qty-inp { width: 70px; border: 1px solid #ddd; border-radius: 5px; padding: 5px 7px; font-size: 0.82rem; }
+.task-unit-sel,
+.task-status-sel { border: 1px solid #ddd; border-radius: 5px; padding: 5px 7px; font-size: 0.82rem; background: #fff; }
+.task-unit-sel   { width: 70px; }
+.task-status-sel { flex: 1; min-width: 100px; }
+.task-del-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #bbb;
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    transition: color .15s;
+}
+.task-del-btn:hover { color: #e53935; }
+.task-del-btn .material-symbols-outlined { font-size: 18px !important; }
+.btn-add-task {
+    margin-top: 6px;
+    background: none;
+    border: 1.5px dashed #C8A951;
+    border-radius: 6px;
+    color: #8C701C;
+    font-weight: 600;
+    font-size: 0.8rem;
+    padding: 5px 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: background .15s;
+}
+.btn-add-task:hover { background: #FBF6E8; }
