@@ -12,8 +12,10 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-install zip intl
 
 # gRPC + Protobuf — required by google/cloud-firestore
+# $PHPIZE_DEPS provides compilers needed by pecl
+# MAKEFLAGS="-j1" limits parallel compilation to 1 thread to prevent OOM kill
 RUN apt-get update && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
-    && pecl install grpc protobuf \
+    && MAKEFLAGS="-j1" pecl install grpc protobuf \
     && docker-php-ext-enable grpc protobuf \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
     && rm -rf /var/lib/apt/lists/*
@@ -23,13 +25,13 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy composer manifests first (better layer caching)
+# Copy composer manifests first for better layer caching
 COPY composer.json composer.lock ./
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Copy project files
+# Copy the rest of the project files
 COPY . .
 
 # Point Apache document root to CI4's public/ folder
