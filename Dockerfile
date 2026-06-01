@@ -25,11 +25,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-<<<<<<< HEAD
 # Copy composer manifests first for better layer caching
-=======
-# Copy composer manifests first (better layer caching)
->>>>>>> ebd9bfe3f4c5825559388747f6c6fd87aaec202d
 COPY composer.json composer.lock ./
 
 # Install PHP dependencies
