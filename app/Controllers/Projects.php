@@ -32,23 +32,91 @@ class Projects extends BaseController
                 $projects[] = $this->enrichProjectForView($projectData);
             }
 
-            $perPage = config('Pager')->perPage;
+            // — Build PM / SE option lists from actual project data —
+            $pmOptions = [];
+            $seOptions = [];
+            foreach ($projects as $p) {
+                $pmId   = $p['pm_id_normalized'] ?? '';
+                $pmName = $p['project_manager_name'] ?? '';
+                if ($pmId && $pmName !== 'N/A' && !isset($pmOptions[$pmId])) {
+                    $pmOptions[$pmId] = $pmName;
+                }
+                $seId   = $p['se_id_normalized'] ?? '';
+                $seName = $p['site_engineer_name'] ?? '';
+                if ($seId && $seName !== 'N/A' && !isset($seOptions[$seId])) {
+                    $seOptions[$seId] = $seName;
+                }
+            }
+            asort($pmOptions);
+            asort($seOptions);
+
+            // — Read filters from GET —
+            $filterStatus = trim((string) ($this->request->getGet('status') ?? ''));
+            $filterRegion = trim((string) ($this->request->getGet('region') ?? ''));
+            $filterPm     = trim((string) ($this->request->getGet('pm_id') ?? ''));
+            $filterSe     = trim((string) ($this->request->getGet('se_id') ?? ''));
+            $filterType   = trim((string) ($this->request->getGet('type') ?? ''));
+            $filterSort   = trim((string) ($this->request->getGet('sort') ?? ''));
+
+            // — Apply filters —
+            if ($filterStatus !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    strcasecmp((string) ($p['status'] ?? ''), $filterStatus) === 0));
+            }
+            if ($filterRegion !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    $this->resolveRegion((string) ($p['location_label'] ?? '')) === $filterRegion));
+            }
+            if ($filterPm !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    ($p['pm_id_normalized'] ?? '') === $filterPm));
+            }
+            if ($filterSe !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    ($p['se_id_normalized'] ?? '') === $filterSe));
+            }
+            if ($filterType !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    strcasecmp((string) ($p['project_type'] ?? ''), $filterType) === 0));
+            }
+
+            // — Sort —
+            if ($filterSort === 'progress_desc') {
+                usort($projects, fn($a, $b) =>
+                    (float) ($b['overall_progress'] ?? 0) <=> (float) ($a['overall_progress'] ?? 0));
+            } elseif ($filterSort === 'progress_asc') {
+                usort($projects, fn($a, $b) =>
+                    (float) ($a['overall_progress'] ?? 0) <=> (float) ($b['overall_progress'] ?? 0));
+            }
+
+            // — Paginate —
+            $perPage     = config('Pager')->perPage;
             $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
-            $total = count($projects);
+            $total       = count($projects);
 
             $pager = service('pager');
             $pager->store('projects', $currentPage, $perPage, $total);
 
-            $offset = ($currentPage - 1) * $perPage;
+            $offset        = ($currentPage - 1) * $perPage;
             $pagedProjects = array_slice($projects, $offset, $perPage);
 
             $data = [
-                'pageTitle' => 'Projects',
-                'activePage' => 'projects',
-                'projects' => $pagedProjects,
-                'pagerOffset' => $offset,
+                'pageTitle'     => 'Projects',
+                'activePage'    => 'projects',
+                'projects'      => $pagedProjects,
+                'pagerOffset'   => $offset,
+                'pmOptions'     => $pmOptions,
+                'seOptions'     => $seOptions,
+                'activeFilters' => [
+                    'status' => $filterStatus,
+                    'region' => $filterRegion,
+                    'pm_id'  => $filterPm,
+                    'se_id'  => $filterSe,
+                    'type'   => $filterType,
+                    'sort'   => $filterSort,
+                ],
                 'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff'
+                'role'     => session()->get('role') ?? 'Staff',
             ];
 
             return view('projects/projects_view', $data);
@@ -56,13 +124,16 @@ class Projects extends BaseController
             log_message('error', 'Projects::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle' => 'Projects',
-                'activePage' => 'projects',
-                'projects' => [],
-                'pagerOffset' => 0,
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff',
-                'error' => 'Unable to fetch projects'
+                'pageTitle'     => 'Projects',
+                'activePage'    => 'projects',
+                'projects'      => [],
+                'pagerOffset'   => 0,
+                'pmOptions'     => [],
+                'seOptions'     => [],
+                'activeFilters' => [],
+                'userName'      => session()->get('userName') ?? 'User',
+                'role'          => session()->get('role') ?? 'Staff',
+                'error'         => 'Unable to fetch projects',
             ];
 
             return view('projects/projects_view', $data);
@@ -553,6 +624,11 @@ class Projects extends BaseController
         $project['location_lat_value'] = (string) ($geopoint['lat'] ?? '');
         $project['location_lng_value'] = (string) ($geopoint['lng'] ?? '');
 
+        $rawPmId = $this->normalizeReferenceValue($personnel['project_manager_id'] ?? null);
+        $rawSeId = $this->normalizeReferenceValue($personnel['site_engineer_id'] ?? null);
+        $project['pm_id_normalized'] = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
+        $project['se_id_normalized'] = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
+
         return $project;
     }
 
@@ -678,5 +754,48 @@ class Projects extends BaseController
             'completion_percent' => '',
             'status' => 'Pending'
         ]];
+    }
+
+    private function resolveRegion(string $address): string
+    {
+        $addr = strtolower($address);
+
+        $luzon = [
+            'metro manila','ncr','manila','quezon city','makati','pasig','taguig',
+            'mandaluyong','marikina','caloocan','las piñas','muntinlupa','navotas',
+            'parañaque','pasay','san juan','valenzuela','pateros',
+            'ilocos norte','ilocos sur','la union','pangasinan',
+            'benguet','baguio','ifugao','kalinga','mountain province','apayao','abra',
+            'cagayan','isabela','nueva vizcaya','quirino','batanes',
+            'nueva ecija','pampanga','tarlac','zambales','bulacan','bataan','aurora',
+            'cavite','laguna','batangas','rizal','quezon province',
+            'marinduque','occidental mindoro','oriental mindoro','palawan','romblon',
+            'albay','camarines norte','camarines sur','catanduanes','masbate','sorsogon',
+        ];
+
+        $visayas = [
+            'aklan','antique','capiz','guimaras','iloilo','negros occidental','bacolod',
+            'bohol','cebu','negros oriental','siquijor','dumaguete',
+            'biliran','eastern samar','leyte','northern samar','samar','southern leyte','tacloban',
+            'boracay',
+        ];
+
+        $mindanao = [
+            'zamboanga del norte','zamboanga del sur','zamboanga sibugay','zamboanga city',
+            'basilan','lanao del norte','misamis occidental','misamis oriental','iligan','cagayan de oro',
+            'bukidnon','camiguin','lanao del sur',
+            'maguindanao','sultan kudarat','cotabato','north cotabato',
+            'davao del norte','davao del sur','davao occidental','davao oriental','davao city',
+            'compostela valley','tagum','digos',
+            'agusan del norte','agusan del sur','dinagat','surigao del norte','surigao del sur','butuan',
+            'general santos','sarangani','south cotabato',
+            'tawi-tawi','sulu','basilan',
+        ];
+
+        foreach ($luzon    as $kw) { if (str_contains($addr, $kw)) return 'LUZON';    }
+        foreach ($visayas  as $kw) { if (str_contains($addr, $kw)) return 'VISAYAS';  }
+        foreach ($mindanao as $kw) { if (str_contains($addr, $kw)) return 'MINDANAO'; }
+
+        return '';
     }
 }

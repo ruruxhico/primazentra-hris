@@ -31,12 +31,30 @@
     <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
 
+<style>
+.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
+.filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px 16px; }
+.filter-group { display:flex; flex-direction:column; gap:4px; }
+.filter-group label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; }
+.filter-group select { padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; background:#fff; }
+.filter-footer { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
+.filter-badge { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
+</style>
+
+<?php
+    $activeFilters  = $activeFilters  ?? [];
+    $activeCount    = count(array_filter($activeFilters));
+    $pmOptions      = $pmOptions      ?? [];
+    $seOptions      = $seOptions      ?? [];
+    $af             = $activeFilters;
+?>
+
 <div class="page-module">
 <div class="resource-controls">
     <input type="text" id="searchProjects" placeholder="🔍 Search projects..." class="search-input">
 
-    <button class="btn btn-filter">
-        ▼ FILTER
+    <button type="button" class="btn btn-filter" id="filterToggleBtn">
+        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
     <a href="<?= base_url('projects/create') ?>" class="btn btn-success">
@@ -50,6 +68,77 @@
     <button class="btn btn-export">
         ⬆ EXPORT
     </button>
+</div>
+
+<!-- Filter Panel -->
+<div id="filterPanel" class="filter-panel" style="display:none">
+    <form id="filterForm" method="get" action="<?= base_url('projects') ?>">
+        <div class="filter-grid">
+
+            <div class="filter-group">
+                <label>Status</label>
+                <select name="status">
+                    <option value="">All Statuses</option>
+                    <?php foreach (['PLANNED' => 'Planned', 'ON-GOING' => 'On Going', 'COMPLETED' => 'Completed', 'HALTED' => 'Halted'] as $val => $label): ?>
+                    <option value="<?= $val ?>" <?= ($af['status'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Region</label>
+                <select name="region">
+                    <option value="">All Regions</option>
+                    <?php foreach (['LUZON' => 'Luzon', 'VISAYAS' => 'Visayas', 'MINDANAO' => 'Mindanao'] as $val => $label): ?>
+                    <option value="<?= $val ?>" <?= ($af['region'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Type</label>
+                <select name="type">
+                    <option value="">All Types</option>
+                    <?php foreach (['RESIDENTIAL' => 'Residential', 'TOWERS' => 'Towers', 'COMMERCIAL' => 'Commercial'] as $val => $label): ?>
+                    <option value="<?= $val ?>" <?= ($af['type'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Project Manager</label>
+                <select name="pm_id">
+                    <option value="">All PMs</option>
+                    <?php foreach ($pmOptions as $id => $name): ?>
+                    <option value="<?= esc($id) ?>" <?= ($af['pm_id'] ?? '') === $id ? 'selected' : '' ?>><?= esc($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Site Engineer</label>
+                <select name="se_id">
+                    <option value="">All SEs</option>
+                    <?php foreach ($seOptions as $id => $name): ?>
+                    <option value="<?= esc($id) ?>" <?= ($af['se_id'] ?? '') === $id ? 'selected' : '' ?>><?= esc($name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Sort by Progress</label>
+                <select name="sort">
+                    <option value="">Default</option>
+                    <option value="progress_desc" <?= ($af['sort'] ?? '') === 'progress_desc' ? 'selected' : '' ?>>Highest First</option>
+                    <option value="progress_asc"  <?= ($af['sort'] ?? '') === 'progress_asc'  ? 'selected' : '' ?>>Lowest First</option>
+                </select>
+            </div>
+
+        </div>
+        <div class="filter-footer">
+            <a href="<?= base_url('projects') ?>" class="btn btn-secondary">Reset</a>
+        </div>
+    </form>
 </div>
 
 <!-- Projects Table -->
@@ -121,6 +210,26 @@ document.addEventListener('DOMContentLoaded', function () {
         toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
         toast.innerText = message;
         setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
+    }
+
+    // — Filter panel toggle —
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    const filterPanel     = document.getElementById('filterPanel');
+    const filterForm      = document.getElementById('filterForm');
+    if (filterToggleBtn && filterPanel) {
+        <?php if ($activeCount > 0): ?>
+        filterPanel.style.display = 'block';
+        <?php endif; ?>
+        filterToggleBtn.addEventListener('click', function () {
+            filterPanel.style.display = filterPanel.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+
+    // — Auto-submit on any filter change —
+    if (filterForm) {
+        filterForm.querySelectorAll('select').forEach(function (sel) {
+            sel.addEventListener('change', function () { filterForm.submit(); });
+        });
     }
 
     const search = document.getElementById('searchProjects');

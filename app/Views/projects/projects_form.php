@@ -21,6 +21,10 @@
 
 <h2><?= $isEdit ? 'Projects - Edit' : 'Projects - Add' ?></h2>
 
+<style>
+#projectForm input[type="text"]:not([readonly]) { text-transform: uppercase; }
+</style>
+
 <div class="form-container project-form-container">
     <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm">
         <?= csrf_field() ?>
@@ -37,8 +41,8 @@
                 <div class="form-group">
                     <label for="project_type">Project Type *</label>
                     <select id="project_type" name="project_type" required>
-                        <option value="">Select Type</option>
-                        <?php foreach (['Residential','Towers','Commercial'] as $type): ?>
+                        <option value="">SELECT TYPE</option>
+                        <?php foreach (['RESIDENTIAL','TOWERS','COMMERCIAL'] as $type): ?>
                             <option value="<?= esc($type) ?>"
                                 <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
                                 <?= esc($type) ?>
@@ -50,8 +54,8 @@
                 <div class="form-group">
                     <label for="status">Status *</label>
                     <select id="status" name="status" required>
-                        <option value="">Select Status</option>
-                        <?php foreach (['Planned','On-going','Completed','Halted'] as $status): ?>
+                        <option value="">SELECT STATUS</option>
+                        <?php foreach (['PLANNED','ON-GOING','COMPLETED','HALTED'] as $status): ?>
                             <option value="<?= esc($status) ?>"
                                 <?= ($project['status'] ?? '') === $status ? 'selected' : '' ?>>
                                 <?= esc($status) ?>
@@ -109,7 +113,7 @@
                 <div class="form-group">
                     <label for="project_manager_id">Project Manager *</label>
                     <select id="project_manager_id" name="project_manager_id" required>
-                        <option value="">Select Project Manager</option>
+                        <option value="">SELECT PROJECT MANAGER</option>
                         <?php foreach ($projectManagers ?? [] as $mgr): ?>
                             <?php $label = trim(($mgr['first_name'] ?? '') . ' ' . ($mgr['last_name'] ?? '')); ?>
                             <option value="<?= esc($mgr['id'] ?? '') ?>"
@@ -123,7 +127,7 @@
                 <div class="form-group">
                     <label for="site_engineer_id">Site Engineer *</label>
                     <select id="site_engineer_id" name="site_engineer_id" required>
-                        <option value="">Select Site Engineer</option>
+                        <option value="">SELECT SITE ENGINEER</option>
                         <?php foreach ($siteEngineers ?? [] as $eng): ?>
                             <?php $label = trim(($eng['first_name'] ?? '') . ' ' . ($eng['last_name'] ?? '')); ?>
                             <option value="<?= esc($eng['id'] ?? '') ?>"
@@ -140,7 +144,7 @@
                     <label for="start_date">Start Date</label>
                     <div class="date-picker" data-target="start">
                         <input type="text" id="start_date_display" class="date-display"
-                               placeholder="dd/mm/yyyy"
+                               placeholder="DD/MM/YYYY"
                                value="<?= esc((($project['start_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string)$project['start_date_value'])) : '') ?>"
                                readonly>
                         <input type="hidden" id="start_date" name="start_date"
@@ -154,7 +158,7 @@
                     <label for="end_date">End Date</label>
                     <div class="date-picker" data-target="end">
                         <input type="text" id="end_date_display" class="date-display"
-                               placeholder="dd/mm/yyyy"
+                               placeholder="DD/MM/YYYY"
                                value="<?= esc((($project['end_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string)$project['end_date_value'])) : '') ?>"
                                readonly>
                         <input type="hidden" id="end_date" name="end_date"
@@ -358,6 +362,7 @@
             var lng = place.geometry.location.lng();
             setCoords(lat, lng);
             placeMarker({ lat: lat, lng: lng }, 15);
+            addrInput.value = addrInput.value.toUpperCase();
         });
 
         // If editing with saved coords, zoom in and drop pin on load
@@ -389,7 +394,7 @@
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data.status === 'OK') {
-                    addrInput.value = data.formatted_address;
+                    addrInput.value = data.formatted_address.toUpperCase();
                 }
             })
             .catch(function () {});
@@ -405,7 +410,7 @@
                 if (data.status === 'OK') {
                     setCoords(data.lat, data.lng);
                     placeMarker({ lat: data.lat, lng: data.lng }, 15);
-                    addrInput.value = data.formatted_address;
+                    addrInput.value = data.formatted_address.toUpperCase();
                 } else {
                     coordsEl.textContent = 'Address not found — try a more specific address.';
                     coordsEl.className = 'location-coords';
@@ -819,6 +824,16 @@ document.addEventListener('DOMContentLoaded', function () {
         toggle.addEventListener('click', function () { var open = popup.classList.toggle('open'); popup.setAttribute('aria-hidden', !open); });
         document.addEventListener('click', function (e) { if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); } });
     });
+});
+</script>
+
+<script>
+document.getElementById('projectForm').addEventListener('input', function (e) {
+    if (e.target.matches('input[type="text"]') && !e.target.readOnly) {
+        var pos = e.target.selectionStart;
+        e.target.value = e.target.value.toUpperCase();
+        e.target.setSelectionRange(pos, pos);
+    }
 });
 </script>
 
