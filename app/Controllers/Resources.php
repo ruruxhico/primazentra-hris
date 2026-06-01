@@ -50,12 +50,50 @@ class Resources extends BaseController
                 // fail gracefully; leave manpower empty
             }
 
+            // — Read and apply equipment/tools sort filters —
+            $eqSort    = trim((string) ($this->request->getGet('eq_sort')    ?? ''));
+            $toolsSort = trim((string) ($this->request->getGet('tools_sort') ?? ''));
+
+            if ($eqSort === 'total_desc') {
+                usort($equipment, fn($a, $b) => ($b['total_quantity_display'] ?? 0) <=> ($a['total_quantity_display'] ?? 0));
+            } elseif ($eqSort === 'avail_desc') {
+                usort($equipment, fn($a, $b) => ($b['available_units_display'] ?? 0) <=> ($a['available_units_display'] ?? 0));
+            }
+
+            if ($toolsSort === 'total_desc') {
+                usort($tools, fn($a, $b) => ($b['total_quantity_display'] ?? 0) <=> ($a['total_quantity_display'] ?? 0));
+            } elseif ($toolsSort === 'avail_desc') {
+                usort($tools, fn($a, $b) => ($b['available_units_display'] ?? 0) <=> ($a['available_units_display'] ?? 0));
+            }
+
+            // — Read and apply manpower filters —
+            $mpRole   = trim((string) ($this->request->getGet('mp_role')   ?? ''));
+            $mpSpec   = trim((string) ($this->request->getGet('mp_spec')   ?? ''));
+            $mpStatus = trim((string) ($this->request->getGet('mp_status') ?? ''));
+
+            if ($mpRole !== '') {
+                $manpower = array_values(array_filter($manpower, fn($m) =>
+                    strcasecmp((string)($m['manpower_details']['role'] ?? $m['role'] ?? ''), $mpRole) === 0));
+            }
+            if ($mpSpec !== '') {
+                $manpower = array_values(array_filter($manpower, fn($m) =>
+                    strcasecmp((string)($m['manpower_details']['specialization'] ?? $m['specialization'] ?? ''), $mpSpec) === 0));
+            }
+            if ($mpStatus !== '') {
+                $manpower = array_values(array_filter($manpower, fn($m) =>
+                    strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
+            }
+
             return view('resources/resources_view', [
-                'equipment' => $equipment,
-                'tools' => $tools,
-                'manpower' => $manpower,
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'User'
+                'equipment'             => $equipment,
+                'tools'                 => $tools,
+                'manpower'              => $manpower,
+                'activeEquipFilters'    => ['eq_sort'    => $eqSort],
+                'activeToolFilters'     => ['tools_sort' => $toolsSort],
+                'activeManpowerFilters' => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
+                'activeTab'             => $this->request->getGet('tab') ?? 'equipment',
+                'userName'           => session()->get('userName') ?? 'User',
+                'role'               => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error loading resources: ' . $e->getMessage());
@@ -339,11 +377,47 @@ class Resources extends BaseController
             // Ensure derived fields (like name from manpower_details) are present
             $resource = $this->normalizeResourceForView($resource);
 
+            // — Read unit-level filters —
+            $filterBrand     = trim((string) ($this->request->getGet('brand')     ?? ''));
+            $filterModelNo   = trim((string) ($this->request->getGet('model_no')  ?? ''));
+            $filterCondition = trim((string) ($this->request->getGet('condition') ?? ''));
+            $filterStatus    = trim((string) ($this->request->getGet('status')    ?? ''));
+            $filterLocType   = trim((string) ($this->request->getGet('loc_type')  ?? ''));
+
+            // — Apply filters —
+            if ($filterBrand !== '') {
+                $items = array_values(array_filter($items, fn($i) =>
+                    str_contains(strtolower((string) ($i['brand'] ?? '')), strtolower($filterBrand))));
+            }
+            if ($filterModelNo !== '') {
+                $items = array_values(array_filter($items, fn($i) =>
+                    str_contains(strtolower((string) ($i['model_number'] ?? '')), strtolower($filterModelNo))));
+            }
+            if ($filterCondition !== '') {
+                $items = array_values(array_filter($items, fn($i) =>
+                    strcasecmp((string) ($i['condition'] ?? ''), $filterCondition) === 0));
+            }
+            if ($filterStatus !== '') {
+                $items = array_values(array_filter($items, fn($i) =>
+                    strcasecmp((string) ($i['status'] ?? ''), $filterStatus) === 0));
+            }
+            if ($filterLocType !== '') {
+                $items = array_values(array_filter($items, fn($i) =>
+                    strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
+            }
+
             return view('resources/resource_items', [
-                'resource' => $resource,
-                'items' => $items,
+                'resource'      => $resource,
+                'items'         => $items,
+                'activeFilters' => [
+                    'brand'     => $filterBrand,
+                    'model_no'  => $filterModelNo,
+                    'condition' => $filterCondition,
+                    'status'    => $filterStatus,
+                    'loc_type'  => $filterLocType,
+                ],
                 'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'User'
+                'role'     => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error loading resource items: ' . $e->getMessage());
@@ -416,6 +490,8 @@ class Resources extends BaseController
             $data['contact_number'] = trim((string) $this->request->getPost('contact_number'));
             $data['assigned_project_id'] = trim((string) $this->request->getPost('assigned_project_id')) ?: null;
             $data['next_availability'] = trim((string) $this->request->getPost('next_availability')) ?: null;
+            $rawSkills = $this->request->getPost('skills') ?? [];
+            $data['skills'] = array_values(array_filter(array_map('trim', is_array($rawSkills) ? $rawSkills : [])));
 
             // For manpower, if current site/deployment provided, use it as top-level location
             $site = trim((string) $this->request->getPost('current_site_deployment'));
@@ -479,6 +555,8 @@ class Resources extends BaseController
         foreach ($rawItems as $item) {
             // New spec fields
             $serialNumber = trim((string) ($item['serial_number'] ?? ''));
+            $brand        = trim((string) ($item['brand'] ?? ''));
+            $modelNumber  = trim((string) ($item['model_number'] ?? ''));
             $condition = trim((string) ($item['condition'] ?? ''));
             $status = trim((string) ($item['status'] ?? 'In-Storage'));
             $address = trim((string) ($item['address'] ?? ''));
@@ -500,15 +578,17 @@ class Resources extends BaseController
 
             // Build item with new spec structure
             $itemData = [
-                'id' => trim((string) ($item['id'] ?? '')) ?: bin2hex(random_bytes(8)),
+                'id'           => trim((string) ($item['id'] ?? '')) ?: bin2hex(random_bytes(8)),
                 'serial_number' => $serialNumber,
-                'condition' => $condition,
-                'status' => $status,
+                'brand'        => $brand,
+                'model_number' => $modelNumber,
+                'condition'    => $condition,
+                'status'       => $status,
                 'assigned_project_id' => $assignedProjectId,
-                'next_availability' => $nextAvailability,
+                'next_availability'   => $nextAvailability,
                 'location' => [
                     'address' => $address,
-                    'type' => $locationType,
+                    'type'    => $locationType,
                 ],
             ];
 
@@ -701,6 +781,7 @@ class Resources extends BaseController
                 'specialization' => $resource['specialization'] ?? ($resource['manpower_details']['specialization'] ?? ''),
                 'contact_number' => $resource['contact_number'] ?? ($resource['manpower_details']['contact_number'] ?? ''),
                 'assigned_project_id' => $resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null),
+                'skills' => is_array($resource['skills'] ?? null) ? $resource['skills'] : ($resource['manpower_details']['skills'] ?? []),
                 'current_site_deployment' => '',
             ];
             // Prefer showing project name when assigned_project_id exists

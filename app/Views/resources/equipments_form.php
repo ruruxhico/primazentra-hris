@@ -113,7 +113,11 @@
                                             <input type="text" name="items[<?= $index ?>][serial_number]" value="<?= esc((string)($item['serial_number'] ?? '')) ?>" placeholder="SN-12345" class="unit-serial-input">
                                         </div>
                                         <div class="unit-field">
-                                            <label>Model Number / Brand</label>
+                                            <label>Brand</label>
+                                            <input type="text" name="items[<?= $index ?>][brand]" value="<?= esc((string)($item['brand'] ?? '')) ?>" placeholder="e.g. Caterpillar">
+                                        </div>
+                                        <div class="unit-field">
+                                            <label>Model Number</label>
                                             <input type="text" name="items[<?= $index ?>][model_number]" value="<?= esc((string)($item['model_number'] ?? '')) ?>" placeholder="e.g. CAT-950GC">
                                         </div>
                                         <div class="unit-field">
@@ -205,7 +209,11 @@
                     <input type="text" name="__INDEX__[serial_number]" placeholder="SN-12345" class="unit-serial-input">
                 </div>
                 <div class="unit-field">
-                    <label>Model Number / Brand</label>
+                    <label>Brand</label>
+                    <input type="text" name="__INDEX__[brand]" placeholder="e.g. Caterpillar">
+                </div>
+                <div class="unit-field">
+                    <label>Model Number</label>
                     <input type="text" name="__INDEX__[model_number]" placeholder="e.g. CAT-950GC">
                 </div>
                 <div class="unit-field">
