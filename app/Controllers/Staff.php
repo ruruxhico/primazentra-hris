@@ -66,23 +66,57 @@ class Staff extends BaseController
                 });
             }
 
-            $perPage = config('Pager')->perPage;
+            // — Build role option list from actual data —
+            $roleOptions = [];
+            foreach ($staff as $s) {
+                $r = trim((string) ($s['role'] ?? ''));
+                if ($r !== '' && !in_array($r, $roleOptions, true)) {
+                    $roleOptions[] = $r;
+                }
+            }
+            sort($roleOptions);
+
+            // — Read filters —
+            $filterLnRange = trim((string) ($this->request->getGet('ln_range') ?? ''));
+            $filterRole    = trim((string) ($this->request->getGet('role_filter') ?? ''));
+
+            // — Apply filters —
+            if ($filterLnRange !== '' && str_contains($filterLnRange, '-')) {
+                [$rangeStart, $rangeEnd] = explode('-', $filterLnRange, 2);
+                $rangeStart = strtolower(trim($rangeStart));
+                $rangeEnd   = strtolower(trim($rangeEnd));
+                $staff = array_values(array_filter($staff, function ($s) use ($rangeStart, $rangeEnd) {
+                    $letter = strtolower(substr(trim((string) ($s['last_name'] ?? '')), 0, 1));
+                    return $letter !== '' && $letter >= $rangeStart && $letter <= $rangeEnd;
+                }));
+            }
+            if ($filterRole !== '') {
+                $staff = array_values(array_filter($staff, fn($s) =>
+                    strcasecmp((string) ($s['role'] ?? ''), $filterRole) === 0));
+            }
+
+            $perPage     = config('Pager')->perPage;
             $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
-            $total = count($staff);
+            $total       = count($staff);
 
             $pager = service('pager');
             $pager->store('staff', $currentPage, $perPage, $total);
 
-            $offset = ($currentPage - 1) * $perPage;
+            $offset    = ($currentPage - 1) * $perPage;
             $pagedStaff = array_slice($staff, $offset, $perPage);
 
             $data = [
-                'pageTitle' => 'Staff',
-                'activePage' => 'staff',
-                'staff' => $pagedStaff,
-                'pagerOffset' => $offset,
+                'pageTitle'     => 'Staff',
+                'activePage'    => 'staff',
+                'staff'         => $pagedStaff,
+                'pagerOffset'   => $offset,
+                'roleOptions'   => $roleOptions,
+                'activeFilters' => [
+                    'ln_range'    => $filterLnRange,
+                    'role_filter' => $filterRole,
+                ],
                 'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff'
+                'role'     => session()->get('role') ?? 'Staff',
             ];
 
             return view('staff/staff_view', $data);
@@ -90,13 +124,15 @@ class Staff extends BaseController
             log_message('error', 'Staff::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle' => 'Staff',
-                'activePage' => 'staff',
-                'staff' => [],
-                'pagerOffset' => 0,
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff',
-                'error' => 'Unable to fetch staff'
+                'pageTitle'     => 'Staff',
+                'activePage'    => 'staff',
+                'staff'         => [],
+                'pagerOffset'   => 0,
+                'roleOptions'   => [],
+                'activeFilters' => [],
+                'userName'      => session()->get('userName') ?? 'User',
+                'role'          => session()->get('role') ?? 'Staff',
+                'error'         => 'Unable to fetch staff',
             ];
 
             return view('staff/staff_view', $data);

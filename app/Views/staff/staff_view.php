@@ -31,12 +31,33 @@
     <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
 
+<style>
+.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
+.filter-rows  { display:flex; flex-direction:column; gap:12px; }
+.filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.filter-row label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; min-width:80px; }
+.filter-row select { padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; background:#fff; }
+.ln-ranges    { display:flex; flex-wrap:wrap; gap:6px; }
+.ln-chip      { padding:4px 10px; border:1px solid #ccc; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#444; transition:background .15s,color .15s,border-color .15s; }
+.ln-chip:hover   { border-color:#8C701C; color:#8C701C; }
+.ln-chip.active  { background:#8C701C; color:#fff; border-color:#8C701C; }
+.filter-footer   { display:flex; align-items:center; gap:10px; margin-top:14px; }
+.filter-badge    { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
+</style>
+
+<?php
+    $activeFilters = $activeFilters ?? [];
+    $activeCount   = count(array_filter($activeFilters));
+    $roleOptions   = $roleOptions   ?? [];
+    $af            = $activeFilters;
+?>
+
 <div class="page-module">
 <div class="resource-controls">
     <input type="text" id="searchStaff" placeholder="🔍 Search staff..." class="search-input">
 
-    <button class="btn btn-filter">
-        ▼ FILTER
+    <button type="button" class="btn btn-filter" id="filterToggleBtn">
+        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
     <a href="<?= base_url('staff/create') ?>" class="btn btn-success">
@@ -50,6 +71,37 @@
     <button class="btn btn-export">
         ⬆ EXPORT
     </button>
+</div>
+
+<!-- Filter Panel -->
+<div id="filterPanel" class="filter-panel" style="display:none">
+    <form id="filterForm" method="get" action="<?= base_url('staff') ?>">
+        <input type="hidden" id="lnRangeInput" name="ln_range" value="<?= esc($af['ln_range'] ?? '') ?>">
+
+        <div class="filter-rows">
+
+            <div class="filter-row">
+                <label>Last Name</label>
+                <div class="ln-ranges">
+                    <?php foreach (['A-C','D-F','G-I','J-L','M-O','P-R','S-U','V-Z'] as $range): ?>
+                    <button type="button"
+                            class="ln-chip <?= ($af['ln_range'] ?? '') === $range ? 'active' : '' ?>"
+                            data-range="<?= $range ?>"><?= $range ?></button>
+                    <?php endforeach; ?>
+                </div>
+                <label style="min-width:unset">Role</label>
+                <select name="role_filter" style="flex:1;min-width:120px">
+                    <option value="">All Roles</option>
+                    <?php foreach ($roleOptions as $r): ?>
+                    <option value="<?= esc($r) ?>" <?= ($af['role_filter'] ?? '') === $r ? 'selected' : '' ?>><?= esc($r) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <div class="filter-footer">
+            <a href="<?= base_url('staff') ?>" class="btn btn-secondary">Reset</a>
+        </div>
+    </form>
 </div>
 
 <!-- Staff Table -->
@@ -78,8 +130,8 @@
                 <?php foreach ($staff as $index => $person): ?>
                     <tr>
                         <td><?= $offset + $index + 1 ?></td>
-                        <td><?= esc((string)($person['last_name'] ?? 'N/A')) ?></td>
-                        <td><strong><?= esc((string)($person['first_name'] ?? 'N/A')) ?></strong></td>
+                        <td><strong><?= esc((string)($person['last_name'] ?? 'N/A')) ?></strong></td>
+                        <td><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
                         <td><?= esc((string)($person['middle_name'] ?? 'N/A')) ?></td>
                         <td><?= esc((string)($person['email'] ?? 'N/A')) ?></td>
                         <td>
@@ -119,6 +171,36 @@ document.addEventListener('DOMContentLoaded', function () {
         toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
         toast.innerText = message;
         setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
+    }
+
+    // — Filter panel toggle —
+    const filterToggleBtn = document.getElementById('filterToggleBtn');
+    const filterPanel     = document.getElementById('filterPanel');
+    const filterForm      = document.getElementById('filterForm');
+    if (filterToggleBtn && filterPanel) {
+        <?php if ($activeCount > 0): ?>
+        filterPanel.style.display = 'block';
+        <?php endif; ?>
+        filterToggleBtn.addEventListener('click', function () {
+            filterPanel.style.display = filterPanel.style.display === 'none' ? 'block' : 'none';
+        });
+    }
+
+    // — Auto-submit: role dropdown → immediate; ln chips → toggle + immediate —
+    if (filterForm) {
+        filterForm.querySelectorAll('select').forEach(function (sel) {
+            sel.addEventListener('change', function () { filterForm.submit(); });
+        });
+
+        const lnRangeInput = document.getElementById('lnRangeInput');
+        filterForm.querySelectorAll('.ln-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                const range = this.dataset.range;
+                // Toggle off if already active
+                lnRangeInput.value = lnRangeInput.value === range ? '' : range;
+                filterForm.submit();
+            });
+        });
     }
 
     const search = document.getElementById('searchStaff');
