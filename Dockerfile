@@ -12,8 +12,11 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-install zip intl
 
 # gRPC + Protobuf — required by google/cloud-firestore
-RUN pecl install grpc protobuf \
-    && docker-php-ext-enable grpc protobuf
+RUN apt-get update && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
+    && pecl install grpc protobuf \
+    && docker-php-ext-enable grpc protobuf \
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS \
+    && rm -rf /var/lib/apt/lists/*
 
 # Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
