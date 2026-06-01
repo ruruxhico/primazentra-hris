@@ -31,11 +31,7 @@ COPY composer.json composer.lock ./
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-<<<<<<< HEAD
 # Copy the rest of the project files
-=======
-# Copy project files
->>>>>>> ebd9bfe3f4c5825559388747f6c6fd87aaec202d
 COPY . .
 
 # Point Apache document root to CI4's public/ folder
