@@ -1,15 +1,15 @@
-FROM php:8.2-apache
+FROM php:8.4-apache
 
 # Enable mod_rewrite for CI4 URL routing
 RUN a2enmod rewrite
 
-# System dependencies needed to compile gRPC
+# System dependencies (libicu-dev needed for intl extension)
 RUN apt-get update && apt-get install -y \
-    git unzip libzip-dev zlib1g-dev \
+    git unzip libzip-dev zlib1g-dev libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# PHP extensions
-RUN docker-php-ext-install zip
+# PHP extensions (intl required by CI4 v4.7.2)
+RUN docker-php-ext-install zip intl
 
 # gRPC + Protobuf — required by google/cloud-firestore
 RUN pecl install grpc protobuf \
