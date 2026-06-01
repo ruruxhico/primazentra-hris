@@ -23,11 +23,14 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy project files
-COPY . .
+# Copy composer manifests first (better layer caching)
+COPY composer.json composer.lock ./
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Copy project files
+COPY . .
 
 # Point Apache document root to CI4's public/ folder
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
