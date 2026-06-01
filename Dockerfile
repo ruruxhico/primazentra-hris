@@ -11,16 +11,11 @@ RUN apt-get update && apt-get install -y \
 # PHP extensions (intl required by CI4 v4.7.2)
 RUN docker-php-ext-install zip intl
 
-<<<<<<< HEAD
-# gRPC + Protobuf — $PHPIZE_DEPS provides compilers needed by pecl
+# gRPC + Protobuf — required by google/cloud-firestore
+# $PHPIZE_DEPS provides compilers needed by pecl
 # MAKEFLAGS="-j1" limits parallel compilation to 1 thread to prevent OOM kill
 RUN apt-get update && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
     && MAKEFLAGS="-j1" pecl install grpc protobuf \
-=======
-# gRPC + Protobuf — required by google/cloud-firestore
-RUN apt-get update && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
-    && pecl install grpc protobuf \
->>>>>>> ebd9bfe3f4c5825559388747f6c6fd87aaec202d
     && docker-php-ext-enable grpc protobuf \
     && apt-get purge -y --auto-remove $PHPIZE_DEPS \
     && rm -rf /var/lib/apt/lists/*
