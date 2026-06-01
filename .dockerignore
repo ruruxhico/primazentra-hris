@@ -1,0 +1,14 @@
+vendor/
+
+# Ignore all runtime-writable data; re-include only placeholders
+writable/*
+!writable/.htaccess
+!writable/index.html
+
+.env
+.git
+.vscode
+.qodo
+*.md
+tests/
+cookiejar.txt
