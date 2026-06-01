@@ -1,6 +1,15 @@
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
+
+<style>
+.skills-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; }
+.skill-chip-label { cursor:pointer; user-select:none; }
+.skill-chip-label input[type="checkbox"] { display:none; }
+.skill-chip { display:inline-block; padding:7px 16px; border:2px solid #ccc; border-radius:20px; font-size:13px; font-weight:600; color:#444; transition:background .15s,color .15s,border-color .15s; }
+.skill-chip-label:hover .skill-chip { border-color:#8C701C; color:#8C701C; }
+.skill-chip-label input[type="checkbox"]:checked + .skill-chip { background:#8C701C; color:#fff; border-color:#8C701C; }
+</style>
 <?php
     $resource = $resource ?? [];
     $manpower = $resource['manpower_details'] ?? [];
@@ -111,6 +120,22 @@
                             <option value="<?= esc($statusOption) ?>" <?= (($resource['status'] ?? 'Available') === $statusOption) ? 'selected' : '' ?>><?= esc($statusOption) ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+
+                <div class="manpower-field manpower-span-2">
+                    <label>Skills</label>
+                    <div class="skills-chips">
+                        <?php
+                        $currentSkills = is_array($manpower['skills'] ?? null) ? $manpower['skills'] : [];
+                        foreach (['Electrician','Plumber','Painter','Mason','Labor/Helper'] as $skill):
+                            $checked = in_array($skill, $currentSkills, true);
+                        ?>
+                        <label class="skill-chip-label">
+                            <input type="checkbox" name="skills[]" value="<?= esc($skill) ?>" <?= $checked ? 'checked' : '' ?>>
+                            <span class="skill-chip"><?= esc($skill) ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
             </div>
 
