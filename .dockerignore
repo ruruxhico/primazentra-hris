@@ -1,8 +1,10 @@
 vendor/
-writable/logs/
-writable/cache/
-writable/session/
-writable/credentials/
+
+# Ignore all runtime-writable data; re-include only placeholders
+writable/*
+!writable/.htaccess
+!writable/index.html
+
 .env
 .git
 .vscode
