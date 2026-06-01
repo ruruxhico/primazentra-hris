@@ -36,5 +36,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Railway redeploy
-        if: ${{ secrets.RAILWAY_DEPLOY_HOOK != '' }}
-        run: curl -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK }}"
+        run: |
+          if [ -n "$HOOK_URL" ]; then
+            curl -X POST "$HOOK_URL"
+          else
+            echo "No RAILWAY_DEPLOY_HOOK secret set — skipping redeploy trigger."
+          fi
+        env:
+          HOOK_URL: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
