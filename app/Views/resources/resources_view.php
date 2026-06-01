@@ -67,7 +67,6 @@
                 <tr>
                     <th>NO.</th>
                     <th>EQUIPMENT NAME</th>
-                    <th>MODEL NUMBER</th>
                     <th>TOTAL QUANTITY</th>
                     <th>AVAILABLE UNITS</th>
                     <th class="text-center">ACTIONS</th>
@@ -76,14 +75,15 @@
             <tbody>
                 <?php if (empty($equipment)): ?>
                     <tr>
-                        <td colspan="6" class="text-center">No equipment found.</td>
+                        <td colspan="5" class="text-center">No equipment found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($equipment as $index => $item): ?>
                         <tr>
                             <td><?= $index + 1 ?></td>
-                            <td><strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong></td>
-                            <td><?= esc((string)($item['asset_details']['model_number'] ?? $item['model_code'] ?? 'N/A')) ?></td>
+                            <td>
+                                <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
+                            </td>
                             <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
                             <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
@@ -129,26 +129,26 @@
                 <tr>
                     <th>NO.</th>
                     <th>TOOL NAME</th>
-                    <th>MODEL NUMBER</th>
                     <th>TOTAL QUANTITY</th>
                     <th>AVAILABLE</th>
                     <th class="text-center">ACTIONS</th>
                 </tr>
             </thead>
             <tbody>
-                <?php 
+                <?php
                     $tools = $tools ?? [];
                 ?>
                 <?php if (empty($tools)): ?>
                     <tr>
-                        <td colspan="6" class="text-center">No tools found.</td>
+                        <td colspan="5" class="text-center">No tools found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($tools as $index => $item): ?>
                         <tr>
                             <td><?= $index + 1 ?></td>
-                            <td><strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong></td>
-                            <td><?= esc((string)($item['asset_details']['model_number'] ?? $item['model_code'] ?? 'N/A')) ?></td>
+                            <td>
+                                <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
+                            </td>
                             <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
                             <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
                             <td class="text-center">
