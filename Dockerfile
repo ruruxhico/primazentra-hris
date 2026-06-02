@@ -1,7 +1,8 @@
 FROM php:8.4-apache
 
 # Enable mod_rewrite for CI4 URL routing
-RUN a2enmod rewrite
+RUN a2dismod mpm_event mpm_worker 2>/dev/null || true \
+    && a2enmod mpm_prefork rewrite
 
 # System dependencies (libicu-dev needed for intl extension)
 RUN apt-get update && apt-get install -y \
