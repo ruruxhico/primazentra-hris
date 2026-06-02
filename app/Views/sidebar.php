@@ -13,7 +13,7 @@
 <div class="sidebar">
     <div class="sidebar-header">
         <div class="sidebar-logo">
-            <?php $logo = base_url('public/assets/primazentra_colored.png'); ?>
+            <?php $logo = base_url('assets/primazentra_colored.png'); ?>
             <a href="<?= base_url('dashboard') ?>" class="logo-link">
                 <img src="<?= $logo ?>" alt="PrimaZentra logo" class="logo-img" onerror="this.style.display='none'">
             </a>
