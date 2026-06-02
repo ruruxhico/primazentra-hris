@@ -202,8 +202,13 @@ class Auth extends BaseController {
         }
         */
 
-        $userModel = new \App\Models\Model_Users();
-        $user = $userModel->getUserById($firebaseUid) ?? $userModel->getUserByEmail($email);
+        try {
+            $userModel = new \App\Models\Model_Users();
+            $user = $userModel->getUserById($firebaseUid) ?? $userModel->getUserByEmail($email);
+        } catch (\Throwable $e) {
+            log_message('error', 'Firestore user lookup failed: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Unable to load account profile. Please try again later.');
+        }
 
         if (!$user || !is_array($user['data'] ?? null)) {
             return redirect()->back()->withInput()->with('error', 'Account profile not found. Please contact support.');
