@@ -7,7 +7,7 @@
 <?= $this->section('content') ?>
     <div class="auth-shell auth-shell--register">
         <div class="auth-brand">
-            <img src="<?= base_url('assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
+            <img src="<?= asset_url('assets/primazentra_colored.png') ?>" alt="PrimaZentra" class="auth-logo">
         </div>
 
         <div class="auth-card auth-card--login">
