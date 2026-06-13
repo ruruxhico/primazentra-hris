@@ -26,7 +26,7 @@
 </style>
 
 <div class="form-container project-form-container">
-    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm">
+    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data">
         <?= csrf_field() ?>
 
         <div class="form-section">
@@ -35,6 +35,12 @@
                 <label for="project_name">Project Name *</label>
                 <input type="text" id="project_name" name="project_name"
                        value="<?= esc($project['project_name'] ?? '') ?>" required>
+            </div>
+
+            <div class="form-group">
+                <label for="client_name">Client Name</label>
+                <input type="text" id="client_name" name="client_name"
+                       value="<?= esc($project['client_name'] ?? '') ?>">
             </div>
 
             <div class="form-row">
@@ -169,11 +175,46 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label for="budget">Budget *</label>
-                <input type="number" id="budget" name="budget"
-                       min="0" step="0.01"
-                       value="<?= esc($project['budget'] ?? '') ?>" required>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="budget">Budget *</label>
+                    <input type="number" id="budget" name="budget"
+                           min="0" step="0.01"
+                           value="<?= esc($project['budget'] ?? '') ?>" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="attachments">Attachments</label>
+                    <label class="file-upload-label" for="attachments">
+                        <span class="material-symbols-outlined file-upload-icon">upload_file</span>
+                        <span class="file-upload-text" id="attachmentsText">Choose files…</span>
+                        <input type="file" id="attachments" name="attachments[]"
+                               multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                               style="display:none">
+                    </label>
+                    <div class="file-upload-list" id="attachmentsList"></div>
+                    <?php
+                        $existingAttachments = is_array($project['attachments'] ?? null) ? $project['attachments'] : [];
+                    ?>
+                    <?php if (!empty($existingAttachments)): ?>
+                    <div class="file-existing-list">
+                        <div class="file-existing-label">Saved attachments</div>
+                        <?php foreach ($existingAttachments as $att): ?>
+                        <div class="file-upload-item">
+                            <span class="material-symbols-outlined">description</span>
+                            <a class="file-upload-name"
+                               href="<?= esc($att['url'] ?? '#') ?>"
+                               target="_blank" rel="noopener">
+                                <?= esc($att['name'] ?? 'file') ?>
+                            </a>
+                            <span class="file-upload-size">
+                                <?= isset($att['size']) ? number_format($att['size'] / 1024, 1) . ' KB' : '' ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
 
         </div><!-- /form-section -->
@@ -280,6 +321,14 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div class="form-group add-tasks-toggle">
+            <label class="checkbox-label">
+                <input type="checkbox" id="add_resources_now" name="add_resources_now">
+                <span class="checkbox-custom"></span>
+                Add resources now
+            </label>
         </div>
 
         <div class="form-actions">
@@ -497,6 +546,34 @@ if (window.location.hostname === 'localhost') {
 }
 </script>
 <?php endif; ?>
+
+<!-- ── Attachment input JS ───────────────────────────────── -->
+<script>
+(function () {
+    var input   = document.getElementById('attachments');
+    var textEl  = document.getElementById('attachmentsText');
+    var listEl  = document.getElementById('attachmentsList');
+    if (!input) return;
+
+    input.addEventListener('change', function () {
+        var files = Array.from(this.files);
+        if (files.length === 0) {
+            textEl.textContent = 'Choose files…';
+            listEl.innerHTML = '';
+            return;
+        }
+        textEl.textContent = files.length + ' file' + (files.length > 1 ? 's' : '') + ' selected';
+        listEl.innerHTML = files.map(function (f) {
+            var kb = (f.size / 1024).toFixed(1);
+            return '<div class="file-upload-item">' +
+                '<span class="material-symbols-outlined">description</span>' +
+                '<span class="file-upload-name">' + f.name + '</span>' +
+                '<span class="file-upload-size">' + kb + ' KB</span>' +
+                '</div>';
+        }).join('');
+    });
+}());
+</script>
 
 <!-- ── Phase Schedule JS ──────────────────────────────────── -->
 <script>

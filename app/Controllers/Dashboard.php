@@ -143,17 +143,19 @@ class Dashboard extends BaseController
         [$p['_lat'], $p['_lng']] = $this->extractLatLng($p);
         $p['_maps_url']  = $this->mapsUrl($p);
 
-        // Resource pills: prefer project-embedded list, fall back to personnel
-        $tools    = [];
-        $manpower = [];
+        // Resource pills: split by category — Equipment / Tools / Manpower
+        $equipment = [];
+        $tools     = [];
+        $manpower  = [];
 
         if (!empty($p['resources']) && is_array($p['resources'])) {
             foreach ($p['resources'] as $res) {
-                $cat  = strtolower($res['category'] ?? 'tool');
+                $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
                 $name = strtoupper(trim((string)($res['name'] ?? '')));
                 if ($name === '') continue;
-                if ($cat === 'manpower') $manpower[] = $name;
-                else $tools[] = $name;
+                if ($cat === 'manpower')      $manpower[]  = $name;
+                elseif ($cat === 'equipment') $equipment[] = $name;
+                else                          $tools[]     = $name;
             }
         }
 
@@ -164,8 +166,10 @@ class Dashboard extends BaseController
             if ($se && $se !== 'N/A') $manpower[] = strtoupper($se);
         }
 
-        $p['_tools']    = $tools;
-        $p['_manpower'] = $manpower;
+        $p['_equipment'] = $equipment;
+        $p['_tools']     = $tools;
+        $p['_manpower']  = $manpower;
+        $p['_client']    = strtoupper(trim((string)($p['client_name'] ?? '')));
 
         return $p;
     }

@@ -139,68 +139,154 @@ class Staff extends BaseController
         }
     }
 
-    public function create()
-    {
-        if (strtolower($this->request->getMethod()) === 'post') {
-            // Validate using named rule group 'staff'
-            if (! $this->validate('staff')) {
-                return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
-            }
-
-            try {
-                log_message('info', 'Staff::create POST received');
-                $lastName = trim((string) $this->request->getPost('last_name'));
-                $firstName = trim((string) $this->request->getPost('first_name'));
-                $email = trim((string) $this->request->getPost('email'));
-                $role = trim((string) $this->request->getPost('role'));
-
-                // Uniqueness check for email in Firestore
-                $existing = $this->usersModel->getUserByEmail($email);
-                if ($existing) {
-                    return redirect()->back()->withInput()->with('error', 'Email is already in use.');
-                }
-
-                $now = new Timestamp(new \DateTime());
-                $data = [
-                    'last_name' => $lastName,
-                    'first_name' => $firstName,
-                    'middle_name' => trim((string) ($this->request->getPost('middle_name') ?? '')),
-                    'contact_no' => trim((string) ($this->request->getPost('contact_no') ?? '')),
-                    'email' => $email,
-                    'role' => $role,
-                    'must_change_password' => $this->request->getPost('must_change_password') ? true : false,
-                    'created_at' => $now,
-                    'updated_at' => $now
-                ];
-
-                // Use explicit ID so we can reliably trace new documents
-                $newId = bin2hex(random_bytes(8));
-                $docRef = $this->firestore->getDb()->collection('users')->document($newId);
-                $docRef->set($data);
-
-                // Verify write succeeded
-                $snapshot = $docRef->snapshot();
-                if (!$snapshot->exists()) {
-                    throw new \RuntimeException('Firestore write verification failed.');
-                }
-
-                log_message('info', 'Staff::create success. Document ID: ' . $newId);
-
-                return redirect()->to('staff')->with('success', 'Staff member created successfully!');
-            } catch (\Exception $e) {
-                log_message('error', 'Staff::create - ' . $e->getMessage());
-                return redirect()->back()->withInput()->with('error', 'Failed to create staff member: ' . $e->getMessage());
-            }
+   public function create()
+{
+    if (strtolower($this->request->getMethod()) === 'post') {
+        if (! $this->validate('staff')) {
+            return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
         }
 
-        return view('staff/staff_form', [
-            'pageTitle' => 'Add Staff',
-            'activePage' => 'staff',
-            'staff' => [],
-            'userName' => session()->get('userName') ?? 'User',
-            'role' => session()->get('role') ?? 'Staff'
-        ]);
+        try {
+            log_message('info', 'Staff::create POST received');
+            $lastName  = trim((string) $this->request->getPost('last_name'));
+            $firstName = trim((string) $this->request->getPost('first_name'));
+            $email     = trim((string) $this->request->getPost('email'));
+            $role      = trim((string) $this->request->getPost('role'));
+
+            // Uniqueness check for email in Firestore
+            $existing = $this->usersModel->getUserByEmail($email);
+            if ($existing) {
+                return redirect()->back()->withInput()->with('error', 'Email is already in use.');
+            }
+
+            // ─── Generate a temporary password ────────────────────────────────
+            $tempPassword = $this->generateTempPassword();
+
+            // ─── Create Firebase Auth account with temp password ──────────────
+            $firebaseAuth = $this->firestore->getAuth();
+
+            try {
+                $firebaseUser = $firebaseAuth->createUserWithEmailAndPassword($email, $tempPassword);
+                $firebaseUid  = (string) $firebaseUser->uid;
+
+                if ($firebaseUid === '') {
+                    throw new \RuntimeException('Firebase Auth did not return a user ID.');
+                }
+
+                $firebaseAuth->updateUser($firebaseUid, [
+                    'displayName' => trim($firstName . ' ' . $lastName),
+                ]);
+            } catch (\Throwable $e) {
+                log_message('error', 'Staff::create Firebase Auth - ' . $e->getMessage());
+                return redirect()->back()->withInput()->with('error', 'Failed to create auth account: ' . $e->getMessage());
+            }
+
+            $now = new Timestamp(new \DateTime());
+
+            $data = [
+                'last_name'           => $lastName,
+                'first_name'          => $firstName,
+                'middle_name'         => trim((string) ($this->request->getPost('middle_name') ?? '')),
+                'contact_no'          => trim((string) ($this->request->getPost('contact_no')  ?? '')),
+                'email'               => $email,
+                'role'                => $role,
+                'must_change_password'=> true,   // always true for new staff
+                'is_verified'         => true,   // active immediately since they have credentials
+                'firebase_uid'        => $firebaseUid,
+                'created_at'          => $now,
+                'updated_at'          => $now,
+            ];
+
+            // Use Firebase UID as document ID (required for mobile login lookup)
+            $docRef = $this->firestore->getDb()->collection('users')->document($firebaseUid);
+            $docRef->set($data);
+
+            // Verify write succeeded
+            $snapshot = $docRef->snapshot();
+            if (!$snapshot->exists()) {
+                throw new \RuntimeException('Firestore write verification failed.');
+            }
+
+            // ─── Send welcome email with temp password ────────────────────────
+            $this->sendWelcomeEmail($email, $firstName, $tempPassword);
+
+            log_message('info', 'Staff::create success. Document ID: ' . $firebaseUid);
+
+            return redirect()->to('staff')->with('success', 'Staff member created successfully! Login credentials sent via email.');
+        } catch (\Exception $e) {
+            log_message('error', 'Staff::create - ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Failed to create staff member: ' . $e->getMessage());
+        }
     }
+
+    return view('staff/staff_form', [
+        'pageTitle'  => 'Add Staff',
+        'activePage' => 'staff',
+        'staff'      => [],
+        'userName'   => session()->get('userName') ?? 'User',
+        'role'       => session()->get('role') ?? 'Staff'
+    ]);
+}
+
+// ─── private helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Generate a readable but secure temporary password
+ * e.g. "Pz-7Kx9mQ2r"
+ */
+private function generateTempPassword(): string
+{
+    $upper   = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no O, I to avoid confusion
+    $lower   = 'abcdefghijkmnopqrstuvwxyz'; // no l
+    $numbers = '23456789'; // no 0, 1
+    $all     = $upper . $lower . $numbers;
+
+    $password  = $upper[random_int(0, strlen($upper) - 1)];
+    $password .= $lower[random_int(0, strlen($lower) - 1)];
+    $password .= $numbers[random_int(0, strlen($numbers) - 1)];
+
+    for ($i = 0; $i < 7; $i++) {
+        $password .= $all[random_int(0, strlen($all) - 1)];
+    }
+
+    return str_shuffle($password); // e.g. "Pz7Kx9mQ2r"
+}
+
+private function sendWelcomeEmail(string $to, string $firstName, string $tempPassword): void
+{
+    $emailConfig = config('Email');
+    $mailer      = service('email');
+
+    $mailer->initialize([
+        'protocol'       => $emailConfig->protocol,
+        'SMTPHost'       => $emailConfig->SMTPHost,
+        'SMTPUser'       => $emailConfig->SMTPUser,
+        'SMTPPass'       => $emailConfig->SMTPPass,
+        'SMTPPort'       => $emailConfig->SMTPPort,
+        'SMTPCrypto'     => $emailConfig->SMTPCrypto,
+        'SMTPAuthMethod' => $emailConfig->SMTPAuthMethod,
+        'SMTPTimeout'    => $emailConfig->SMTPTimeout,
+        'mailType'       => 'html',
+        'charset'        => $emailConfig->charset,
+        'wordWrap'       => true,
+        'validate'       => false,
+        'CRLF'           => $emailConfig->CRLF,
+        'newline'        => $emailConfig->newline,
+    ]);
+
+    $mailer->setFrom($emailConfig->fromEmail, $emailConfig->fromName);
+    $mailer->setTo($to);
+    $mailer->setSubject('Welcome to PrimaZentra – Your Login Credentials');
+    $mailer->setMessage(view('emails/welcome_credentials', [
+        'firstName'    => $firstName,
+        'email'        => $to,
+        'tempPassword' => $tempPassword,
+    ]));
+
+    $result = $mailer->send(false);
+    log_message($result ? 'info' : 'error', 'Welcome email send result: ' . ($result ? 'SUCCESS' : 'FAILED') . ' for ' . $to);
+}
+
 
     public function update($id)
     {
@@ -235,7 +321,7 @@ class Staff extends BaseController
             }
 
             $staff = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
-            
+
             if (!$staff->exists()) {
                 return redirect()->to('staff')->with('error', 'Staff member not found');
             }
@@ -292,6 +378,13 @@ class Staff extends BaseController
                     return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
                 }
 
+                // Delete from Firebase Auth too (doc ID = firebase_uid)
+                try {
+                    $this->firestore->getAuth()->deleteUser($idFromPost);
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Staff::delete - Firebase Auth user not found or already deleted: ' . $e->getMessage());
+                }
+
                 $this->firestore->getDb()->collection('users')->document($idFromPost)->delete();
 
                 return $this->response->setJSON(['success' => true, 'message' => 'Staff member deleted']);
@@ -301,9 +394,18 @@ class Staff extends BaseController
             }
         }
 
-        // Fallback: traditional GET with segment - redirect back to staff list
+
+
+         // Fallback: traditional GET with segment - redirect back to staff list
         if ($id !== null) {
             try {
+                // Delete from Firebase Auth too (doc ID = firebase_uid)
+                try {
+                    $this->firestore->getAuth()->deleteUser($id);
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Staff::delete - Firebase Auth user not found or already deleted: ' . $e->getMessage());
+                }
+
                 $this->firestore->getDb()->collection('users')->document($id)->delete();
                 return redirect()->to('staff')->with('success', 'Staff member deleted successfully!');
             } catch (\Exception $e) {

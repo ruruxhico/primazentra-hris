@@ -216,6 +216,11 @@ class Auth extends BaseController {
 
         $userData = $user['data'];
 
+        // Block unverified staff accounts
+        if (isset($userData['is_verified']) && $userData['is_verified'] === false) {
+            return redirect()->back()->withInput()->with('error', 'Please verify your account via the email sent to you before logging in.');
+        }
+
         session()->set([
             'isLoggedIn' => true,
             'userId'     => $user['id'],

@@ -39,6 +39,7 @@
         </dl>
 
         <div class="form-actions">
+            <a href="<?= base_url('projects/' . ($project['id'] ?? '') . '/resources') ?>" class="btn-add">Resources</a>
             <a href="<?= base_url('projects/update/' . ($project['id'] ?? '')) ?>" class="btn-add">Edit</a>
             <a href="<?= base_url('projects') ?>" class="btn-secondary">Back</a>
         </div>

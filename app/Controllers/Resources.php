@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
+use Config\GoogleMaps;
 
 class Resources extends BaseController
 {
@@ -111,6 +112,8 @@ class Resources extends BaseController
             return redirect()->to('manpower/create');
         }
 
+        $mapsKey = (new GoogleMaps())->browserKey;
+
         if ($category === 'Equipment') {
             return view('resources/equipments_form', [
                 'resource' => [
@@ -126,6 +129,7 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -146,6 +150,7 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -225,6 +230,7 @@ class Resources extends BaseController
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'mapsKey' => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);

@@ -40,6 +40,12 @@ $routes->post('projects/delete', 'Projects::delete');
 // Backwards-compatible GET delete
 $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 
+// Project Resource Assignment
+$routes->get('projects/(:segment)/resources',                      'Projects::resources/$1');
+$routes->post('projects/(:segment)/resources/assign',              'Projects::assignResource/$1');
+$routes->post('projects/(:segment)/resources/unassign',            'Projects::unassignResource/$1');
+$routes->get('projects/(:segment)/resources/units/(:segment)',     'Projects::getEquipmentUnits/$1/$2');
+
 // Resources Routes
 $routes->get('resources', 'Resources::index');
 $routes->get('resources/requests', 'Resources::requests');
@@ -79,3 +85,8 @@ $routes->get('staff/show/(:segment)', 'Staff::show/$1');
 $routes->post('staff/delete', 'Staff::delete');
 // Backwards-compatible GET delete (optional) - keeps previous behavior when called with segment
 $routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
+
+// Account verification (no auth middleware — user isn't logged in yet)
+$routes->get('verify-account/(:segment)',  'VerifyAccount::showForm/$1');
+$routes->post('verify-account/(:segment)', 'VerifyAccount::setPassword/$1');
+$routes->get('verification-success',       'VerifyAccount::verificationSuccess');

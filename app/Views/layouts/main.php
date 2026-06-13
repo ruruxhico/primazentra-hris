@@ -48,5 +48,65 @@
   </div>
   <?= $this->renderSection('scripts') ?>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+  <!-- Long-press drag-to-scroll (hold left button 300 ms on any non-interactive area) -->
+  <style>
+    body.pz-drag-scroll,
+    body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !important; }
+  </style>
+  <script>
+  (function () {
+    var DELAY = 300; // ms before drag-scroll activates
+    var SKIP  = 'a, button, input, select, textarea, label, ' +
+                '.db-pill-icons, .db-res-group-hdr, .map-panel-hdr, ' +
+                '.db-btn-locate, .db-icon-chat, .db-icon-warn, ' +
+                '[onclick], .sidebar-link, .nav-link';
+
+    var timer  = null;
+    var active = false;
+    var lastX  = 0, lastY = 0;
+
+    function scrollTarget() {
+      var cw = document.getElementById('content-wrapper');
+      if (cw && (cw.scrollHeight > cw.clientHeight || cw.scrollWidth > cw.clientWidth)) return cw;
+      return document.documentElement;
+    }
+
+    document.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return;
+      if (e.target.closest(SKIP)) return;
+
+      lastX = e.clientX;
+      lastY = e.clientY;
+
+      timer = setTimeout(function () {
+        active = true;
+        document.body.classList.add('pz-drag-scroll');
+      }, DELAY);
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!active) return;
+      var dx = e.clientX - lastX;
+      var dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      var el = scrollTarget();
+      el.scrollLeft -= dx;
+      el.scrollTop  -= dy;
+      e.preventDefault();
+    }, { passive: false });
+
+    function stop() {
+      clearTimeout(timer);
+      timer  = null;
+      active = false;
+      document.body.classList.remove('pz-drag-scroll');
+    }
+
+    document.addEventListener('mouseup',    stop);
+    document.addEventListener('mouseleave', stop);
+  }());
+  </script>
 </body>
 </html>

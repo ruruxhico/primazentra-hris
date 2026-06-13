@@ -13,8 +13,7 @@
     $addSpecificUnitsNow = (bool) ($asset['add_specific_units_now'] ?? $hasItems);
 ?>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<?php $mapsKey = $mapsKey ?? ''; ?>
 
 <style>
 .unit-cards-container { display: flex; flex-direction: column; gap: 0.6rem; }
@@ -292,27 +291,28 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const checkbox  = document.getElementById('add_specific_units_now');
-    const section   = document.getElementById('equipmentUnitsSection');
-    const addBtn    = document.getElementById('addEquipmentUnitBtn');
-    const container = document.getElementById('equipmentItemsContainer');
-    const template  = document.getElementById('equipmentItemTemplate');
-    const mapModal  = document.getElementById('equipmentMapModal');
-    const mapClose  = document.getElementById('equipmentMapClose');
-    const mapCancel = document.getElementById('equipmentMapCancel');
-    const mapUseCurrent = document.getElementById('equipmentMapUseCurrent');
-    const mapSearch = document.getElementById('equipmentMapSearch');
+var _eqMap = null, _eqMarker = null, _eqAuto = null;
+window.initEquipmentMap = function () { /* Maps API ready; map created lazily on modal open */ };
 
-    let rowIndex = container.querySelectorAll('.unit-card').length;
-    let mapInstance = null;
-    let mapMarker = null;
-    let activeWarehouseInput = null;
-    let mapPendingAddress = '';
+document.addEventListener('DOMContentLoaded', function () {
+    var checkbox  = document.getElementById('add_specific_units_now');
+    var section   = document.getElementById('equipmentUnitsSection');
+    var addBtn    = document.getElementById('addEquipmentUnitBtn');
+    var container = document.getElementById('equipmentItemsContainer');
+    var template  = document.getElementById('equipmentItemTemplate');
+    var mapModal  = document.getElementById('equipmentMapModal');
+    var mapClose  = document.getElementById('equipmentMapClose');
+    var mapCancel = document.getElementById('equipmentMapCancel');
+    var mapUseCurrent = document.getElementById('equipmentMapUseCurrent');
+    var mapSearch = document.getElementById('equipmentMapSearch');
+
+    var rowIndex = container.querySelectorAll('.unit-card').length;
+    var activeWarehouseInput = null;
+    var mapPendingAddress = '';
 
     function setSectionVisible(visible) {
         section.classList.toggle('open', visible);
-        section.querySelectorAll('input, select, button').forEach(field => {
+        section.querySelectorAll('input, select, button').forEach(function (field) {
             if (field === addBtn) return;
             field.disabled = !visible;
         });
@@ -320,35 +320,35 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function reindexCards() {
-        container.querySelectorAll('.unit-card').forEach((card, index) => {
-            card.querySelectorAll('input[name], select[name]').forEach(field => {
+        container.querySelectorAll('.unit-card').forEach(function (card, index) {
+            card.querySelectorAll('input[name], select[name]').forEach(function (field) {
                 field.name = field.name.replace(/items\[\d+\]/, 'items[' + index + ']');
             });
-            const titleEl = card.querySelector('.unit-card-title');
+            var titleEl = card.querySelector('.unit-card-title');
             if (titleEl) {
-                const serial = card.querySelector('.unit-serial-input')?.value || '';
+                var serial = (card.querySelector('.unit-serial-input') || {}).value || '';
                 titleEl.textContent = 'Unit #' + (index + 1) + (serial ? ' — ' + serial : '');
             }
         });
     }
 
     function syncLocationFields(card) {
-        const typeSelect    = card.querySelector('.equipment-location-type');
-        const projectWrap   = card.querySelector('.equipment-address-project');
-        const warehouseWrap = card.querySelector('.equipment-address-warehouse');
-        const projectSelect = card.querySelector('.equipment-address-select');
-        const warehouseInput = card.querySelector('.equipment-warehouse-input');
-        const currentType = typeSelect?.value || 'Warehouse';
+        var typeSelect    = card.querySelector('.equipment-location-type');
+        var projectWrap   = card.querySelector('.equipment-address-project');
+        var warehouseWrap = card.querySelector('.equipment-address-warehouse');
+        var projectSelect = card.querySelector('.equipment-address-select');
+        var warehouseInput = card.querySelector('.equipment-warehouse-input');
+        var currentType = (typeSelect && typeSelect.value) || 'Warehouse';
 
         if (currentType === 'Project Site') {
-            card.dataset.warehouseValue = warehouseInput?.value || card.dataset.warehouseValue || '';
+            card.dataset.warehouseValue = (warehouseInput && warehouseInput.value) || card.dataset.warehouseValue || '';
             projectWrap.style.display = 'block';
             warehouseWrap.style.display = 'none';
             if (projectSelect) projectSelect.disabled = false;
             if (warehouseInput) warehouseInput.disabled = true;
             if (projectSelect && card.dataset.projectValue) projectSelect.value = card.dataset.projectValue;
         } else {
-            card.dataset.projectValue = projectSelect?.value || card.dataset.projectValue || '';
+            card.dataset.projectValue = (projectSelect && projectSelect.value) || card.dataset.projectValue || '';
             projectWrap.style.display = 'none';
             warehouseWrap.style.display = 'block';
             if (projectSelect) projectSelect.disabled = true;
@@ -360,56 +360,56 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function bindCard(card) {
-        const typeSelect     = card.querySelector('.equipment-location-type');
-        const projectSelect  = card.querySelector('.equipment-address-select');
-        const warehouseInput = card.querySelector('.equipment-warehouse-input');
-        const mapBtn         = card.querySelector('.equipment-map-btn');
-        const serialInput    = card.querySelector('.unit-serial-input');
-        const titleEl        = card.querySelector('.unit-card-title');
+        var typeSelect     = card.querySelector('.equipment-location-type');
+        var projectSelect  = card.querySelector('.equipment-address-select');
+        var warehouseInput = card.querySelector('.equipment-warehouse-input');
+        var mapBtn         = card.querySelector('.equipment-map-btn');
+        var serialInput    = card.querySelector('.unit-serial-input');
+        var titleEl        = card.querySelector('.unit-card-title');
 
         if (serialInput && titleEl) {
             serialInput.addEventListener('input', function () {
-                const idx = Array.from(container.querySelectorAll('.unit-card')).indexOf(card) + 1;
+                var idx = Array.from(container.querySelectorAll('.unit-card')).indexOf(card) + 1;
                 titleEl.textContent = 'Unit #' + idx + (this.value ? ' — ' + this.value : '');
             });
         }
 
         if (typeSelect) {
             typeSelect.addEventListener('change', function () {
-                card.dataset.projectValue   = projectSelect?.value  || card.dataset.projectValue   || '';
-                card.dataset.warehouseValue = warehouseInput?.value || card.dataset.warehouseValue || '';
+                card.dataset.projectValue   = (projectSelect  && projectSelect.value)  || card.dataset.projectValue   || '';
+                card.dataset.warehouseValue = (warehouseInput && warehouseInput.value) || card.dataset.warehouseValue || '';
                 syncLocationFields(card);
             });
         }
 
-        if (projectSelect) {
-            projectSelect.addEventListener('change', function () { card.dataset.projectValue = this.value; });
+        if (projectSelect)  projectSelect.addEventListener('change',  function () { card.dataset.projectValue   = this.value; });
+        if (warehouseInput) warehouseInput.addEventListener('input',   function () { card.dataset.warehouseValue = this.value; });
+
+        if (mapBtn) {
+            mapBtn.addEventListener('click', function () {
+                activeWarehouseInput = warehouseInput || null;
+                mapPendingAddress = (activeWarehouseInput && activeWarehouseInput.value) || '';
+                openMapModal();
+            });
         }
 
-        if (warehouseInput) {
-            warehouseInput.addEventListener('input', function () { card.dataset.warehouseValue = this.value; });
-        }
-
-        mapBtn?.addEventListener('click', function () {
-            activeWarehouseInput = warehouseInput || null;
-            mapPendingAddress = activeWarehouseInput?.value || '';
-            openMapModal();
-        });
-
-        if (!typeSelect?.value) typeSelect.value = 'Warehouse';
+        if (typeSelect && !typeSelect.value) typeSelect.value = 'Warehouse';
         syncLocationFields(card);
     }
 
     window.toggleUnit = function (header) {
-        header.closest('.unit-card')?.classList.toggle('collapsed');
+        var card = header.closest('.unit-card');
+        if (card) card.classList.toggle('collapsed');
     };
 
     function openMapModal() {
         mapModal.classList.add('open');
         mapModal.setAttribute('aria-hidden', 'false');
         mapSearch.value = mapPendingAddress;
-        setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 50);
-        ensureMap();
+        setTimeout(function () {
+            ensureMap();
+            if (_eqMap) google.maps.event.trigger(_eqMap, 'resize');
+        }, 50);
     }
 
     function closeMapModal() {
@@ -417,41 +417,94 @@ document.addEventListener('DOMContentLoaded', function () {
         mapModal.setAttribute('aria-hidden', 'true');
     }
 
-    async function reverseGeocode(latlng) {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latlng.lat)}&lon=${encodeURIComponent(latlng.lng)}`;
-        try {
-            const data = await (await fetch(url, { headers: { 'Accept': 'application/json' } })).json();
-            return data.display_name || `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
-        } catch {
-            return `${latlng.lat.toFixed(6)}, ${latlng.lng.toFixed(6)}`;
-        }
+    function reverseGeocode(lat, lng) {
+        fetch('<?= base_url('maps/reverse') ?>?lat=' + lat + '&lng=' + lng)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.status === 'OK') {
+                    mapPendingAddress = data.formatted_address;
+                    mapSearch.value   = data.formatted_address;
+                }
+            })
+            .catch(function () {});
+    }
+
+    function serverGeocode(address) {
+        if (!address.trim()) return;
+        fetch('<?= base_url('maps/geocode') ?>?address=' + encodeURIComponent(address))
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.status === 'OK') {
+                    var latLng = { lat: data.lat, lng: data.lng };
+                    _eqMap.setCenter(latLng);
+                    _eqMap.setZoom(15);
+                    placeMarker(latLng);
+                    mapPendingAddress = data.formatted_address;
+                    mapSearch.value   = data.formatted_address;
+                }
+            })
+            .catch(function () {});
+    }
+
+    function placeMarker(latLng) {
+        _eqMarker.setAnimation(null);
+        _eqMarker.setPosition(latLng);
+        _eqMarker.setMap(_eqMap);
+        setTimeout(function () { _eqMarker.setAnimation(google.maps.Animation.DROP); }, 10);
     }
 
     function ensureMap() {
-        if (mapInstance || typeof L === 'undefined') return;
-        mapInstance = L.map('equipmentMapCanvas').setView([14.5995, 120.9842], 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(mapInstance);
-        mapInstance.on('click', async function (event) {
-            mapPendingAddress = await reverseGeocode(event.latlng);
-            if (mapMarker) mapMarker.setLatLng(event.latlng);
-            else mapMarker = L.marker(event.latlng).addTo(mapInstance);
+        if (_eqMap || typeof google === 'undefined') return;
+        _eqMap = new google.maps.Map(document.getElementById('equipmentMapCanvas'), {
+            center: { lat: 14.5995, lng: 120.9842 },
+            zoom: 11,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+        });
+        _eqMarker = new google.maps.Marker({
+            map: null,
+            draggable: false,
+            title: 'Selected location',
+        });
+        _eqMap.addListener('click', function (event) {
+            placeMarker(event.latLng);
+            reverseGeocode(event.latLng.lat(), event.latLng.lng());
+        });
+        _eqAuto = new google.maps.places.Autocomplete(mapSearch, {
+            types: ['geocode', 'establishment'],
+            componentRestrictions: { country: 'ph' },
+        });
+        _eqAuto.bindTo('bounds', _eqMap);
+        _eqAuto.addListener('place_changed', function () {
+            var place = _eqAuto.getPlace();
+            if (!place.geometry || !place.geometry.location) {
+                serverGeocode(mapSearch.value);
+                return;
+            }
+            var lat = place.geometry.location.lat();
+            var lng = place.geometry.location.lng();
+            var latLng = { lat: lat, lng: lng };
+            _eqMap.setCenter(latLng);
+            _eqMap.setZoom(15);
+            placeMarker(latLng);
+            mapPendingAddress = place.formatted_address || mapSearch.value;
+            mapSearch.value   = mapPendingAddress;
         });
     }
 
-    addBtn?.addEventListener('click', function () {
-        const html = template.innerHTML.replace(/__INDEX__/g, 'items[' + rowIndex + ']');
+    addBtn && addBtn.addEventListener('click', function () {
+        var html = template.innerHTML.replace(/__INDEX__/g, 'items[' + rowIndex + ']');
         container.insertAdjacentHTML('beforeend', html);
         rowIndex++;
         setSectionVisible(true);
-        const cards = container.querySelectorAll('.unit-card');
+        var cards = container.querySelectorAll('.unit-card');
         bindCard(cards[cards.length - 1]);
         reindexCards();
     });
 
     window.removeEquipmentRow = function (button) {
-        const card = button.closest('.unit-card');
+        var card = button.closest('.unit-card');
         if (!card) return;
         card.remove();
         reindexCards();
@@ -461,27 +514,26 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    checkbox?.addEventListener('change', function () { setSectionVisible(this.checked); });
+    checkbox && checkbox.addEventListener('change', function () { setSectionVisible(this.checked); });
 
-    mapClose?.addEventListener('click', closeMapModal);
-    mapCancel?.addEventListener('click', closeMapModal);
-    mapModal?.querySelector('.equipment-map-backdrop')?.addEventListener('click', closeMapModal);
+    mapClose  && mapClose.addEventListener('click',  closeMapModal);
+    mapCancel && mapCancel.addEventListener('click', closeMapModal);
+    var backdrop = mapModal && mapModal.querySelector('.equipment-map-backdrop');
+    if (backdrop) backdrop.addEventListener('click', closeMapModal);
 
-    mapUseCurrent?.addEventListener('click', function () {
+    mapUseCurrent && mapUseCurrent.addEventListener('click', function () {
         if (activeWarehouseInput) {
             activeWarehouseInput.value = mapPendingAddress || activeWarehouseInput.value;
-            const card = activeWarehouseInput.closest('.unit-card');
+            var card = activeWarehouseInput.closest('.unit-card');
             if (card) card.dataset.warehouseValue = activeWarehouseInput.value;
         }
         closeMapModal();
     });
 
-    mapSearch?.addEventListener('change', function () {
-        mapPendingAddress = this.value.trim();
-        if (activeWarehouseInput) {
-            activeWarehouseInput.value = mapPendingAddress;
-            const card = activeWarehouseInput.closest('.unit-card');
-            if (card) card.dataset.warehouseValue = activeWarehouseInput.value;
+    mapSearch && mapSearch.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (_eqMap && this.value.trim()) serverGeocode(this.value.trim());
         }
     });
 
@@ -490,8 +542,18 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     container.querySelectorAll('.unit-card').forEach(bindCard);
-    setSectionVisible(checkbox?.checked || false);
+    setSectionVisible(checkbox ? checkbox.checked : false);
 });
 </script>
+
+<?php if ($mapsKey): ?>
+<script src="https://maps.googleapis.com/maps/api/js?key=<?= esc($mapsKey) ?>&libraries=places&callback=initEquipmentMap" async defer></script>
+<?php else: ?>
+<script>
+if (window.location.hostname === 'localhost') {
+    console.warn('[PrimaZentra] GOOGLE_MAPS_BROWSER_KEY is not set. Equipment map picker is disabled.');
+}
+</script>
+<?php endif; ?>
 
 <?= $this->endSection() ?>
