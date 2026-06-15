@@ -22,24 +22,20 @@
     }
 ?>
 
-<header class="resource-header">
-    <div class="manpower-topbar">
-        <a href="<?= base_url('resources') ?>" class="manpower-back" aria-label="Back to resources">←</a>
-        <h1 class="manpower-title"><?= $isEdit ? 'Edit Manpower' : 'Add Manpower' ?></h1>
-    </div>
-</header>
+<a href="<?= base_url('resources') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Resources
+</a>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert alert-danger">
-        <?= session()->getFlashdata('error') ?>
-    </div>
+    <div class="pz-alert pz-alert-error"><span class="material-symbols-outlined" style="font-size:1rem">error</span><?= session()->getFlashdata('error') ?></div>
+<?php endif; ?>
+<?php if (session()->getFlashdata('success')): ?>
+    <div class="pz-alert pz-alert-success"><span class="material-symbols-outlined" style="font-size:1rem">check_circle</span><?= session()->getFlashdata('success') ?></div>
 <?php endif; ?>
 
-<?php if (session()->getFlashdata('success')): ?>
-    <div class="alert alert-success">
-        <?= session()->getFlashdata('success') ?>
-    </div>
-<?php endif; ?>
+<div class="pz-page-header">
+    <h1><?= $isEdit ? 'Edit Manpower' : 'Add Manpower' ?></h1>
+</div>
 
 <div class="manpower-shell">
     <div class="manpower-card">
@@ -51,24 +47,24 @@
             <div class="manpower-grid">
                 <div class="manpower-field">
                     <label for="first_name">First Name</label>
-                    <input type="text" id="first_name" name="first_name" placeholder="e.g., Juan" value="<?= esc((string)($manpower['first_name'] ?? '')) ?>" required>
+                    <input type="text" id="first_name" name="first_name" placeholder="e.g., JUAN" value="<?= esc(strtoupper((string)($manpower['first_name'] ?? ''))) ?>" style="text-transform:uppercase" required>
                 </div>
 
                 <div class="manpower-field">
                     <label for="last_name">Last Name</label>
-                    <input type="text" id="last_name" name="last_name" placeholder="e.g., Dela Cruz" value="<?= esc((string)($manpower['last_name'] ?? '')) ?>" required>
+                    <input type="text" id="last_name" name="last_name" placeholder="e.g., DELA CRUZ" value="<?= esc(strtoupper((string)($manpower['last_name'] ?? ''))) ?>" style="text-transform:uppercase" required>
                 </div>
-                
+
                 <div class="manpower-field">
                     <label for="middle_name">Middle Name</label>
-                    <input type="text" id="middle_name" name="middle_name" placeholder="Optional" value="<?= esc((string)($manpower['middle_name'] ?? '')) ?>">
+                    <input type="text" id="middle_name" name="middle_name" placeholder="Optional" value="<?= esc(strtoupper((string)($manpower['middle_name'] ?? ''))) ?>" style="text-transform:uppercase">
                 </div>
 
                 <div class="manpower-field">
                     <label for="manpower_role">Role</label>
                     <select id="manpower_role" name="manpower_role" required>
-                        <option value="">Select Role</option>
-                        <?php foreach (['Field Worker', 'Foreman'] as $roleOption): ?>
+                        <option value="">SELECT ROLE</option>
+                        <?php foreach (['FIELD WORKER', 'FOREMAN'] as $roleOption): ?>
                             <option value="<?= esc($roleOption) ?>" <?= (($manpower['role'] ?? '') === $roleOption) ? 'selected' : '' ?>><?= esc($roleOption) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -77,8 +73,8 @@
                 <div class="manpower-field">
                     <label for="specialization">Specialization</label>
                     <select id="specialization" name="specialization" required>
-                        <option value="">Select Specialization</option>
-                        <?php foreach (['Residential', 'Towers'] as $specializationOption): ?>
+                        <option value="">SELECT SPECIALIZATION</option>
+                        <?php foreach (['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'] as $specializationOption): ?>
                             <option value="<?= esc($specializationOption) ?>" <?= (($manpower['specialization'] ?? '') === $specializationOption) ? 'selected' : '' ?>><?= esc($specializationOption) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -87,7 +83,7 @@
                 <div class="manpower-field manpower-span-2">
                     <label for="assigned_project_id">Assigned Project / Site</label>
                     <select id="assigned_project_id" name="assigned_project_id">
-                        <option value="">Select project (optional)</option>
+                        <option value="">SELECT PROJECT (OPTIONAL)</option>
                         <?php if (!empty($projects) && is_array($projects)): ?>
                             <?php foreach ($projects as $proj): ?>
                                 <option value="<?= esc((string)($proj['value'] ?? '')) ?>" data-label="<?= esc((string)($proj['label'] ?? '')) ?>" <?= ((string)($manpower['assigned_project_id'] ?? '') === (string)($proj['value'] ?? '')) ? 'selected' : '' ?>><?= esc((string)($proj['label'] ?? $proj['value'])) ?></option>
@@ -116,7 +112,7 @@
                 <div class="manpower-field manpower-span-2">
                     <label for="status">Status</label>
                     <select id="status" name="status" required>
-                        <?php foreach (['Available', 'Deployed', 'On-Leave'] as $statusOption): ?>
+                        <?php foreach (['AVAILABLE', 'DEPLOYED', 'ON-LEAVE'] as $statusOption): ?>
                             <option value="<?= esc($statusOption) ?>" <?= (($resource['status'] ?? 'Available') === $statusOption) ? 'selected' : '' ?>><?= esc($statusOption) ?></option>
                         <?php endforeach; ?>
                     </select>
@@ -127,7 +123,7 @@
                     <div class="skills-chips">
                         <?php
                         $currentSkills = is_array($manpower['skills'] ?? null) ? $manpower['skills'] : [];
-                        foreach (['Electrician','Plumber','Painter','Mason','Labor/Helper'] as $skill):
+                        foreach (['ELECTRICIAN','MASON','LABOR/HELPER'] as $skill):
                             $checked = in_array($skill, $currentSkills, true);
                         ?>
                         <label class="skill-chip-label">

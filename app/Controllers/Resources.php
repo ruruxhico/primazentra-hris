@@ -85,10 +85,40 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
+            // — Pagination (per-tab, 10 per page) —
+            $perPage = 10;
+            $pager   = service('pager');
+
+            $eqPage    = max(1, (int) ($this->request->getGet('eq_page')    ?? 1));
+            $toolsPage = max(1, (int) ($this->request->getGet('tools_page') ?? 1));
+            $mpPage    = max(1, (int) ($this->request->getGet('mp_page')    ?? 1));
+
+            $eqTotal    = count($equipment);
+            $toolsTotal = count($tools);
+            $mpTotal    = count($manpower);
+
+            $eqOffset    = ($eqPage    - 1) * $perPage;
+            $toolsOffset = ($toolsPage - 1) * $perPage;
+            $mpOffset    = ($mpPage    - 1) * $perPage;
+
+            $equipment = array_slice($equipment, $eqOffset,    $perPage);
+            $tools     = array_slice($tools,     $toolsOffset, $perPage);
+            $manpower  = array_slice($manpower,  $mpOffset,    $perPage);
+
             return view('resources/resources_view', [
                 'equipment'             => $equipment,
                 'tools'                 => $tools,
                 'manpower'              => $manpower,
+                'eqOffset'              => $eqOffset,
+                'toolsOffset'           => $toolsOffset,
+                'mpOffset'              => $mpOffset,
+                'eqPage'                => $eqPage,
+                'toolsPage'             => $toolsPage,
+                'mpPage'                => $mpPage,
+                'eqTotalPages'          => (int) ceil($eqTotal    / $perPage),
+                'toolsTotalPages'       => (int) ceil($toolsTotal / $perPage),
+                'mpTotalPages'          => (int) ceil($mpTotal    / $perPage),
+                'resPerPage'            => $perPage,
                 'activeEquipFilters'    => ['eq_sort'    => $eqSort],
                 'activeToolFilters'     => ['tools_sort' => $toolsSort],
                 'activeManpowerFilters' => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
@@ -412,9 +442,19 @@ class Resources extends BaseController
                     strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
             }
 
+            // — Pagination —
+            $perPage     = config('Pager')->perPage;
+            $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $total       = count($items);
+            $pager       = service('pager');
+            $pager->store('items', $currentPage, $perPage, $total);
+            $pagerOffset = ($currentPage - 1) * $perPage;
+            $items       = array_slice($items, $pagerOffset, $perPage);
+
             return view('resources/resource_items', [
                 'resource'      => $resource,
                 'items'         => $items,
+                'pagerOffset'   => $pagerOffset,
                 'activeFilters' => [
                     'brand'     => $filterBrand,
                     'model_no'  => $filterModelNo,

@@ -16,10 +16,19 @@
 ?>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
+        <?= session()->getFlashdata('error') ?>
+    </div>
 <?php endif; ?>
 
-<h2><?= $isEdit ? 'Projects - Edit' : 'Projects - Add' ?></h2>
+<a href="<?= base_url('projects') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Projects
+</a>
+
+<div class="pz-page-header">
+    <h1><?= $isEdit ? 'Edit Project' : 'Add Project' ?></h1>
+</div>
 
 <style>
 #projectForm input[type="text"]:not([readonly]) { text-transform: uppercase; }
@@ -45,10 +54,10 @@
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="project_type">Project Type *</label>
+                    <label for="project_type">Tower Type *</label>
                     <select id="project_type" name="project_type" required>
                         <option value="">SELECT TYPE</option>
-                        <?php foreach (['RESIDENTIAL','TOWERS','COMMERCIAL'] as $type): ?>
+                        <?php foreach (['BUILD-TO-SUIT','RETROFITTING','COLOCATION', 'CONVERSION'] as $type): ?>
                             <option value="<?= esc($type) ?>"
                                 <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
                                 <?= esc($type) ?>
@@ -292,7 +301,7 @@
                                         <span class="task-field-label">Unit:</span>
                                         <select name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][unit]"
                                                 class="task-unit-sel">
-                                            <?php foreach (['pcs','hrs','sqm','lm','lot','set'] as $u): ?>
+                                            <?php foreach (['pcs','hrs','sqm', 'cbm', 'lm','lot','set'] as $u): ?>
                                             <option value="<?= $u ?>" <?= ($task['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= $u ?></option>
                                             <?php endforeach; ?>
                                         </select>

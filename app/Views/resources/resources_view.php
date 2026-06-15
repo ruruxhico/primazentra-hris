@@ -15,23 +15,10 @@
         </div>
         <div class="confirm-actions">
             <button id="confirmCancel" class="btn-toolbar">Cancel</button>
-            <button id="confirmOk" class="btn-toolbar btn-add">OK</button>
+            <button id="confirmOk" class="btn-toolbar btn-add">Delete</button>
         </div>
     </div>
 </div>
-
-<style>
-.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
-.filter-rows  { display:flex; flex-direction:column; gap:12px; }
-.filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.filter-row label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; min-width:80px; }
-.sort-chips   { display:flex; flex-wrap:wrap; gap:6px; }
-.sort-chip    { padding:4px 10px; border:1px solid #ccc; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#444; transition:background .15s,color .15s,border-color .15s; }
-.sort-chip:hover  { border-color:#8C701C; color:#8C701C; }
-.sort-chip.active { background:#8C701C; color:#fff; border-color:#8C701C; }
-.filter-footer { display:flex; align-items:center; gap:10px; margin-top:14px; }
-.filter-badge  { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
-</style>
 
 <?php
     $activeEquipFilters    = $activeEquipFilters    ?? [];
@@ -41,370 +28,335 @@
     $eqActiveCount         = count(array_filter($activeEquipFilters));
     $toolsActiveCount      = count(array_filter($activeToolFilters));
     $mpActiveCount         = count(array_filter($activeManpowerFilters));
+
+    $eqPage          = $eqPage          ?? 1;
+    $toolsPage       = $toolsPage       ?? 1;
+    $mpPage          = $mpPage          ?? 1;
+    $eqTotalPages    = $eqTotalPages    ?? 1;
+    $toolsTotalPages = $toolsTotalPages ?? 1;
+    $mpTotalPages    = $mpTotalPages    ?? 1;
+    $eqOffset        = $eqOffset        ?? 0;
+    $toolsOffset     = $toolsOffset     ?? 0;
+    $mpOffset        = $mpOffset        ?? 0;
+
+    function res_pager(int $current, int $totalPages, string $pageParam, array $extra = []): string {
+        if ($totalPages <= 1) return '';
+        $out = '<nav class="pager-wrapper"><ul class="pager-list">';
+        if ($current > 1) {
+            $out .= '<li class="pager-item"><a class="pager-link" href="?' . http_build_query(array_merge($extra, [$pageParam => 1])) . '">&laquo;</a></li>';
+            $out .= '<li class="pager-item"><a class="pager-link" href="?' . http_build_query(array_merge($extra, [$pageParam => $current - 1])) . '">&lsaquo;</a></li>';
+        }
+        $start = max(1, $current - 2);
+        $end   = min($totalPages, $current + 2);
+        for ($p = $start; $p <= $end; $p++) {
+            $cls = $p === $current ? 'pager-active' : 'pager-link';
+            $out .= '<li class="pager-item"><a class="' . $cls . '" href="?' . http_build_query(array_merge($extra, [$pageParam => $p])) . '">' . $p . '</a></li>';
+        }
+        if ($current < $totalPages) {
+            $out .= '<li class="pager-item"><a class="pager-link" href="?' . http_build_query(array_merge($extra, [$pageParam => $current + 1])) . '">&rsaquo;</a></li>';
+            $out .= '<li class="pager-item"><a class="pager-link" href="?' . http_build_query(array_merge($extra, [$pageParam => $totalPages])) . '">&raquo;</a></li>';
+        }
+        $out .= '</ul></nav>';
+        return $out;
+    }
 ?>
 
-<div class="resource-header">
+<div class="pz-page-header">
     <h1>Resources</h1>
 </div>
 
-<!-- Tabs Navigation -->
-<div class="resource-tabs">
-    <button id="tab-equipment" class="tab-btn <?= $activeTab === 'equipment' ? 'tab-btn-active' : '' ?>" onclick="showResourceTab('equipment')">
-        EQUIPMENT
-    </button>
-    <button id="tab-tools" class="tab-btn <?= $activeTab === 'tools' ? 'tab-btn-active' : '' ?>" onclick="showResourceTab('tools')">
-        TOOLS
-    </button>
-    <button id="tab-manpower" class="tab-btn <?= $activeTab === 'manpower' ? 'tab-btn-active' : '' ?>" onclick="showResourceTab('manpower')">
-        MANPOWER
-    </button>
+<!-- Tabs -->
+<div class="pz-tabs">
+    <button id="tab-equipment" class="pz-tab <?= $activeTab === 'equipment' ? 'active' : '' ?>" onclick="showResourceTab('equipment')">Equipment</button>
+    <button id="tab-tools"     class="pz-tab <?= $activeTab === 'tools'     ? 'active' : '' ?>" onclick="showResourceTab('tools')">Tools</button>
+    <button id="tab-manpower"  class="pz-tab <?= $activeTab === 'manpower'  ? 'active' : '' ?>" onclick="showResourceTab('manpower')">Manpower</button>
 </div>
 
-<!-- EQUIPMENT TAB -->
+<!-- ═══════════════════ EQUIPMENT TAB ═══════════════════ -->
 <div id="equipment" class="tab-content <?= $activeTab === 'equipment' ? 'tab-content-active' : '' ?>">
-    <!-- Search and Filter Section -->
-    <div class="resource-controls">
-        <input type="text" id="searchEquipment" placeholder="🔍 Search equipment..." class="search-input">
 
-        <button type="button" class="btn btn-filter" id="eqFilterToggleBtn">
-            ▼ FILTER<?php if ($eqActiveCount > 0): ?><span class="filter-badge"><?= $eqActiveCount ?></span><?php endif; ?>
-        </button>
-
-        <a href="<?= base_url('resources/create?category=Equipment') ?>" class="btn btn-success">
-            + ADD
-        </a>
-
-        <button class="btn btn-import">
-            ⬇ IMPORT
-        </button>
-
-        <button class="btn btn-export">
-            ⬆ EXPORT
-        </button>
+    <div class="pz-toolbar">
+        <div class="pz-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchEquipment" placeholder="Search equipment…" class="pz-search">
+        </div>
+        <div class="pz-toolbar-right">
+            <button type="button" class="pz-btn pz-btn-outline" id="eqFilterToggleBtn">
+                <span class="material-symbols-outlined">filter_list</span>
+                Filter<?php if ($eqActiveCount > 0): ?><span class="pz-filter-badge"><?= $eqActiveCount ?></span><?php endif; ?>
+            </button>
+            <a href="<?= base_url('resources/create?category=Equipment') ?>" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">add</span> Add
+            </a>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">upload</span> Import</button>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">download</span> Export</button>
+        </div>
     </div>
 
-    <!-- Equipment Filter Panel -->
-    <div id="eqFilterPanel" class="filter-panel" style="display:none">
+    <div id="eqFilterPanel" class="pz-filter-panel">
         <form id="eqFilterForm" method="get" action="<?= base_url('resources') ?>">
             <input type="hidden" name="tab" value="equipment">
             <input type="hidden" id="eqSortInput" name="eq_sort" value="<?= esc($activeEquipFilters['eq_sort'] ?? '') ?>">
-
-            <div class="filter-rows">
-                <div class="filter-row">
-                    <label>Sort By</label>
-                    <div class="sort-chips">
-                        <button type="button" class="sort-chip <?= ($activeEquipFilters['eq_sort'] ?? '') === 'total_desc' ? 'active' : '' ?>" data-val="total_desc">Most Total</button>
-                        <button type="button" class="sort-chip <?= ($activeEquipFilters['eq_sort'] ?? '') === 'avail_desc' ? 'active' : '' ?>" data-val="avail_desc">Most Available</button>
-                    </div>
-                </div>
-            </div>
-            <div class="filter-footer">
-                <a href="<?= base_url('resources?tab=equipment') ?>" class="btn btn-secondary">Reset</a>
+            <div style="margin-bottom:.5rem"><p class="pz-filter-group"><label>Sort By</label></p>
+            <div class="pz-chip-row">
+                <button type="button" class="pz-chip <?= ($activeEquipFilters['eq_sort'] ?? '') === 'total_desc' ? 'active' : '' ?>" data-val="total_desc">Most Total</button>
+                <button type="button" class="pz-chip <?= ($activeEquipFilters['eq_sort'] ?? '') === 'avail_desc' ? 'active' : '' ?>" data-val="avail_desc">Most Available</button>
+            </div></div>
+            <div class="pz-filter-footer">
+                <a href="<?= base_url('resources?tab=equipment') ?>" class="pz-btn pz-btn-ghost pz-btn-sm"><span class="material-symbols-outlined">restart_alt</span> Reset</a>
             </div>
         </form>
     </div>
 
-    <!-- Equipment Table -->
-    <div class="table-container">
-        <table class="resource-table">
-            <thead>
-                <tr>
-                    <th>NO.</th>
-                    <th>EQUIPMENT NAME</th>
-                    <th>TOTAL QUANTITY</th>
-                    <th>AVAILABLE UNITS</th>
-                    <th class="text-center">ACTIONS</th>
-                </tr>
-            </thead>
+    <div class="pz-table-wrap">
+        <table class="pz-table">
+            <thead><tr>
+                <th>#</th>
+                <th>Equipment Name</th>
+                <th>Total Qty</th>
+                <th>Available</th>
+                <th class="center">Actions</th>
+            </tr></thead>
             <tbody>
                 <?php if (empty($equipment)): ?>
-                    <tr>
-                        <td colspan="5" class="text-center">No equipment found.</td>
-                    </tr>
+                    <tr><td colspan="5" class="pz-table-empty">No equipment found. <a href="<?= base_url('resources/create?category=Equipment') ?>">Add now</a></td></tr>
                 <?php else: ?>
                     <?php foreach ($equipment as $index => $item): ?>
-                        <tr>
-                            <td><?= $index + 1 ?></td>
-                            <td>
-                                <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
-                            </td>
-                            <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
-                            <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
-                            <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
-                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
-                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td class="pz-row-num"><?= $eqOffset + $index + 1 ?></td>
+                        <td class="pz-row-name"><?= esc((string)($item['name'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
+                        <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
+                        <td class="actions">
+                            <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="pz-btn-icon" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="pz-btn-icon" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                            <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="pz-btn-icon danger action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                        </td>
+                    </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
+    <?= res_pager($eqPage, $eqTotalPages, 'eq_page', ['tab' => 'equipment', 'eq_sort' => $activeEquipFilters['eq_sort'] ?? '']) ?>
 </div>
 
-<!-- TOOLS TAB -->
+<!-- ═══════════════════ TOOLS TAB ═══════════════════ -->
 <div id="tools" class="tab-content <?= $activeTab === 'tools' ? 'tab-content-active' : '' ?>">
-    <!-- Search and Filter Section -->
-    <div class="resource-controls">
-        <input type="text" id="searchTools" placeholder="🔍 Search tools..." class="search-input">
 
-        <button type="button" class="btn btn-filter" id="toolsFilterToggleBtn">
-            ▼ FILTER<?php if ($toolsActiveCount > 0): ?><span class="filter-badge"><?= $toolsActiveCount ?></span><?php endif; ?>
-        </button>
-
-        <a href="<?= base_url('resources/create?category=Tools') ?>" class="btn btn-success">
-            + ADD
-        </a>
-
-        <button class="btn btn-import">
-            ⬇ IMPORT
-        </button>
-
-        <button class="btn btn-export">
-            ⬆ EXPORT
-        </button>
+    <div class="pz-toolbar">
+        <div class="pz-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchTools" placeholder="Search tools…" class="pz-search">
+        </div>
+        <div class="pz-toolbar-right">
+            <button type="button" class="pz-btn pz-btn-outline" id="toolsFilterToggleBtn">
+                <span class="material-symbols-outlined">filter_list</span>
+                Filter<?php if ($toolsActiveCount > 0): ?><span class="pz-filter-badge"><?= $toolsActiveCount ?></span><?php endif; ?>
+            </button>
+            <a href="<?= base_url('resources/create?category=Tools') ?>" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">add</span> Add
+            </a>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">upload</span> Import</button>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">download</span> Export</button>
+        </div>
     </div>
 
-    <!-- Tools Filter Panel -->
-    <div id="toolsFilterPanel" class="filter-panel" style="display:none">
+    <div id="toolsFilterPanel" class="pz-filter-panel">
         <form id="toolsFilterForm" method="get" action="<?= base_url('resources') ?>">
             <input type="hidden" name="tab" value="tools">
             <input type="hidden" id="toolsSortInput" name="tools_sort" value="<?= esc($activeToolFilters['tools_sort'] ?? '') ?>">
-
-            <div class="filter-rows">
-                <div class="filter-row">
-                    <label>Sort By</label>
-                    <div class="sort-chips">
-                        <button type="button" class="sort-chip <?= ($activeToolFilters['tools_sort'] ?? '') === 'total_desc' ? 'active' : '' ?>" data-val="total_desc">Most Total</button>
-                        <button type="button" class="sort-chip <?= ($activeToolFilters['tools_sort'] ?? '') === 'avail_desc' ? 'active' : '' ?>" data-val="avail_desc">Most Available</button>
-                    </div>
-                </div>
-            </div>
-            <div class="filter-footer">
-                <a href="<?= base_url('resources?tab=tools') ?>" class="btn btn-secondary">Reset</a>
+            <div style="margin-bottom:.5rem"><p class="pz-filter-group"><label>Sort By</label></p>
+            <div class="pz-chip-row">
+                <button type="button" class="pz-chip <?= ($activeToolFilters['tools_sort'] ?? '') === 'total_desc' ? 'active' : '' ?>" data-val="total_desc">Most Total</button>
+                <button type="button" class="pz-chip <?= ($activeToolFilters['tools_sort'] ?? '') === 'avail_desc' ? 'active' : '' ?>" data-val="avail_desc">Most Available</button>
+            </div></div>
+            <div class="pz-filter-footer">
+                <a href="<?= base_url('resources?tab=tools') ?>" class="pz-btn pz-btn-ghost pz-btn-sm"><span class="material-symbols-outlined">restart_alt</span> Reset</a>
             </div>
         </form>
     </div>
 
-    <!-- Tools Table -->
-    <div class="table-container">
-        <table class="resource-table">
-            <thead>
-                <tr>
-                    <th>NO.</th>
-                    <th>TOOL NAME</th>
-                    <th>TOTAL QUANTITY</th>
-                    <th>AVAILABLE</th>
-                    <th class="text-center">ACTIONS</th>
-                </tr>
-            </thead>
+    <div class="pz-table-wrap">
+        <table class="pz-table">
+            <thead><tr>
+                <th>#</th>
+                <th>Tool Name</th>
+                <th>Total Qty</th>
+                <th>Available</th>
+                <th class="center">Actions</th>
+            </tr></thead>
             <tbody>
-                <?php
-                    $tools = $tools ?? [];
-                ?>
+                <?php $tools = $tools ?? []; ?>
                 <?php if (empty($tools)): ?>
-                    <tr>
-                        <td colspan="5" class="text-center">No tools found.</td>
-                    </tr>
+                    <tr><td colspan="5" class="pz-table-empty">No tools found. <a href="<?= base_url('resources/create?category=Tools') ?>">Add now</a></td></tr>
                 <?php else: ?>
                     <?php foreach ($tools as $index => $item): ?>
-                        <tr>
-                            <td><?= $index + 1 ?></td>
-                            <td>
-                                <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
-                            </td>
-                            <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
-                            <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
-                            <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
-                                <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
-                                <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td class="pz-row-num"><?= $toolsOffset + $index + 1 ?></td>
+                        <td class="pz-row-name"><?= esc((string)($item['name'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($item['total_quantity_display'] ?? $item['asset_details']['total_quantity'] ?? '0')) ?></td>
+                        <td><?= esc((string)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? '0')) ?></td>
+                        <td class="actions">
+                            <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="pz-btn-icon" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="pz-btn-icon" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                            <a href="#" data-id="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>" class="pz-btn-icon danger action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                        </td>
+                    </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
+    <?= res_pager($toolsPage, $toolsTotalPages, 'tools_page', ['tab' => 'tools', 'tools_sort' => $activeToolFilters['tools_sort'] ?? '']) ?>
 </div>
 
-<!-- MANPOWER TAB -->
+<!-- ═══════════════════ MANPOWER TAB ═══════════════════ -->
 <div id="manpower" class="tab-content <?= $activeTab === 'manpower' ? 'tab-content-active' : '' ?>">
-    <!-- Search and Filter Section -->
-    <div class="resource-controls">
-        <input type="text" id="searchManpower" placeholder="🔍 Search manpower..." class="search-input">
-        
-        <button type="button" class="btn btn-filter" id="mpFilterToggleBtn">
-            ▼ FILTER<?php if ($mpActiveCount > 0): ?><span class="filter-badge"><?= $mpActiveCount ?></span><?php endif; ?>
-        </button>
 
-        <a href="<?= base_url('resources/create?category=Manpower') ?>" class="btn btn-success">
-            + ADD
-        </a>
-        
-        <button class="btn btn-import">
-            ⬇ IMPORT
-        </button>
-        
-        <button class="btn btn-export">
-            ⬆ EXPORT
-        </button>
+    <div class="pz-toolbar">
+        <div class="pz-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchManpower" placeholder="Search manpower…" class="pz-search">
+        </div>
+        <div class="pz-toolbar-right">
+            <button type="button" class="pz-btn pz-btn-outline" id="mpFilterToggleBtn">
+                <span class="material-symbols-outlined">filter_list</span>
+                Filter<?php if ($mpActiveCount > 0): ?><span class="pz-filter-badge"><?= $mpActiveCount ?></span><?php endif; ?>
+            </button>
+            <a href="<?= base_url('resources/create?category=Manpower') ?>" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">add</span> Add
+            </a>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">upload</span> Import</button>
+            <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">download</span> Export</button>
+        </div>
     </div>
 
-    <!-- Manpower Filter Panel -->
-    <div id="mpFilterPanel" class="filter-panel" style="display:none">
+    <div id="mpFilterPanel" class="pz-filter-panel">
         <form id="mpFilterForm" method="get" action="<?= base_url('resources') ?>">
             <input type="hidden" name="tab" value="manpower">
+            <input type="hidden" id="mpRoleInput"   name="mp_role"   value="<?= esc($activeManpowerFilters['mp_role']   ?? '') ?>">
+            <input type="hidden" id="mpSpecInput"   name="mp_spec"   value="<?= esc($activeManpowerFilters['mp_spec']   ?? '') ?>">
+            <input type="hidden" id="mpStatusInput" name="mp_status" value="<?= esc($activeManpowerFilters['mp_status'] ?? '') ?>">
 
-            <div class="filter-rows">
-                <input type="hidden" id="mpRoleInput" name="mp_role" value="<?= esc($activeManpowerFilters['mp_role'] ?? '') ?>">
-                <div class="filter-row">
-                    <label>Role</label>
-                    <div class="sort-chips">
+            <div style="display:flex;flex-direction:column;gap:.65rem">
+                <div>
+                    <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Role</label></p>
+                    <div class="pz-chip-row">
                         <?php foreach (['Field Worker','Foreman'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-role-chip <?= ($activeManpowerFilters['mp_role'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <button type="button" class="pz-chip mp-role-chip <?= ($activeManpowerFilters['mp_role'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
-
-                <input type="hidden" id="mpSpecInput" name="mp_spec" value="<?= esc($activeManpowerFilters['mp_spec'] ?? '') ?>">
-                <div class="filter-row">
-                    <label>Specialization</label>
-                    <div class="sort-chips">
+                <div>
+                    <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Specialization</label></p>
+                    <div class="pz-chip-row">
                         <?php foreach (['Residential','Towers'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-spec-chip <?= ($activeManpowerFilters['mp_spec'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <button type="button" class="pz-chip mp-spec-chip <?= ($activeManpowerFilters['mp_spec'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
-
-                <input type="hidden" id="mpStatusInput" name="mp_status" value="<?= esc($activeManpowerFilters['mp_status'] ?? '') ?>">
-                <div class="filter-row">
-                    <label>Status</label>
-                    <div class="sort-chips">
+                <div>
+                    <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Status</label></p>
+                    <div class="pz-chip-row">
                         <?php foreach (['Available','Deployed','On-Leave'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-status-chip <?= ($activeManpowerFilters['mp_status'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <button type="button" class="pz-chip mp-status-chip <?= ($activeManpowerFilters['mp_status'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
             </div>
 
-            <div class="filter-footer">
-                <a href="<?= base_url('resources?tab=manpower') ?>" class="btn btn-secondary">Reset</a>
+            <div class="pz-filter-footer">
+                <a href="<?= base_url('resources?tab=manpower') ?>" class="pz-btn pz-btn-ghost pz-btn-sm"><span class="material-symbols-outlined">restart_alt</span> Reset</a>
             </div>
         </form>
     </div>
 
-    <!-- Manpower Table -->
-    <div class="table-container">
-        <table class="resource-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>RESOURCE NAME</th>
-                    <th>ROLE</th>
-                    <th>NEXT AVAILABLE</th>
-                    <th>STATUS</th>
-                    <th>CURRENT SITE</th>
-                    <th>SPECIALIZATION</th>
-                    <th class="text-center">ACTIONS</th>
-                </tr>
-            </thead>
+    <div class="pz-table-wrap">
+        <table class="pz-table">
+            <thead><tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Next Available</th>
+                <th>Status</th>
+                <th>Current Site</th>
+                <th>Specialization</th>
+                <th class="center">Actions</th>
+            </tr></thead>
             <tbody>
                 <?php if (empty($manpower)): ?>
-                    <tr>
-                            No manpower records found.
-                        </td>
-                    </tr>
+                    <tr><td colspan="8" class="pz-table-empty">No manpower records found. <a href="<?= base_url('resources/create?category=Manpower') ?>">Add now</a></td></tr>
                 <?php else: ?>
                     <?php foreach ($manpower as $index => $person): ?>
-                        <tr>
-                            <td><?= $index + 1 ?></td>
-                            <td><?= isset($person['name']) ? esc((string)$person['name']) : 'N/A' ?></td>
-                            <td><?= isset($person['manpower_details']['role']) ? esc((string)$person['manpower_details']['role']) : 'N/A' ?></td>
-                            <td><?= isset($person['next_availability']) ? esc((string)$person['next_availability']) : 'N/A' ?></td>
-                            <td>
-                                <span class="status-badge status-<?= strtolower(str_replace('-', '', $person['status'] ?? 'available')) ?>">
-                                    <?= esc((string)($person['status'] ?? 'N/A')) ?>
-                                </span>
-                            </td>
-                            <?php $displaySite = $person['manpower_details']['current_site_deployment'] ?? $person['location']['address'] ?? 'N/A'; ?>
-                            <td><?= esc((string)$displaySite) ?></td>
-                            <td><?= isset($person['manpower_details']['specialization']) ? esc((string)$person['manpower_details']['specialization']) : 'N/A' ?></td>
-                            <td class="text-center">
-                                <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
-                                <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
-                                <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
-                            </td>
-                        </tr>
+                    <tr>
+                        <td class="pz-row-num"><?= $mpOffset + $index + 1 ?></td>
+                        <td class="pz-row-name"><?= esc((string)($person['name'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($person['manpower_details']['role'] ?? 'N/A')) ?></td>
+                        <td class="pz-row-muted"><?= esc((string)($person['next_availability'] ?? 'N/A')) ?></td>
+                        <td>
+                            <?php
+                                $st  = strtolower($person['status'] ?? 'available');
+                                $sbc = str_contains($st,'avail') ? 'pz-badge-available' : (str_contains($st,'deploy') ? 'pz-badge-deployed' : (str_contains($st,'leave') ? 'pz-badge-maintenance' : 'pz-badge-unavailable'));
+                            ?>
+                            <span class="pz-badge <?= $sbc ?>"><?= esc((string)($person['status'] ?? 'N/A')) ?></span>
+                        </td>
+                        <td class="pz-row-muted"><?= esc((string)($person['manpower_details']['current_site_deployment'] ?? $person['location']['address'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($person['manpower_details']['specialization'] ?? 'N/A')) ?></td>
+                        <td class="actions">
+                            <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="pz-btn-icon" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="pz-btn-icon" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                            <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>" class="pz-btn-icon danger action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                        </td>
+                    </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </tbody>
         </table>
     </div>
+    <?= res_pager($mpPage, $mpTotalPages, 'mp_page', array_merge(['tab' => 'manpower'], array_filter($activeManpowerFilters))) ?>
 </div>
 
 <script>
     function showResourceTab(tabName) {
         document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('tab-content-active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-btn-active'));
-        const selectedTab = document.getElementById(tabName);
-        const selectedBtn = document.getElementById('tab-' + tabName);
-        if (selectedTab) selectedTab.classList.add('tab-content-active');
-        if (selectedBtn) selectedBtn.classList.add('tab-btn-active');
+        document.querySelectorAll('.pz-tab').forEach(el => el.classList.remove('active'));
+        const sel = document.getElementById(tabName);
+        const btn = document.getElementById('tab-' + tabName);
+        if (sel) sel.classList.add('tab-content-active');
+        if (btn) btn.classList.add('active');
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        // — Equipment filter panel —
-        const eqToggle  = document.getElementById('eqFilterToggleBtn');
-        const eqPanel   = document.getElementById('eqFilterPanel');
-        const eqForm    = document.getElementById('eqFilterForm');
-        const eqSortInp = document.getElementById('eqSortInput');
-        if (eqToggle && eqPanel) {
-            <?php if ($eqActiveCount > 0): ?>eqPanel.style.display = 'block';<?php endif; ?>
-            eqToggle.addEventListener('click', () => {
-                eqPanel.style.display = eqPanel.style.display === 'none' ? 'block' : 'none';
-            });
+        // Filter panels
+        function wireFilterPanel(toggleId, panelId, activeCount) {
+            const toggle = document.getElementById(toggleId);
+            const panel  = document.getElementById(panelId);
+            if (!toggle || !panel) return;
+            if (activeCount > 0) panel.classList.add('open');
+            toggle.addEventListener('click', () => panel.classList.toggle('open'));
         }
-        if (eqForm && eqSortInp) {
-            eqForm.querySelectorAll('.sort-chip').forEach(chip => {
+        wireFilterPanel('eqFilterToggleBtn',    'eqFilterPanel',    <?= $eqActiveCount ?>);
+        wireFilterPanel('toolsFilterToggleBtn', 'toolsFilterPanel', <?= $toolsActiveCount ?>);
+        wireFilterPanel('mpFilterToggleBtn',    'mpFilterPanel',    <?= $mpActiveCount ?>);
+
+        // Sort chips (equipment + tools)
+        function wireSortChips(formId, hiddenId) {
+            const form = document.getElementById(formId);
+            const inp  = document.getElementById(hiddenId);
+            if (!form || !inp) return;
+            form.querySelectorAll('.pz-chip[data-val]').forEach(chip => {
                 chip.addEventListener('click', function () {
-                    eqSortInp.value = eqSortInp.value === this.dataset.val ? '' : this.dataset.val;
-                    eqForm.submit();
+                    inp.value = inp.value === this.dataset.val ? '' : this.dataset.val;
+                    form.submit();
                 });
             });
         }
+        wireSortChips('eqFilterForm',    'eqSortInput');
+        wireSortChips('toolsFilterForm', 'toolsSortInput');
 
-        // — Tools filter panel —
-        const toolsToggle  = document.getElementById('toolsFilterToggleBtn');
-        const toolsPanel   = document.getElementById('toolsFilterPanel');
-        const toolsForm    = document.getElementById('toolsFilterForm');
-        const toolsSortInp = document.getElementById('toolsSortInput');
-        if (toolsToggle && toolsPanel) {
-            <?php if ($toolsActiveCount > 0): ?>toolsPanel.style.display = 'block';<?php endif; ?>
-            toolsToggle.addEventListener('click', () => {
-                toolsPanel.style.display = toolsPanel.style.display === 'none' ? 'block' : 'none';
-            });
-        }
-        if (toolsForm && toolsSortInp) {
-            toolsForm.querySelectorAll('.sort-chip').forEach(chip => {
-                chip.addEventListener('click', function () {
-                    toolsSortInp.value = toolsSortInp.value === this.dataset.val ? '' : this.dataset.val;
-                    toolsForm.submit();
-                });
-            });
-        }
-
-        // — Manpower filter panel —
-        const mpToggle = document.getElementById('mpFilterToggleBtn');
-        const mpPanel  = document.getElementById('mpFilterPanel');
-        const mpForm   = document.getElementById('mpFilterForm');
-        if (mpToggle && mpPanel) {
-            <?php if ($mpActiveCount > 0): ?>mpPanel.style.display = 'block';<?php endif; ?>
-            mpToggle.addEventListener('click', () => {
-                mpPanel.style.display = mpPanel.style.display === 'none' ? 'block' : 'none';
-            });
-        }
+        // Manpower filter chips
+        const mpForm = document.getElementById('mpFilterForm');
         if (mpForm) {
             function wireMpChips(selector, hiddenId) {
                 const inp = document.getElementById(hiddenId);
@@ -420,26 +372,11 @@
             wireMpChips('.mp-status-chip', 'mpStatusInput');
         }
 
-        const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
-        const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
-        const confirmDialog = document.getElementById('confirmDialog');
-        const confirmMessage = document.getElementById('confirmMessage');
-        const confirmOk = document.getElementById('confirmOk');
-        const confirmCancel = document.getElementById('confirmCancel');
-        const toast = document.getElementById('customToast');
-
-        function showToast(message, type='info') {
-            if (!toast) return;
-            toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
-            toast.innerText = message;
-            setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
-        }
-
+        // Search
         function attachSearch(inputId, tableSelector) {
             const search = document.getElementById(inputId);
-            const table = document.querySelector(tableSelector);
+            const table  = document.querySelector(tableSelector);
             if (!search || !table) return;
-
             search.addEventListener('input', function () {
                 const q = this.value.trim().toLowerCase();
                 table.querySelectorAll('tbody tr').forEach(row => {
@@ -447,10 +384,38 @@
                 });
             });
         }
+        attachSearch('searchEquipment', '#equipment .pz-table');
+        attachSearch('searchTools',     '#tools .pz-table');
+        attachSearch('searchManpower',  '#manpower .pz-table');
 
-        attachSearch('searchEquipment', '#equipment .resource-table');
-        attachSearch('searchTools', '#tools .resource-table');
-        attachSearch('searchManpower', '#manpower .resource-table');
+        // Delete
+        const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
+        const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
+        const confirmDialog  = document.getElementById('confirmDialog');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmOk      = document.getElementById('confirmOk');
+        const confirmCancel  = document.getElementById('confirmCancel');
+        const toast          = document.getElementById('customToast');
+
+        function showToast(msg, type) {
+            if (!toast) return;
+            toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+            toast.innerText = msg;
+            setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
+        }
+
+        function animateRowOut(row) {
+            const h = row.offsetHeight;
+            row.style.height = h + 'px';
+            row.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                row.style.transition = 'height 260ms ease, opacity 260ms ease, transform 260ms ease';
+                row.style.height = '0';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-8px)';
+            });
+            setTimeout(() => row.remove(), 280);
+        }
 
         let pendingDeleteId = null;
         let pendingRow = null;
@@ -460,27 +425,24 @@
                 e.preventDefault();
                 pendingDeleteId = this.dataset.id;
                 pendingRow = this.closest('tr');
-                const name = this.dataset.name || 'this resource';
-                confirmMessage.innerText = `Delete ${name}?`;
+                confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
                 confirmDialog.classList.add('open');
             });
         });
 
-        confirmCancel?.addEventListener('click', function () {
-            pendingDeleteId = null;
-            pendingRow = null;
+        confirmCancel?.addEventListener('click', () => {
+            pendingDeleteId = null; pendingRow = null;
             confirmDialog.classList.remove('open');
         });
 
-        confirmOk?.addEventListener('click', function () {
+        confirmOk?.addEventListener('click', () => {
             if (!pendingDeleteId) return;
             const body = new URLSearchParams();
             if (csrfName && csrfHash) body.append(csrfName, csrfHash);
             body.append('id', pendingDeleteId);
 
             fetch('<?= base_url('resources/delete') ?>', {
-                method: 'POST',
-                credentials: 'same-origin',
+                method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
                 body: body.toString()
             })
@@ -488,18 +450,14 @@
             .then(data => {
                 if (data && data.success) {
                     showToast('Resource deleted', 'success');
-                    if (pendingRow) {
-                        pendingRow.classList.add('removing');
-                        setTimeout(() => pendingRow?.remove(), 350);
-                    }
+                    if (pendingRow) animateRowOut(pendingRow);
                 } else {
                     showToast(data.message || 'Delete failed', 'error');
                 }
             })
             .catch(() => showToast('Error deleting resource', 'error'))
             .finally(() => {
-                pendingDeleteId = null;
-                pendingRow = null;
+                pendingDeleteId = null; pendingRow = null;
                 confirmDialog.classList.remove('open');
             });
         });

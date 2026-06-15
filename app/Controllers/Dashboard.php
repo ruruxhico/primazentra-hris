@@ -44,7 +44,10 @@ class Dashboard extends BaseController
             foreach ($activeProjects as $p) {
                 $projectsByRegion[$p['_region']][] = $p;
             }
-            ksort($projectsByRegion);
+            $regionOrder = ['LUZON' => 0, 'VISAYAS' => 1, 'MINDANAO' => 2];
+            uksort($projectsByRegion, function ($a, $b) use ($regionOrder) {
+                return ($regionOrder[$a] ?? 99) - ($regionOrder[$b] ?? 99);
+            });
 
             // ── Blockers: low progress or halted ────────────────────
             $blockers = array_values(array_filter($activeProjects, function ($p) {
@@ -81,6 +84,7 @@ class Dashboard extends BaseController
                         'addr' => $p['location']['address'] ?? '',
                         'lat'  => $p['_lat'],
                         'lng'  => $p['_lng'],
+                        'type' => $p['_project_type'] ?? '',
                     ];
                 }
             }
@@ -153,23 +157,31 @@ class Dashboard extends BaseController
                 $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
                 $name = strtoupper(trim((string)($res['name'] ?? '')));
                 if ($name === '') continue;
-                if ($cat === 'manpower')      $manpower[]  = $name;
-                elseif ($cat === 'equipment') $equipment[] = $name;
-                else                          $tools[]     = $name;
+                $pill = [
+                    'name'    => $name,
+                    'id'      => (string)($res['ref_id']    ?? ''),
+                    'unit_id' => (string)($res['unit_id']   ?? ''),
+                ];
+                if ($cat === 'manpower')      $manpower[]  = $pill;
+                elseif ($cat === 'equipment') $equipment[] = $pill;
+                else                          $tools[]     = $pill;
             }
         }
 
         if (empty($manpower)) {
             $pm = trim((string)($p['project_manager_name'] ?? ''));
             $se = trim((string)($p['site_engineer_name']   ?? ''));
-            if ($pm && $pm !== 'N/A') $manpower[] = strtoupper($pm);
-            if ($se && $se !== 'N/A') $manpower[] = strtoupper($se);
+            if ($pm && $pm !== 'N/A') $manpower[] = ['name' => strtoupper($pm), 'id' => '', 'unit_id' => ''];
+            if ($se && $se !== 'N/A') $manpower[] = ['name' => strtoupper($se), 'id' => '', 'unit_id' => ''];
         }
 
-        $p['_equipment'] = $equipment;
-        $p['_tools']     = $tools;
-        $p['_manpower']  = $manpower;
-        $p['_client']    = strtoupper(trim((string)($p['client_name'] ?? '')));
+        $p['_equipment']    = $equipment;
+        $p['_tools']        = $tools;
+        $p['_manpower']     = $manpower;
+        $p['_client']       = strtoupper(trim((string)($p['client_name'] ?? '')));
+        $p['_project_type'] = strtoupper(trim((string)($p['project_type'] ?? '')));
+        $rawStatus          = strtoupper(trim((string)($p['status'] ?? '')));
+        $p['_status']       = in_array($rawStatus, ['COMPLETED', 'DONE']) ? 'DONE' : 'ONGOING';
 
         return $p;
     }

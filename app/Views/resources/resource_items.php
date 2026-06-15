@@ -7,20 +7,6 @@
 <meta name="csrf-name" content="<?= csrf_token() ?>">
 <meta name="csrf-hash" content="<?= csrf_hash() ?>">
 
-<style>
-.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
-.filter-rows  { display:flex; flex-direction:column; gap:10px; }
-.filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
-.filter-row label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; min-width:90px; }
-.filter-row input[type="text"] { padding:5px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; width:180px; }
-.filter-chips { display:flex; flex-wrap:wrap; gap:6px; }
-.f-chip       { padding:4px 10px; border:1px solid #ccc; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#444; transition:background .15s,color .15s,border-color .15s; }
-.f-chip:hover  { border-color:#8C701C; color:#8C701C; }
-.f-chip.active { background:#8C701C; color:#fff; border-color:#8C701C; }
-.filter-footer { display:flex; align-items:center; gap:10px; margin-top:14px; }
-.filter-badge  { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
-</style>
-
 <?php
     $activeFilters = $activeFilters ?? [];
     $activeCount   = count(array_filter($activeFilters));
@@ -28,167 +14,175 @@
     $resourceId    = $resource['id'] ?? '';
 ?>
 
-<header class="resource-header">
-    <div>
-        <h1><?= isset($resource['name']) ? esc((string)$resource['name']) : 'Resource' ?> — Units</h1>
-        <p class="muted-sub">Category: <?= isset($resource['category']) ? esc((string)$resource['category']) : 'N/A' ?></p>
-    </div>
-</header>
+<a href="<?= base_url('resources') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Resources
+</a>
+
+<div class="pz-page-header">
+    <h1><?= esc((string)($resource['name'] ?? 'Resource')) ?> — Units</h1>
+    <p>Category: <?= esc((string)($resource['category'] ?? 'N/A')) ?></p>
+</div>
 
 <?php if (session()->getFlashdata('success')): ?>
-    <div class="alert-success">✓ <?= session()->getFlashdata('success') ?></div>
+    <div class="pz-alert pz-alert-success">
+        <span class="material-symbols-outlined" style="font-size:1rem">check_circle</span>
+        <?= session()->getFlashdata('success') ?>
+    </div>
 <?php endif; ?>
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
+        <?= session()->getFlashdata('error') ?>
+    </div>
 <?php endif; ?>
 
 <div class="page-module">
-<div class="resource-controls">
-    <a href="<?= base_url('resources') ?>" class="btn btn-secondary">← Back</a>
-
-    <button type="button" class="btn btn-filter" id="filterToggleBtn">
-        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
-    </button>
-
-    <button class="btn btn-success" onclick="document.getElementById('addItemModal').style.display='flex'">+ Add Unit</button>
+<div class="pz-toolbar">
+    <div class="pz-toolbar-right">
+        <button type="button" class="pz-btn pz-btn-outline" id="filterToggleBtn">
+            <span class="material-symbols-outlined">filter_list</span>
+            Filter<?php if ($activeCount > 0): ?><span class="pz-filter-badge"><?= $activeCount ?></span><?php endif; ?>
+        </button>
+        <button class="pz-btn pz-btn-primary" onclick="document.getElementById('addItemModal').style.display='flex'">
+            <span class="material-symbols-outlined">add</span> Add Unit
+        </button>
+    </div>
 </div>
 
 <!-- Filter Panel -->
-<div id="filterPanel" class="filter-panel" style="display:none">
+<div id="filterPanel" class="pz-filter-panel">
     <form id="filterForm" method="get" action="<?= base_url('resources/viewItems/' . $resourceId) ?>">
 
-        <!-- Text filters: Brand and Model No -->
-        <div class="filter-rows">
-            <div class="filter-row">
+        <div class="pz-filter-grid" style="margin-bottom:.65rem">
+            <div class="pz-filter-group">
                 <label>Brand</label>
                 <input type="text" name="brand" id="brandInput" value="<?= esc($af['brand'] ?? '') ?>" placeholder="Search brand…">
-                <label style="min-width:unset">Model No.</label>
-                <input type="text" name="model_no" id="modelNoInput" value="<?= esc($af['model_no'] ?? '') ?>" placeholder="Search model…" style="flex:1;min-width:120px;width:auto">
             </div>
-
-            <!-- Condition chips -->
-            <input type="hidden" id="conditionInput" name="condition" value="<?= esc($af['condition'] ?? '') ?>">
-            <div class="filter-row">
-                <label>Condition</label>
-                <div class="filter-chips">
-                    <?php foreach (['New','Functional','Worn','Broken'] as $opt): ?>
-                    <button type="button" class="f-chip condition-chip <?= ($af['condition'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- Status chips -->
-            <input type="hidden" id="statusInput" name="status" value="<?= esc($af['status'] ?? '') ?>">
-            <div class="filter-row">
-                <label>Status</label>
-                <div class="filter-chips">
-                    <?php foreach (['In-Storage','In-Use','Repair'] as $opt): ?>
-                    <button type="button" class="f-chip status-chip <?= ($af['status'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-
-            <!-- Location origin chips -->
-            <input type="hidden" id="locTypeInput" name="loc_type" value="<?= esc($af['loc_type'] ?? '') ?>">
-            <div class="filter-row">
-                <label>Location</label>
-                <div class="filter-chips">
-                    <?php foreach (['Warehouse','Project Site'] as $opt): ?>
-                    <button type="button" class="f-chip loctype-chip <?= ($af['loc_type'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
-                    <?php endforeach; ?>
-                </div>
+            <div class="pz-filter-group">
+                <label>Model No.</label>
+                <input type="text" name="model_no" id="modelNoInput" value="<?= esc($af['model_no'] ?? '') ?>" placeholder="Search model…">
             </div>
         </div>
 
-        <div class="filter-footer">
-            <a href="<?= base_url('resources/viewItems/' . $resourceId) ?>" class="btn btn-secondary">Reset</a>
+        <input type="hidden" id="conditionInput" name="condition" value="<?= esc($af['condition'] ?? '') ?>">
+        <div style="margin-bottom:.55rem">
+            <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Condition</label></p>
+            <div class="pz-chip-row">
+                <?php foreach (['New','Functional','Worn','Broken'] as $opt): ?>
+                <button type="button" class="pz-chip condition-chip <?= ($af['condition'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <input type="hidden" id="statusInput" name="status" value="<?= esc($af['status'] ?? '') ?>">
+        <div style="margin-bottom:.55rem">
+            <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Status</label></p>
+            <div class="pz-chip-row">
+                <?php foreach (['In-Storage','In-Use','Repair'] as $opt): ?>
+                <button type="button" class="pz-chip status-chip <?= ($af['status'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <input type="hidden" id="locTypeInput" name="loc_type" value="<?= esc($af['loc_type'] ?? '') ?>">
+        <div>
+            <p class="pz-filter-group" style="margin-bottom:.3rem"><label>Location</label></p>
+            <div class="pz-chip-row">
+                <?php foreach (['Warehouse','Project Site'] as $opt): ?>
+                <button type="button" class="pz-chip loctype-chip <?= ($af['loc_type'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= $opt ?>"><?= $opt ?></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="pz-filter-footer">
+            <a href="<?= base_url('resources/viewItems/' . $resourceId) ?>" class="pz-btn pz-btn-ghost pz-btn-sm">
+                <span class="material-symbols-outlined">restart_alt</span> Reset
+            </a>
         </div>
     </form>
 </div>
 
 <!-- Units Table -->
-<div class="table-container">
-    <table id="itemsTable" class="resource-table">
+<div class="pz-table-wrap">
+    <table id="itemsTable" class="pz-table">
         <thead>
             <tr>
-                <th>NO.</th>
-                <th>SERIAL NO.</th>
-                <th>BRAND</th>
-                <th>MODEL NO.</th>
-                <th>CONDITION</th>
-                <th>STATUS</th>
-                <th>LOCATION</th>
-                <th class="text-center">ACTIONS</th>
+                <th>#</th>
+                <th>Serial No.</th>
+                <th>Brand</th>
+                <th>Model No.</th>
+                <th>Condition</th>
+                <th>Status</th>
+                <th>Location</th>
+                <th class="center">Actions</th>
             </tr>
         </thead>
         <tbody>
+            <?php $pagerOffset = $pagerOffset ?? 0; ?>
             <?php if (empty($items)): ?>
-                <tr>
-                    <td colspan="8" class="empty-state">No units found.</td>
-                </tr>
+                <tr><td colspan="8" class="pz-table-empty">No units found.</td></tr>
             <?php else: ?>
                 <?php foreach ($items as $index => $item): ?>
-                    <tr>
-                        <td><?= $index + 1 ?></td>
-                        <td><?= esc((string)($item['serial_number'] ?? 'N/A')) ?></td>
-                        <td><?= esc((string)($item['brand'] ?? '—')) ?></td>
-                        <td><?= esc((string)($item['model_number'] ?? '—')) ?></td>
-                        <td>
-                            <span class="status-badge status-<?= strtolower((string)($item['condition'] ?? 'na')) ?>">
-                                <?= esc((string)($item['condition'] ?? 'N/A')) ?>
-                            </span>
-                        </td>
-                        <td>
-                            <span class="status-badge status-<?= strtolower(str_replace(['-',' '], '', (string)($item['status'] ?? 'na'))) ?>">
-                                <?= esc((string)($item['status'] ?? 'N/A')) ?>
-                            </span>
-                        </td>
-                        <td><?= esc((string)($item['location']['type'] ?? '') . (($item['location']['address'] ?? '') !== '' ? ' — ' . ($item['location']['address'] ?? '') : '')) ?: '—' ?></td>
-                        <td class="text-center">
-                            <button class="action-btn" title="Edit" onclick="alert('Edit coming soon')"><span class="material-symbols-outlined">edit</span></button>
-                            <button class="action-btn" title="Delete" onclick="return confirm('Delete this unit?');"><span class="material-symbols-outlined">delete</span></button>
-                        </td>
-                    </tr>
+                <tr>
+                    <td class="pz-row-num"><?= $pagerOffset + $index + 1 ?></td>
+                    <td><?= esc((string)($item['serial_number'] ?? 'N/A')) ?></td>
+                    <td class="pz-row-muted"><?= esc((string)($item['brand'] ?? '—')) ?></td>
+                    <td class="pz-row-muted"><?= esc((string)($item['model_number'] ?? '—')) ?></td>
+                    <td>
+                        <?php $cond = strtolower($item['condition'] ?? ''); $cbc = $cond === 'new' ? 'pz-badge-approved' : ($cond === 'functional' ? 'pz-badge-available' : ($cond === 'worn' ? 'pz-badge-deployed' : 'pz-badge-rejected')); ?>
+                        <span class="pz-badge <?= $cbc ?>"><?= esc((string)($item['condition'] ?? 'N/A')) ?></span>
+                    </td>
+                    <td>
+                        <?php $stt = strtolower(str_replace(['-',' '],'', $item['status'] ?? '')); $stbc = $stt === 'instorage' ? 'pz-badge-available' : ($stt === 'inuse' ? 'pz-badge-deployed' : 'pz-badge-maintenance'); ?>
+                        <span class="pz-badge <?= $stbc ?>"><?= esc((string)($item['status'] ?? 'N/A')) ?></span>
+                    </td>
+                    <td class="pz-row-muted"><?= esc(trim((string)($item['location']['type'] ?? '') . (($item['location']['address'] ?? '') !== '' ? ' — ' . ($item['location']['address'] ?? '') : ''))) ?: '—' ?></td>
+                    <td class="actions">
+                        <button class="pz-btn-icon" title="Edit" onclick="alert('Edit coming soon')"><span class="material-symbols-outlined">edit</span></button>
+                        <button class="pz-btn-icon danger" title="Delete" onclick="return confirm('Delete this unit?')"><span class="material-symbols-outlined">delete</span></button>
+                    </td>
+                </tr>
                 <?php endforeach; ?>
             <?php endif; ?>
         </tbody>
     </table>
 </div>
+<div class="pager-wrapper">
+    <?= service('pager')->links('items', 'bootstrap_full') ?>
+</div>
 </div><!-- /.page-module -->
 
 <!-- Add Unit Modal -->
 <div id="addItemModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:8px;padding:28px 32px;width:100%;max-width:420px;position:relative;">
-        <button onclick="document.getElementById('addItemModal').style.display='none'" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
-        <h2 style="margin:0 0 20px;font-size:16px;">Add New Unit</h2>
+    <div style="background:#fdf8ee;border-radius:14px;padding:1.5rem;width:100%;max-width:400px;position:relative;border:1.5px solid #e8dfc7;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+        <button onclick="document.getElementById('addItemModal').style.display='none'" style="position:absolute;top:.75rem;right:1rem;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#7a5c1e;line-height:1">✕</button>
+        <p style="font-weight:700;font-size:.95rem;color:#3b2a0e;margin:0 0 1.1rem">Add New Unit</p>
 
         <form method="POST" action="<?= base_url('resources/addItem/' . $resourceId) ?>">
             <?= csrf_field() ?>
-
-            <div class="form-group" style="margin-bottom:14px">
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Serial Number *</label>
-                <input type="text" name="serial_number" class="form-control" placeholder="SN-12345" required style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px">
+            <div style="display:flex;flex-direction:column;gap:.65rem">
+                <div class="pz-form-group">
+                    <label>Serial Number *</label>
+                    <input type="text" name="serial_number" placeholder="SN-12345" required>
+                </div>
+                <div class="pz-form-group">
+                    <label>Condition *</label>
+                    <select name="condition" required>
+                        <option value="">— Select —</option>
+                        <option>New</option><option>Functional</option><option>Worn</option><option>Broken</option>
+                    </select>
+                </div>
+                <div class="pz-form-group">
+                    <label>Status *</label>
+                    <select name="status" required>
+                        <option value="">— Select —</option>
+                        <option>In-Storage</option><option>In-Use</option><option>Repair</option>
+                    </select>
+                </div>
             </div>
-
-            <div class="form-group" style="margin-bottom:14px">
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Condition *</label>
-                <select name="condition" class="form-control" required style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px">
-                    <option value="">— Select —</option>
-                    <option>New</option><option>Functional</option><option>Worn</option><option>Broken</option>
-                </select>
-            </div>
-
-            <div class="form-group" style="margin-bottom:14px">
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Status *</label>
-                <select name="status" class="form-control" required style="width:100%;padding:7px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px">
-                    <option value="">— Select —</option>
-                    <option>In-Storage</option><option>In-Use</option><option>Repair</option>
-                </select>
-            </div>
-
-            <div style="display:flex;gap:10px;margin-top:20px;">
-                <button type="submit" class="btn btn-success" style="flex:1">Add Unit</button>
-                <button type="button" class="btn btn-secondary" style="flex:1" onclick="document.getElementById('addItemModal').style.display='none'">Cancel</button>
+            <div style="display:flex;gap:.55rem;margin-top:1.1rem;padding-top:.9rem;border-top:1px solid #e8dfc7">
+                <button type="submit" class="pz-btn pz-btn-primary" style="flex:1">Add Unit</button>
+                <button type="button" class="pz-btn pz-btn-outline" style="flex:1" onclick="document.getElementById('addItemModal').style.display='none'">Cancel</button>
             </div>
         </form>
     </div>
@@ -201,21 +195,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const filterForm      = document.getElementById('filterForm');
 
     if (filterToggleBtn && filterPanel) {
-        <?php if ($activeCount > 0): ?>filterPanel.style.display = 'block';<?php endif; ?>
-        filterToggleBtn.addEventListener('click', () => {
-            filterPanel.style.display = filterPanel.style.display === 'none' ? 'block' : 'none';
-        });
+        <?php if ($activeCount > 0): ?>filterPanel.classList.add('open');<?php endif; ?>
+        filterToggleBtn.addEventListener('click', () => filterPanel.classList.toggle('open'));
     }
 
     if (filterForm) {
-        // Debounced submit for text inputs
         let debounce;
         ['brandInput','modelNoInput'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => filterForm.submit(), 400); });
         });
 
-        // Chip toggles
         function wireChips(selector, hiddenId) {
             const inp = document.getElementById(hiddenId);
             filterForm.querySelectorAll(selector).forEach(chip => {

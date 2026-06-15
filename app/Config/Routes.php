@@ -46,9 +46,17 @@ $routes->post('projects/(:segment)/resources/assign',              'Projects::as
 $routes->post('projects/(:segment)/resources/unassign',            'Projects::unassignResource/$1');
 $routes->get('projects/(:segment)/resources/units/(:segment)',     'Projects::getEquipmentUnits/$1/$2');
 
+// Resource Requests & Transfers
+$routes->get('requests',                          'ResourceRequests::index');
+$routes->get('requests/(:segment)',               'ResourceRequests::show/$1');
+$routes->post('requests/store',                   'ResourceRequests::store');
+$routes->post('requests/approve/(:segment)',       'ResourceRequests::approve/$1');
+$routes->post('requests/approve-secondary/(:segment)', 'ResourceRequests::approveSecondary/$1');
+$routes->post('requests/reject/(:segment)',        'ResourceRequests::reject/$1');
+
 // Resources Routes
 $routes->get('resources', 'Resources::index');
-$routes->get('resources/requests', 'Resources::requests');
+$routes->get('resources/requests', 'Resources::index');
 $routes->get('resources/create', 'Resources::create');
 $routes->post('resources/store', 'Resources::store');
 $routes->get('resources/show/(:segment)', 'Resources::show/$1');

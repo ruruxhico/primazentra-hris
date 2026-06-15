@@ -10,6 +10,29 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
 
 <?= $this->section('content') ?>
 
+<div id="dndToast"></div>
+
+<!-- Transfer confirm modal -->
+<div id="dndConfirmOverlay">
+    <div id="dndConfirmBox">
+        <div class="dnd-modal-title">
+            <span class="material-symbols-outlined">sync_alt</span>
+            Transfer Resource
+        </div>
+        <div class="dnd-modal-body">
+            Create a resource request to transfer <strong id="dndResLabel"></strong>
+            <div class="dnd-modal-label">from</div>
+            <div class="dnd-modal-project" id="dndSrcLabel"></div>
+            <div class="dnd-modal-label">to</div>
+            <div class="dnd-modal-project" id="dndDestLabel"></div>
+        </div>
+        <div class="dnd-modal-actions">
+            <button class="dnd-modal-cancel" id="dndCancelBtn">Cancel</button>
+            <button class="dnd-modal-confirm" id="dndConfirmBtn">Confirm Request</button>
+        </div>
+    </div>
+</div>
+
 <?php if (!empty($errorMessage)): ?>
 <div class="alert alert-warning mb-3"><?= esc((string)$errorMessage) ?></div>
 <?php endif; ?>
@@ -123,27 +146,54 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     $monitorClients = array_keys($monitorClients);
     ?>
 
-    <!-- -- Filter bar -- -->
-    <div class="db-filter-bar">
-        <span class="db-filter-label">Region</span>
-        <div class="db-filter-pills" id="dbRegionPills">
-            <button type="button" class="db-filter-pill active" data-region="ALL">All</button>
-            <button type="button" class="db-filter-pill" data-region="LUZON">Luzon</button>
-            <button type="button" class="db-filter-pill" data-region="VISAYAS">Visayas</button>
-            <button type="button" class="db-filter-pill" data-region="MINDANAO">Mindanao</button>
-        </div>
-
-        <?php if (!empty($monitorClients)): ?>
-        <div class="db-filter-divider"></div>
-        <span class="db-filter-label">Client</span>
-        <select class="db-filter-client-sel" id="dbClientFilter">
-            <option value="ALL">All Clients</option>
-            <?php foreach ($monitorClients as $cl): ?>
-            <option value="<?= esc($cl) ?>"><?= esc($cl) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <?php endif; ?>
-    </div>
+    <!-- -- Filter toggle + dropdown -- -->
+    <div class="db-filter-wrap">
+        <button type="button" class="db-filter-toggle-btn" id="dbFilterToggle">
+            <span class="db-filter-arrow">▼</span> Filter
+        </button>
+        <div class="db-filter-dropdown" id="dbFilterDropdown">
+            <div class="db-filter-bar">
+                <div class="db-filter-row">
+                    <span class="db-filter-label">Region</span>
+                    <div class="db-filter-pills" id="dbRegionPills">
+                        <button type="button" class="db-filter-pill active" data-region="ALL">All</button>
+                        <button type="button" class="db-filter-pill" data-region="LUZON">Luzon</button>
+                        <button type="button" class="db-filter-pill" data-region="VISAYAS">Visayas</button>
+                        <button type="button" class="db-filter-pill" data-region="MINDANAO">Mindanao</button>
+                    </div>
+                </div>
+                <div class="db-filter-row">
+                    <span class="db-filter-label">Category</span>
+                    <div class="db-filter-pills" id="dbTypePills">
+                        <button type="button" class="db-filter-pill active" data-type="ALL">All</button>
+                        <button type="button" class="db-filter-pill" data-type="NEW BUILD">New Build</button>
+                        <button type="button" class="db-filter-pill" data-type="RETROFITTING">Retrofitting</button>
+                        <button type="button" class="db-filter-pill" data-type="COLOCATION">Colocation</button>
+                        <button type="button" class="db-filter-pill" data-type="CONVERSION">Conversion</button>
+                    </div>
+                </div>
+                <div class="db-filter-row">
+                    <span class="db-filter-label">Status</span>
+                    <div class="db-filter-pills" id="dbStatusPills">
+                        <button type="button" class="db-filter-pill active" data-status="ALL">All</button>
+                        <button type="button" class="db-filter-pill" data-status="ONGOING">Ongoing</button>
+                        <button type="button" class="db-filter-pill" data-status="DONE">Done</button>
+                    </div>
+                </div>
+                <?php if (!empty($monitorClients)): ?>
+                <div class="db-filter-row">
+                    <span class="db-filter-label">Client</span>
+                    <select class="db-filter-client-sel" id="dbClientFilter">
+                        <option value="ALL">All Clients</option>
+                        <?php foreach ($monitorClients as $cl): ?>
+                        <option value="<?= esc($cl) ?>"><?= esc($cl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+            </div><!-- .db-filter-bar -->
+        </div><!-- .db-filter-dropdown -->
+    </div><!-- .db-filter-wrap -->
 
     <!-- -- Project card groups -- -->
     <?php foreach ($projectsByRegion as $region => $regionProjects): ?>
@@ -153,7 +203,9 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <?php foreach ($regionProjects as $proj): ?>
             <div class="col-xl-6 col-12 db-monitor-col"
                  data-region="<?= esc($proj['_region']) ?>"
-                 data-client="<?= esc($proj['_client'] ?? '') ?>">
+                 data-client="<?= esc($proj['_client'] ?? '') ?>"
+                 data-type="<?= esc($proj['_project_type'] ?? '') ?>"
+                 data-status="<?= esc($proj['_status'] ?? 'ONGOING') ?>">
                 <?php echo db_render_card($proj, 'monitor'); ?>
             </div>
             <?php endforeach; ?>
@@ -161,7 +213,10 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     </div>
     <?php endforeach; ?>
 
-    <p class="db-monitor-no-results" id="dbNoResults">No projects match the selected filters.</p>
+    <div class="db-monitor-no-results" id="dbNoResults">
+        <div style="font-size:1.5rem;margin-bottom:0.5rem;">📋</div>
+        No projects match the selected filters.
+    </div>
 
     <?php endif; ?>
 
@@ -182,6 +237,12 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
         <span class="map-panel-hdr-spacer"></span>
     </div>
     <div id="monitorMap"></div>
+    <div class="map-legend">
+        <span class="map-legend-item"><span class="map-legend-dot" style="background:#E53935"></span>New Build</span>
+        <span class="map-legend-item"><span class="map-legend-dot" style="background:#1E88E5"></span>Retrofitting</span>
+        <span class="map-legend-item"><span class="map-legend-dot" style="background:#FDD835"></span>Colocation</span>
+        <span class="map-legend-item"><span class="map-legend-dot" style="background:#7B1FA2"></span>Conversion</span>
+    </div>
 </div>
 
 <?php
@@ -204,7 +265,7 @@ function db_render_card(array $p, string $context = 'summary'): string
 
     ob_start();
     ?>
-    <div class="db-project-card" id="<?= $cardId ?>">
+    <div class="db-project-card" id="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>" data-pname="<?= esc(strtoupper($p['project_name'] ?? '')) ?>">
 
         <!-- Project name -->
         <div class="db-project-name-box"><?= $name ?></div>
@@ -245,9 +306,16 @@ function db_render_card(array $p, string $context = 'summary'): string
                     <span class="db-res-group-count"><?= count($grp['items']) ?></span>
                 </div>
                 <div class="db-res-group-body">
-                    <div class="db-res-drop-zone" data-cat="<?= $cat ?>" data-proj="<?= $cardId ?>">
-                        <?php foreach ($grp['items'] as $resName): ?>
-                        <div class="db-pill">
+                    <div class="db-res-drop-zone" data-cat="<?= $cat ?>" data-proj="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>">
+                        <?php foreach ($grp['items'] as $res):
+                            $resName  = is_array($res) ? ($res['name']    ?? '') : $res;
+                            $resId    = is_array($res) ? ($res['id']      ?? '') : '';
+                            $resUnitId= is_array($res) ? ($res['unit_id'] ?? '') : '';
+                        ?>
+                        <div class="db-pill"
+                             data-res-name="<?= esc($resName) ?>"
+                             data-res-id="<?= esc($resId) ?>"
+                             data-unit-id="<?= esc($resUnitId) ?>">
                             <span class="db-pill-icons">
                                 <span class="material-symbols-outlined">drag_indicator</span>
                                 <span class="material-symbols-outlined"><?= $grp['icon'] ?></span>
@@ -268,9 +336,11 @@ function db_render_card(array $p, string $context = 'summary'): string
         <div class="db-card-footer">
             <span class="material-symbols-outlined db-icon-chat" title="Messages">chat_bubble</span>
             <span class="material-symbols-outlined db-icon-warn" title="Warnings">warning</span>
-            <?php if ($context === 'monitor' && $lat !== null && $lng !== null): ?>
+            <?php if ($context === 'monitor'): ?>
             <button class="db-btn-locate"
-                    onclick="monitorFlyTo(<?= (float)$lat ?>, <?= (float)$lng ?>, <?= json_encode($name) ?>)"
+                    data-lat="<?= $lat !== null ? (float)$lat : '' ?>"
+                    data-lng="<?= $lng !== null ? (float)$lng : '' ?>"
+                    data-name="<?= esc(strtoupper($p['project_name'] ?? '')) ?>"
                     title="Focus on map">Locate Site</button>
             <?php else: ?>
             <a href="<?= $mapsUrl ?>" class="db-btn-locate" target="_blank" rel="noopener">Locate Site</a>
@@ -293,46 +363,86 @@ function dbToggleGroup(groupEl) {
     groupEl.classList.toggle('open');
 }
 
+// -- Filter dropdown toggle ---------------------------------
+document.addEventListener('DOMContentLoaded', function () {
+    var toggleBtn  = document.getElementById('dbFilterToggle');
+    var dropdown   = document.getElementById('dbFilterDropdown');
+    if (!toggleBtn || !dropdown) return;
+
+    toggleBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var isOpen = dropdown.classList.toggle('open');
+        toggleBtn.classList.toggle('open', isOpen);
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', function (e) {
+        if (!dropdown.contains(e.target) && e.target !== toggleBtn) {
+            dropdown.classList.remove('open');
+            toggleBtn.classList.remove('open');
+        }
+    });
+});
+
 // -- Monitor filters ----------------------------------------
 (function () {
     var activeRegion = 'ALL';
+    var activeType   = 'ALL';
+    var activeStatus = 'ALL';
     var activeClient = 'ALL';
+
+    function closeDropdown() {
+        var dd  = document.getElementById('dbFilterDropdown');
+        var btn = document.getElementById('dbFilterToggle');
+        if (dd)  dd.classList.remove('open');
+        if (btn) btn.classList.remove('open');
+    }
 
     function applyFilters() {
         var anyVisible = false;
         document.querySelectorAll('.db-monitor-region').forEach(function (group) {
-            var groupRegion = group.dataset.regionGroup;
-            var groupVisible = false;
+            var visibleCols = [];
             group.querySelectorAll('.db-monitor-col').forEach(function (col) {
                 var show = (activeRegion === 'ALL' || col.dataset.region === activeRegion) &&
+                           (activeType   === 'ALL' || col.dataset.type   === activeType)   &&
+                           (activeStatus === 'ALL' || col.dataset.status === activeStatus) &&
                            (activeClient === 'ALL' || col.dataset.client === activeClient);
                 col.style.display = show ? '' : 'none';
-                if (show) groupVisible = true;
+                if (show) visibleCols.push(col);
             });
-            group.style.display = groupVisible ? '' : 'none';
-            if (groupVisible) anyVisible = true;
+
+            group.style.display = visibleCols.length > 0 ? '' : 'none';
+            if (visibleCols.length > 0) anyVisible = true;
         });
         var noResults = document.getElementById('dbNoResults');
-        if (noResults) noResults.style.display = anyVisible ? 'none' : 'block';
+        if (noResults) noResults.style.display = anyVisible ? 'none' : '';
+    }
+
+    function bindPills(containerId, getValue, setter) {
+        var container = document.getElementById(containerId);
+        if (!container) return;
+        container.addEventListener('click', function (e) {
+            var pill = e.target.closest('.db-filter-pill');
+            if (!pill) return;
+            container.querySelectorAll('.db-filter-pill').forEach(function (p) { p.classList.remove('active'); });
+            pill.classList.add('active');
+            setter(getValue(pill));
+            applyFilters();
+            closeDropdown();
+        });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
-        var regionPills = document.getElementById('dbRegionPills');
-        if (regionPills) {
-            regionPills.addEventListener('click', function (e) {
-                var pill = e.target.closest('.db-filter-pill');
-                if (!pill) return;
-                regionPills.querySelectorAll('.db-filter-pill').forEach(function (p) { p.classList.remove('active'); });
-                pill.classList.add('active');
-                activeRegion = pill.dataset.region;
-                applyFilters();
-            });
-        }
+        bindPills('dbRegionPills', function (p) { return p.dataset.region; }, function (v) { activeRegion = v; });
+        bindPills('dbTypePills',   function (p) { return p.dataset.type;   }, function (v) { activeType   = v; });
+        bindPills('dbStatusPills', function (p) { return p.dataset.status; }, function (v) { activeStatus = v; });
+
         var clientSel = document.getElementById('dbClientFilter');
         if (clientSel) {
             clientSel.addEventListener('change', function () {
                 activeClient = this.value;
                 applyFilters();
+                closeDropdown();
             });
         }
     });
@@ -388,6 +498,28 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
         var bounds = new google.maps.LatLngBounds();
         var hasMarkers = false;
 
+        function pinIcon(color, stroke) {
+            var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">' +
+                '<path d="M14 0C6.268 0 0 6.268 0 14c0 9.941 14 22 14 22S28 23.941 28 14C28 6.268 21.732 0 14 0z" ' +
+                'fill="' + color + '" stroke="' + (stroke || '#fff') + '" stroke-width="1.5"/>' +
+                '<circle cx="14" cy="13" r="5" fill="rgba(255,255,255,0.85)"/>' +
+                '</svg>';
+            return {
+                url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+                scaledSize: new google.maps.Size(28, 36),
+                anchor: new google.maps.Point(14, 36),
+            };
+        }
+
+        function typeColor(type) {
+            var t = (type || '').toUpperCase();
+            if (t.indexOf('NEW')   !== -1 || t.indexOf('BUILD')  !== -1) return '#E53935'; // red
+            if (t.indexOf('RETRO') !== -1)                                return '#1E88E5'; // blue
+            if (t.indexOf('COLO')  !== -1)                                return '#FDD835'; // yellow
+            if (t.indexOf('CONV')  !== -1)                                return '#7B1FA2'; // violet
+            return '#E53935'; // default red
+        }
+
         PROJECT_LOCATIONS.forEach(function (proj) {
             if (proj.lat == null || proj.lng == null) return;
 
@@ -397,11 +529,14 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
                 map: monitorMap,
                 title: proj.name,
                 animation: google.maps.Animation.DROP,
+                icon: pinIcon(typeColor(proj.type)),
             });
 
             var info = new google.maps.InfoWindow({
-                content: '<div style="max-width:200px"><strong>' + proj.name + '</strong>' +
-                         (proj.addr ? '<br><small>' + proj.addr + '</small>' : '') + '</div>',
+                content: '<div style="max-width:220px;font-family:inherit;padding:2px 0">' +
+                         '<div style="font-weight:700;font-size:0.85rem;color:#5a3e00;letter-spacing:0.5px;margin-bottom:4px">' + proj.name + '</div>' +
+                         (proj.addr ? '<div style="font-size:0.78rem;color:#666;line-height:1.4">' + proj.addr + '</div>' : '') +
+                         '</div>',
             });
 
             marker.addListener('click', function () {
@@ -421,27 +556,55 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
         if (hasMarkers) monitorMap.fitBounds(bounds);
     };
 
-    // Called by monitor "Locate Site" buttons
-    window.monitorFlyTo = function (lat, lng, name) {
-        if (!monitorMap) return;
-        // Auto-expand the right panel if collapsed
-        var sidePanel = document.getElementById('mapSidePanel');
-        if (sidePanel && sidePanel.classList.contains('map-panel-collapsed')) {
-            toggleMapPanel();
+    // Delegated listener — avoids inline-onclick quote-escaping issues
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('.db-btn-locate[data-name]');
+        if (!btn) return;
+        var rawLat = btn.dataset.lat;
+        var rawLng = btn.dataset.lng;
+        var lat  = rawLat !== '' ? parseFloat(rawLat) : null;
+        var lng  = rawLng !== '' ? parseFloat(rawLng) : null;
+        monitorFlyTo(lat, lng, btn.dataset.name || '');
+    });
+
+    // Called by the delegated listener above
+    function monitorFlyTo(lat, lng, name) {
+        var sidePanel    = document.getElementById('mapSidePanel');
+        var wasCollapsed = sidePanel && sidePanel.classList.contains('map-panel-collapsed');
+
+        // Open the panel if it was collapsed
+        if (wasCollapsed) toggleMapPanel();
+
+        // Flash the panel header to draw the user's eye toward the map
+        var hdr = document.querySelector('#mapSidePanel .map-panel-hdr');
+        if (hdr) {
+            hdr.classList.add('map-panel-flash');
+            setTimeout(function () { hdr.classList.remove('map-panel-flash'); }, 900);
         }
 
-        monitorMap.panTo({ lat: lat, lng: lng });
-        monitorMap.setZoom(15);
+        // No coordinates saved for this project — just open the panel
+        if (lat === null || lng === null || !monitorMap) return;
 
-        // Open matching info window
-        PROJECT_LOCATIONS.forEach(function (proj) {
-            if (proj._marker && Math.abs(proj.lat - lat) < 0.0001 && Math.abs(proj.lng - lng) < 0.0001) {
-                if (openInfo) openInfo.close();
-                proj._info.open(monitorMap, proj._marker);
-                openInfo = proj._info;
-            }
-        });
-    };
+        // Wait for panel open + map resize before panning
+        setTimeout(function () {
+            monitorMap.panTo({ lat: lat, lng: lng });
+            monitorMap.setZoom(15);
+
+            PROJECT_LOCATIONS.forEach(function (proj) {
+                if (proj._marker && Math.abs(proj.lat - lat) < 0.0001 && Math.abs(proj.lng - lng) < 0.0001) {
+                    if (openInfo) openInfo.close();
+
+                    proj._marker.setAnimation(google.maps.Animation.BOUNCE);
+                    setTimeout(function () { proj._marker.setAnimation(null); }, 1500);
+
+                    setTimeout(function () {
+                        proj._info.open(monitorMap, proj._marker);
+                        openInfo = proj._info;
+                    }, 400);
+                }
+            });
+        }, wasCollapsed ? 320 : 0);
+    }
 }());
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=<?= $mapsKey ?>&callback=initMonitorMap" async defer></script>
@@ -451,10 +614,80 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    var dragging = false;
-    var dragY    = 0;
-    var rAfId    = null;
-    var scrollEl = document.scrollingElement || document.documentElement;
+    var dragging       = false;
+    var dragY          = 0;
+    var rAfId          = null;
+    var scrollEl       = document.scrollingElement || document.documentElement;
+    var pendingTransfer = null;
+
+    // ── Transfer confirm modal handlers ──────────────────────────────
+    var overlay     = document.getElementById('dndConfirmOverlay');
+    var cancelBtn   = document.getElementById('dndCancelBtn');
+    var confirmBtn  = document.getElementById('dndConfirmBtn');
+
+    function closeModal() {
+        overlay.classList.remove('open');
+    }
+
+    cancelBtn && cancelBtn.addEventListener('click', function () {
+        // Revert pill to its original zone
+        if (pendingTransfer) {
+            var t = pendingTransfer;
+            var ref = t.fromZone.children[t.oldIndex] || null;
+            t.fromZone.insertBefore(t.pill, ref);
+        }
+        pendingTransfer = null;
+        closeModal();
+    });
+
+    // Close on backdrop click
+    overlay && overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) cancelBtn.click();
+    });
+
+    confirmBtn && confirmBtn.addEventListener('click', function () {
+        if (!pendingTransfer) return;
+        var t = pendingTransfer;
+        confirmBtn.disabled = true;
+
+        fetch('<?= base_url('requests/store') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                '<?= csrf_token() ?>': '<?= csrf_hash() ?>',
+            },
+            body: JSON.stringify({
+                type:                     'drag_drop',
+                category:                 t.cat,
+                resource_name:            t.resName,
+                resource_id:              t.resId,
+                unit_id:                  t.unitId,
+                source_project_id:        t.srcPid,
+                source_project_name:      t.srcPname,
+                destination_project_id:   t.destPid,
+                destination_project_name: t.destPname,
+                quantity:                 1,
+            }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                var toast = document.getElementById('dndToast');
+                if (toast) {
+                    toast.textContent = 'Transfer request created.';
+                    toast.classList.add('show');
+                    setTimeout(function () { toast.classList.remove('show'); }, 3000);
+                }
+            }
+        })
+        .catch(function (err) { console.error('DnD request failed', err); })
+        .finally(function () {
+            confirmBtn.disabled = false;
+            pendingTransfer = null;
+            closeModal();
+        });
+    });
 
     function updateY(e) { if (dragging) dragY = e.clientY; }
     document.addEventListener('mousemove',   updateY, true);
@@ -514,11 +747,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
 
                 onAdd: function (evt) {
-                    var card = evt.to.closest('.db-project-card');
-                    if (card) {
-                        card.classList.add('dnd-received');
-                        setTimeout(function () { card.classList.remove('dnd-received'); }, 600);
-                    }
+                    var destCard = evt.to.closest('.db-project-card');
+                    var srcCard  = evt.from.closest('.db-project-card');
+
+                    var pill      = evt.item;
+                    var resName   = pill.dataset.resName  || (pill.querySelector('.db-pill-name') || {}).textContent || '';
+                    var resId     = pill.dataset.resId    || '';
+                    var unitId    = pill.dataset.unitId   || '';
+                    var destPid   = (evt.to.dataset.pid)  || '';
+                    var destPname = destCard ? (destCard.dataset.pname || '') : '';
+                    var srcPid    = srcCard  ? (srcCard.dataset.pid   || '') : '';
+                    var srcPname  = srcCard  ? (srcCard.dataset.pname || '') : '';
+
+                    if (!destPid || destPid === srcPid) return;
+
+                    // Store context for the confirm/cancel handlers
+                    pendingTransfer = {
+                        cat: cat, pill: pill,
+                        resName: resName.trim(), resId: resId, unitId: unitId,
+                        srcPid: srcPid, srcPname: srcPname,
+                        destPid: destPid, destPname: destPname,
+                        fromZone: evt.from, oldIndex: evt.oldIndex,
+                    };
+
+                    // Populate and show the modal
+                    document.getElementById('dndResLabel').textContent  = resName.trim();
+                    document.getElementById('dndSrcLabel').textContent  = srcPname  || '—';
+                    document.getElementById('dndDestLabel').textContent = destPname || '—';
+                    overlay.classList.add('open');
                 },
             });
         });

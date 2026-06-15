@@ -226,6 +226,7 @@ class Auth extends BaseController {
             'userId'     => $user['id'],
             'userName'   => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
             'role'       => $userData['role'],
+            'last_activity' => time(),
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);

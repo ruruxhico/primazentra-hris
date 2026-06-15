@@ -7,21 +7,26 @@
     $formAction = $isEdit ? base_url('resources/update/' . $resource['id']) : base_url('resources/store');
 ?>
 
-<header class="resource-header">
-    <h1><?= $isEdit ? 'Edit Resource' : 'Create New Resource' ?></h1>
-</header>
+<a href="<?= base_url('resources') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Resources
+</a>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert alert-danger">
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
         <?= session()->getFlashdata('error') ?>
     </div>
 <?php endif; ?>
-
 <?php if (session()->getFlashdata('success')): ?>
-    <div class="alert alert-success">
+    <div class="pz-alert pz-alert-success">
+        <span class="material-symbols-outlined" style="font-size:1rem">check_circle</span>
         <?= session()->getFlashdata('success') ?>
     </div>
 <?php endif; ?>
+
+<div class="pz-page-header">
+    <h1><?= $isEdit ? 'Edit Resource' : 'Create Resource' ?></h1>
+</div>
 
 <div class="resource-form-container">
     <form method="POST" action="<?= $formAction ?>" id="resourceForm">

@@ -41,25 +41,35 @@
 .unit-warehouse-input-wrap { display: flex; gap: 0.4rem; }
 .unit-warehouse-input-wrap input { flex: 1; }
 .unit-card-footer { display: flex; justify-content: flex-end; margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid #e8d5a0; }
+.qty-stepper { display: flex; align-items: center; background: #f5f5f3; border-radius: 999px; border: 1.5px solid #d4b87a; flex-shrink: 0; min-width: 0; width: fit-content; }
+.qty-btn { flex: 0 0 28px !important; width: 28px !important; min-width: 0 !important; height: 24px !important; font-size: 14px !important; line-height: 24px !important; text-align: center; background: none !important; border: none !important; color: #7a5c1e !important; cursor: pointer; transition: background 0.15s; user-select: none; padding: 0 !important; }
+.qty-btn:hover { background: #ede3c4 !important; border-radius: 999px; }
+.qty-input { flex: 0 0 28px !important; width: 28px !important; min-width: 0 !important; text-align: center; border: none !important; background: transparent !important; font-size: 12px !important; font-weight: 600; color: #333; padding: 0 !important; -moz-appearance: textfield; }
+.qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-input:focus { outline: none; }
+.qty-stepper .qty-input { border: none !important; border-radius: 0 !important; background: transparent !important; }
+.add-flow-controls { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.unit-qty-row { display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin-top: 0.4rem; }
+.unit-qty-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: #7a5c1e; letter-spacing: 0.3px; }
+.equipment-remove-btn { background: transparent !important; border: 1.5px solid #e53e3e !important; color: #e53e3e !important; border-radius: 8px !important; }
+.equipment-remove-btn:hover { background: #e53e3e !important; color: #fff !important; }
 </style>
 
-<header class="resource-header">
-    <div class="equipment-topbar">
-        <a href="<?= base_url('resources') ?>" class="equipment-back" aria-label="Back to resources">←</a>
-        <div>
-            <h1 class="equipment-title"><?= $isEdit ? 'Edit Tool Model' : 'Add Tool Model' ?></h1>
-            <p class="equipment-subtitle">Register a new type of tool. You can add specific physical units after creating this profile.</p>
-        </div>
-    </div>
-</header>
+<a href="<?= base_url('resources') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Resources
+</a>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert alert-danger"><?= session()->getFlashdata('error') ?></div>
+    <div class="pz-alert pz-alert-error"><span class="material-symbols-outlined" style="font-size:1rem">error</span><?= session()->getFlashdata('error') ?></div>
+<?php endif; ?>
+<?php if (session()->getFlashdata('success')): ?>
+    <div class="pz-alert pz-alert-success"><span class="material-symbols-outlined" style="font-size:1rem">check_circle</span><?= session()->getFlashdata('success') ?></div>
 <?php endif; ?>
 
-<?php if (session()->getFlashdata('success')): ?>
-    <div class="alert alert-success"><?= session()->getFlashdata('success') ?></div>
-<?php endif; ?>
+<div class="pz-page-header">
+    <h1><?= $isEdit ? 'Edit Tool Model' : 'Add Tool Model' ?></h1>
+    <p>Register a new type of tool. You can add specific physical units after creating this profile.</p>
+</div>
 
 <div class="equipment-shell">
     <div class="equipment-card">
@@ -167,6 +177,14 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="unit-qty-row">
+                                        <span class="unit-qty-label">Qty</span>
+                                        <div class="qty-stepper unit-qty-stepper">
+                                            <button type="button" class="qty-btn unit-qty-minus">&#8722;</button>
+                                            <input type="number" name="items[<?= $index ?>][quantity]" class="qty-input unit-quantity-input" value="<?= esc((string)($item['quantity'] ?? 1)) ?>" min="1">
+                                            <button type="button" class="qty-btn unit-qty-plus">+</button>
+                                        </div>
+                                    </div>
                                     <div class="unit-card-footer">
                                         <button type="button" class="equipment-remove-btn" onclick="removeEquipmentRow(this)">Remove Unit</button>
                                     </div>
@@ -177,7 +195,9 @@
                 </div>
 
                 <div class="equipment-actions-row">
-                    <button type="button" class="btn btn-secondary" id="addEquipmentUnitBtn">+ Add Unit</button>
+                    <div class="add-flow-controls">
+                        <button type="button" class="btn btn-secondary" id="addEquipmentUnitBtn">+ Add Unit</button>
+                    </div>
                 </div>
             </div>
 
@@ -219,7 +239,7 @@
                     <label>Condition</label>
                     <select name="__INDEX__[condition]">
                         <option value="">Select</option>
-                        <option value="New">New</option>
+                        <option value="New" selected>New</option>
                         <option value="Functional">Functional</option>
                         <option value="Worn">Worn</option>
                         <option value="Broken">Broken</option>
@@ -229,7 +249,7 @@
                     <label>Status</label>
                     <select name="__INDEX__[status]">
                         <option value="">Select</option>
-                        <option value="In-Storage">In-Storage</option>
+                        <option value="In-Storage" selected>In-Storage</option>
                         <option value="In-Use">In-Use</option>
                         <option value="Repair">Repair</option>
                     </select>
@@ -238,7 +258,7 @@
                     <label>Location Type</label>
                     <select name="__INDEX__[location_type]" class="equipment-location-type">
                         <option value="">Select Type</option>
-                        <option value="Warehouse">Warehouse</option>
+                        <option value="Warehouse" selected>Warehouse</option>
                         <option value="Project Site">Project Site</option>
                     </select>
                 </div>
@@ -262,6 +282,14 @@
                             <button type="button" class="equipment-map-btn">Map</button>
                         </div>
                     </div>
+                </div>
+            </div>
+            <div class="unit-qty-row">
+                <span class="unit-qty-label">Qty</span>
+                <div class="qty-stepper unit-qty-stepper">
+                    <button type="button" class="qty-btn unit-qty-minus">&#8722;</button>
+                    <input type="number" name="__INDEX__[quantity]" class="qty-input unit-quantity-input" value="1" min="1">
+                    <button type="button" class="qty-btn unit-qty-plus">+</button>
                 </div>
             </div>
             <div class="unit-card-footer">
@@ -307,8 +335,47 @@ document.addEventListener('DOMContentLoaded', function () {
     var mapSearch = document.getElementById('equipmentMapSearch');
 
     var rowIndex = container.querySelectorAll('.unit-card').length;
+    var nextSerialIndex = rowIndex + 1;
     var activeWarehouseInput = null;
     var mapPendingAddress = '';
+
+    function generatePrefix(name) {
+        var words = name.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return '';
+        if (words.length === 1) return words[0].substring(0, 3);
+        if (words.length === 2) return words[0].substring(0, 3) + '_' + words[1];
+        return words[0].substring(0, 3) + '_' + words[1] + words[2];
+    }
+
+    function generateSerialRange(name, startIdx, qty) {
+        var prefix = generatePrefix(name);
+        if (!prefix) return '';
+        var start = String(startIdx).padStart(3, '0');
+        if (qty <= 1) return prefix + '-' + start;
+        return prefix + '-' + start + '-' + String(startIdx + qty - 1).padStart(3, '0');
+    }
+
+    function recalculateSerialIndices() {
+        var name = (document.getElementById('name') || {}).value || '';
+        var allCards = container.querySelectorAll('.unit-card');
+        var currentIdx = 1;
+        allCards.forEach(function (card, pos) {
+            var qtyInput = card.querySelector('.unit-quantity-input');
+            var qty = Math.max(1, parseInt((qtyInput && qtyInput.value) || 1, 10) || 1);
+            card.dataset.serialIndex = currentIdx;
+            var si = card.querySelector('.unit-serial-input');
+            if (si && si.dataset.autoSerial === 'true') {
+                si.value = name ? generateSerialRange(name, currentIdx, qty) : '';
+            }
+            var titleEl = card.querySelector('.unit-card-title');
+            if (titleEl) {
+                var serial = (si && si.value) || '';
+                titleEl.textContent = 'Unit #' + (pos + 1) + (serial ? ' — ' + serial : '');
+            }
+            currentIdx += qty;
+        });
+        nextSerialIndex = currentIdx;
+    }
 
     function setSectionVisible(visible) {
         section.classList.toggle('open', visible);
@@ -369,8 +436,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (serialInput && titleEl) {
             serialInput.addEventListener('input', function () {
+                this.removeAttribute('data-auto-serial');
                 var idx = Array.from(container.querySelectorAll('.unit-card')).indexOf(card) + 1;
                 titleEl.textContent = 'Unit #' + idx + (this.value ? ' — ' + this.value : '');
+            });
+        }
+
+        var qtyMinus = card.querySelector('.unit-qty-minus');
+        var qtyPlus  = card.querySelector('.unit-qty-plus');
+        var qtyInput = card.querySelector('.unit-quantity-input');
+        if (qtyMinus && qtyInput) {
+            qtyMinus.addEventListener('click', function () {
+                var v = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+                if (v > 1) { qtyInput.value = v - 1; recalculateSerialIndices(); }
+            });
+        }
+        if (qtyPlus && qtyInput) {
+            qtyPlus.addEventListener('click', function () {
+                qtyInput.value = (parseInt(qtyInput.value, 10) || 1) + 1;
+                recalculateSerialIndices();
+            });
+        }
+        if (qtyInput) {
+            qtyInput.addEventListener('change', function () {
+                var v = parseInt(this.value, 10);
+                if (isNaN(v) || v < 1) this.value = 1;
+                recalculateSerialIndices();
             });
         }
 
@@ -494,12 +585,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     addBtn && addBtn.addEventListener('click', function () {
-        var html = template.innerHTML.replace(/__INDEX__/g, 'items[' + rowIndex + ']');
-        container.insertAdjacentHTML('beforeend', html);
-        rowIndex++;
-        setSectionVisible(true);
-        var cards = container.querySelectorAll('.unit-card');
-        bindCard(cards[cards.length - 1]);
+        var addFlowQtyEl = document.getElementById('addFlowQty');
+        var addCount = Math.max(1, parseInt((addFlowQtyEl && addFlowQtyEl.value) || 1, 10) || 1);
+        for (var i = 0; i < addCount; i++) {
+            var html = template.innerHTML.replace(/__INDEX__/g, 'items[' + rowIndex + ']');
+            container.insertAdjacentHTML('beforeend', html);
+            rowIndex++;
+            setSectionVisible(true);
+            var cards = container.querySelectorAll('.unit-card');
+            var newCard = cards[cards.length - 1];
+            var si = newCard.querySelector('.unit-serial-input');
+            if (si) si.dataset.autoSerial = 'true';
+            bindCard(newCard);
+        }
+        recalculateSerialIndices();
         reindexCards();
     });
 
@@ -508,11 +607,27 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!card) return;
         card.remove();
         reindexCards();
+        recalculateSerialIndices();
         if (container.querySelectorAll('.unit-card').length === 0) {
             checkbox.checked = false;
             setSectionVisible(false);
         }
     };
+
+    var addFlowQtyEl = document.getElementById('addFlowQty');
+    var addFlowMinus = document.getElementById('addFlowQtyMinus');
+    var addFlowPlus  = document.getElementById('addFlowQtyPlus');
+    addFlowMinus && addFlowMinus.addEventListener('click', function () {
+        var v = Math.max(1, parseInt(addFlowQtyEl.value, 10) || 1);
+        if (v > 1) addFlowQtyEl.value = v - 1;
+    });
+    addFlowPlus && addFlowPlus.addEventListener('click', function () {
+        addFlowQtyEl.value = (parseInt(addFlowQtyEl.value, 10) || 1) + 1;
+    });
+    addFlowQtyEl && addFlowQtyEl.addEventListener('change', function () {
+        var v = parseInt(this.value, 10);
+        if (isNaN(v) || v < 1) this.value = 1;
+    });
 
     checkbox && checkbox.addEventListener('change', function () { setSectionVisible(this.checked); });
 
@@ -541,7 +656,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape' && mapModal.classList.contains('open')) closeMapModal();
     });
 
+    var resourceNameInput = document.getElementById('name');
+    if (resourceNameInput) {
+        resourceNameInput.addEventListener('input', function () {
+            recalculateSerialIndices();
+        });
+    }
+
     container.querySelectorAll('.unit-card').forEach(bindCard);
+    recalculateSerialIndices();
     setSectionVisible(checkbox ? checkbox.checked : false);
 });
 </script>

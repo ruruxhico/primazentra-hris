@@ -1,31 +1,40 @@
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
-    <header class="staff-header">
-        <h1>Staff Detail</h1>
-    </header>
 
-    <div class="detail-container">
-        <dl>
-            <dt>Full Name</dt>
-            <dd><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ?? '') . ' ' . ($staff['last_name'] ?? ''))) ?></dd>
+<a href="<?= base_url('staff') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Staff
+</a>
 
-            <dt>Email</dt>
-            <dd><?= esc((string)($staff['email'] ?? '')) ?></dd>
+<div class="pz-page-header">
+    <h1><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ? $staff['middle_name'] . ' ' : '') . ($staff['last_name'] ?? ''))) ?></h1>
+    <p><?= esc((string)($staff['role'] ?? '')) ?></p>
+</div>
 
-            <dt>Contact No</dt>
-            <dd><?= esc((string)($staff['contact_no'] ?? '')) ?></dd>
+<div class="pz-card">
+    <p class="pz-card-section">Staff Details</p>
+    <div class="pz-info-grid">
+        <span class="pz-info-label">Full Name</span>
+        <span class="pz-info-value"><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ?? '') . ' ' . ($staff['last_name'] ?? ''))) ?></span>
 
-            <dt>Role</dt>
-            <dd><?= esc((string)($staff['role'] ?? '')) ?></dd>
+        <span class="pz-info-label">Email</span>
+        <span class="pz-info-value"><?= esc((string)($staff['email'] ?? '—')) ?></span>
 
-            <!-- Hidden: must_change_password, created_at, updated_at per UI requirements -->
-        </dl>
+        <span class="pz-info-label">Contact No</span>
+        <span class="pz-info-value"><?= esc((string)($staff['contact_no'] ?? '—')) ?></span>
 
-        <div class="form-actions">
-            <a href="<?= base_url('staff/update/' . ($staffId ?? '')) ?>" class="btn-add">Edit</a>
-            <a href="<?= base_url('staff') ?>" class="btn-secondary">Back</a>
-        </div>
+        <span class="pz-info-label">Role</span>
+        <span class="pz-info-value"><?= esc((string)($staff['role'] ?? '—')) ?></span>
     </div>
+
+    <div class="pz-card-actions">
+        <a href="<?= base_url('staff/update/' . ($staffId ?? '')) ?>" class="pz-btn pz-btn-primary">
+            <span class="material-symbols-outlined">edit</span> Edit
+        </a>
+        <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-outline">
+            <span class="material-symbols-outlined">arrow_back</span> Back
+        </a>
+    </div>
+</div>
 
 <?= $this->endSection() ?>

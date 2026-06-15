@@ -6,96 +6,96 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
-    <!-- Alert Messages -->
-    <?php if (session()->getFlashdata('error')): ?>
-        <div class="form-error">
-            ✗ <?= session()->getFlashdata('error') ?>
-        </div>
-    <?php endif; ?>
 
-    <header class="staff-header">
-        <h1><?= esc($pageTitle ?? 'Staff') ?></h1>
-    </header>
+<a href="<?= base_url('staff') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Staff
+</a>
 
-    <!-- Form Container -->
-    <div class="form-container staff-form-container">
-        <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>">
-            <?= csrf_field() ?>
+<?php if (session()->getFlashdata('error')): ?>
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
+        <?= session()->getFlashdata('error') ?>
+    </div>
+<?php endif; ?>
 
-            <!-- Names row: First | Middle | Last -->
-            <div class="staff-names-row">
-                <div class="form-group">
+<div class="pz-page-header">
+    <h1><?= esc($pageTitle ?? 'Staff') ?></h1>
+</div>
+
+<div class="pz-form-container">
+    <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>">
+        <?= csrf_field() ?>
+
+        <!-- Name row -->
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Personal Information</p>
+            <div class="pz-form-row cols-3">
+                <div class="pz-form-group">
                     <label>First Name *</label>
-                    <input type="text" name="first_name" value="<?= esc((string)($staff['first_name'] ?? '')) ?>" required>
+                    <input type="text" name="first_name" value="<?= esc((string)($staff['first_name'] ?? '')) ?>" required placeholder="First name">
                 </div>
-
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label>Middle Name</label>
-                    <input type="text" name="middle_name" value="<?= esc((string)($staff['middle_name'] ?? '')) ?>">
+                    <input type="text" name="middle_name" value="<?= esc((string)($staff['middle_name'] ?? '')) ?>" placeholder="Middle name">
                 </div>
-
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label>Last Name *</label>
-                    <input type="text" name="last_name" value="<?= esc((string)($staff['last_name'] ?? '')) ?>" required>
+                    <input type="text" name="last_name" value="<?= esc((string)($staff['last_name'] ?? '')) ?>" required placeholder="Last name">
                 </div>
             </div>
+        </div>
 
-            <!-- Contact row: Email | Contact No -->
-            <div class="staff-contact-row">
-                <div class="form-group">
+        <!-- Contact row -->
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Contact & Access</p>
+            <div class="pz-form-row cols-2">
+                <div class="pz-form-group">
                     <label>Email *</label>
-                    <input type="email" name="email" value="<?= esc((string)($staff['email'] ?? '')) ?>" required>
+                    <input type="email" name="email" value="<?= esc((string)($staff['email'] ?? '')) ?>" required placeholder="email@example.com">
                 </div>
-
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label>Contact No</label>
                     <div class="phone-input-group">
-                        <input
-                            type="tel"
-                            id="staffContact"
-                            name="contact_no_display"
-                            placeholder="Phone number"
-                            inputmode="tel"
-                            autocomplete="tel"
-                            value="<?= esc((string)($staff['contact_no'] ?? '')) ?>"
-                        >
+                        <input type="tel" id="staffContact" name="contact_no_display"
+                               placeholder="Phone number" inputmode="tel" autocomplete="tel"
+                               value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
                     </div>
                     <input type="hidden" name="country_code" id="staffCountryCode" value="PH">
                     <input type="hidden" name="contact_no" id="staffContactFull" value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
                     <small class="phone-hint" id="staffPhoneHint">Include an active mobile number.</small>
-                    <small class="phone-error" id="staffPhoneError" hidden>Please enter a valid phone number for the selected country.</small>
+                    <small class="phone-error" id="staffPhoneError" hidden>Please enter a valid phone number.</small>
                 </div>
             </div>
 
-            <!-- Role -->
-            <div class="form-group">
-                <label>Role *</label>
-                <select name="role" required>
-                    <option value="">Select Role</option>
-                    <option value="Administrator" <?= ($staff['role'] ?? '') === 'Administrator' ? 'selected' : '' ?>>Administrator</option>
-                    <option value="Operations Manager" <?= ($staff['role'] ?? '') === 'Operations Manager' ? 'selected' : '' ?>>Operations Manager</option>
-                    <option value="Project Manager" <?= ($staff['role'] ?? '') === 'Project Manager' ? 'selected' : '' ?>>Project Manager</option>
-                    <option value="Site Engineer" <?= ($staff['role'] ?? '') === 'Site Engineer' ? 'selected' : '' ?>>Site Engineer</option>
-                </select>
+            <div class="pz-form-row" style="max-width:280px; margin-top:.65rem">
+                <div class="pz-form-group">
+                    <label>Role *</label>
+                    <select name="role" required>
+                        <option value="">Select Role</option>
+                        <option value="Administrator"     <?= ($staff['role'] ?? '') === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
+                        <option value="Operations Manager"<?= ($staff['role'] ?? '') === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
+                        <option value="Project Manager"   <?= ($staff['role'] ?? '') === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
+                        <option value="Site Engineer"     <?= ($staff['role'] ?? '') === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>
+                    </select>
+                </div>
             </div>
+        </div>
 
-            <div class="staff-policy-notice">
-                <input type="radio" checked disabled>
-                <input type="hidden" name="must_change_password" value="1">
-                Users must change password on first login
-            </div>
+        <div class="pz-policy-notice">
+            <input type="radio" checked disabled>
+            <input type="hidden" name="must_change_password" value="1">
+            Users must change password on first login
+        </div>
 
-            <!-- Form Actions -->
-            <div class="form-actions">
-                <button type="submit" class="btn btn-add">
-                    <?= isset($staffId) ? 'Update Staff' : 'Create Staff' ?>
-                </button>
-                <a href="<?= base_url('staff') ?>" class="btn btn-secondary">
-                    Cancel
-                </a>
-            </div>
-        </form>
-    </div>
+        <div class="pz-form-actions">
+            <button type="submit" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">save</span>
+                <?= isset($staffId) ? 'Update Staff' : 'Create Staff' ?>
+            </button>
+            <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-outline">Cancel</a>
+        </div>
+    </form>
+</div>
 
 <?= $this->endSection() ?>
 
@@ -131,12 +131,9 @@ document.addEventListener('DOMContentLoaded', function () {
     phoneInput.addEventListener('countrychange', syncFields);
     phoneInput.addEventListener('input', function () { phoneError.hidden = true; syncFields(); });
     phoneInput.addEventListener('blur', function () {
-        if (phoneInput.value.trim() && !iti.isValidNumber()) {
-            phoneError.hidden = false;
-        }
+        if (phoneInput.value.trim() && !iti.isValidNumber()) phoneError.hidden = false;
         syncFields();
     });
-
     syncFields();
 });
 </script>
