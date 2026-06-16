@@ -184,17 +184,18 @@ class Staff extends BaseController
             $now = new Timestamp(new \DateTime());
 
             $data = [
-                'last_name'           => $lastName,
-                'first_name'          => $firstName,
-                'middle_name'         => trim((string) ($this->request->getPost('middle_name') ?? '')),
-                'contact_no'          => trim((string) ($this->request->getPost('contact_no')  ?? '')),
-                'email'               => $email,
-                'role'                => $role,
-                'must_change_password'=> true,   // always true for new staff
-                'is_verified'         => true,   // active immediately since they have credentials
-                'firebase_uid'        => $firebaseUid,
-                'created_at'          => $now,
-                'updated_at'          => $now,
+                'last_name'                => $lastName,
+                'first_name'               => $firstName,
+                'middle_name'              => trim((string) ($this->request->getPost('middle_name') ?? '')),
+                'contact_no'               => trim((string) ($this->request->getPost('contact_no')  ?? '')),
+                'email'                    => $email,
+                'role'                     => $role,
+                'must_change_password'     => true,
+                'temp_password_expires_at' => time() + (15 * 60), // 15 minutes from now
+                'is_verified'              => true,
+                'firebase_uid'             => $firebaseUid,
+                'created_at'               => $now,
+                'updated_at'               => $now,
             ];
 
             // Use Firebase UID as document ID (required for mobile login lookup)

@@ -149,11 +149,22 @@
         </thead>
         <tbody>
             <?php if (empty($projects)): ?>
-                <tr><td colspan="8" class="pz-table-empty">No projects found. <a href="<?= base_url('projects/create') ?>">Create one now</a></td></tr>
+                <?php $hasFilters = !empty($af['status']) || !empty($af['region']) || !empty($af['type']) || !empty($af['pm_id']) || !empty($af['se_id']); ?>
+                <tr><td colspan="8" class="pz-table-empty <?= $hasFilters ? 'pz-table-empty--filter' : '' ?>">
+                    <?php if ($hasFilters): ?>
+                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                    <?php else: ?>
+                        No projects found. <a href="<?= base_url('projects/create') ?>">Create one now</a>
+                    <?php endif; ?>
+                </td></tr>
             <?php else: ?>
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($projects as $index => $project): ?>
-                <tr>
+                <tr data-status="<?= esc(strtolower(preg_replace('/[^a-z0-9]/i', '', $project['status'] ?? ''))) ?>"
+                    data-type="<?= esc(strtolower(preg_replace('/[^a-z0-9]/i', '', $project['project_type'] ?? ''))) ?>"
+                    data-region="<?= esc(strtolower($project['region_resolved'] ?? '')) ?>"
+                    data-pm="<?= esc($project['pm_id_normalized'] ?? '') ?>"
+                    data-se="<?= esc($project['se_id_normalized'] ?? '') ?>">
                     <td class="pz-row-num"><?= $offset + $index + 1 ?></td>
                     <td class="pz-row-name"><?= esc(view_text($project['project_name'] ?? 'N/A', 'N/A')) ?></td>
                     <td class="pz-row-muted"><?= esc(view_text($project['project_type'] ?? 'N/A', 'N/A')) ?></td>
@@ -172,6 +183,11 @@
                     </td>
                 </tr>
                 <?php endforeach; ?>
+                <tr id="projectFilterNoResults" style="display:none">
+                    <td colspan="8" class="pz-table-empty pz-table-empty--filter">
+                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                    </td>
+                </tr>
             <?php endif; ?>
         </tbody>
     </table>
@@ -221,8 +237,35 @@ document.addEventListener('DOMContentLoaded', function () {
         <?php if ($activeCount > 0): ?>filterPanel.classList.add('open');<?php endif; ?>
         filterToggleBtn.addEventListener('click', () => filterPanel.classList.toggle('open'));
     }
-    filterForm && filterForm.querySelectorAll('select').forEach(sel => {
-        sel.addEventListener('change', () => filterForm.submit());
+    function normalize(v) { return (v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+    function applyProjectFilter() {
+        var get = function (name) {
+            var el = filterForm ? filterForm.querySelector('select[name="' + name + '"]') : null;
+            return el ? el.value : '';
+        };
+        var statusF = normalize(get('status'));
+        var regionF = normalize(get('region'));
+        var typeF   = normalize(get('type'));
+        var pmF     = get('pm_id');
+        var seF     = get('se_id');
+        var visible = 0;
+        table && table.querySelectorAll('tbody tr[data-status]').forEach(function (row) {
+            var show = true;
+            if (statusF) show = show && normalize(row.dataset.status || '') === statusF;
+            if (regionF) show = show && normalize(row.dataset.region || '') === regionF;
+            if (typeF)   show = show && normalize(row.dataset.type   || '') === typeF;
+            if (pmF)     show = show && (row.dataset.pm || '') === pmF;
+            if (seF)     show = show && (row.dataset.se || '') === seF;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        var noRow = document.getElementById('projectFilterNoResults');
+        if (noRow) noRow.style.display = visible === 0 ? '' : 'none';
+    }
+
+    filterForm && filterForm.querySelectorAll('select').forEach(function (sel) {
+        sel.addEventListener('change', applyProjectFilter);
     });
 
     // Search

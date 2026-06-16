@@ -221,6 +221,38 @@ class Auth extends BaseController {
             return redirect()->back()->withInput()->with('error', 'Please verify your account via the email sent to you before logging in.');
         }
 
+        // Check if this is a first-time login with a temporary password
+        if (!empty($userData['must_change_password'])) {
+            $expiresAt = $userData['temp_password_expires_at'] ?? null;
+            if ($expiresAt !== null) {
+                if (is_object($expiresAt) && method_exists($expiresAt, 'get')) {
+                    $expiresTs = $expiresAt->get()->getTimestamp();
+                } elseif (is_object($expiresAt) && method_exists($expiresAt, 'getTimestamp')) {
+                    $expiresTs = $expiresAt->getTimestamp();
+                } else {
+                    $expiresTs = (int) $expiresAt;
+                }
+
+                if (time() > $expiresTs) {
+                    return redirect()->back()->withInput()->with('error',
+                        'Your temporary password has expired. Please contact your administrator to have your account reset.');
+                }
+            }
+
+            // Valid temp password — log in with the force-change flag
+            session()->set([
+                'isLoggedIn'              => true,
+                'userId'                  => $user['id'],
+                'userName'                => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
+                'role'                    => $userData['role'],
+                'last_activity'           => time(),
+                'force_change_password'   => true,
+                'temp_password_expires_at'=> $expiresTs ?? null,
+            ]);
+
+            return redirect()->to('/change-password');
+        }
+
         session()->set([
             'isLoggedIn' => true,
             'userId'     => $user['id'],
@@ -232,6 +264,57 @@ class Auth extends BaseController {
         $this->applyRememberMeCookies($rememberMe, $email);
 
         return redirect()->to('/dashboard');
+    }
+
+    public function changePassword()
+    {
+        if (!session()->get('isLoggedIn') || !session()->get('force_change_password')) {
+            return redirect()->to(session()->get('isLoggedIn') ? '/dashboard' : '/login');
+        }
+
+        return view('auth/change_password', [
+            'tempPasswordExpiresAt' => session()->get('temp_password_expires_at'),
+        ]);
+    }
+
+    public function processChangePassword()
+    {
+        if (!session()->get('isLoggedIn') || !session()->get('force_change_password')) {
+            return redirect()->to('/login');
+        }
+
+        $newPassword     = (string) $this->request->getPost('password');
+        $confirmPassword = (string) $this->request->getPost('confirm_password');
+
+        if (strlen($newPassword) < 8) {
+            return redirect()->back()->with('error', 'Password must be at least 8 characters long.');
+        }
+
+        if ($newPassword !== $confirmPassword) {
+            return redirect()->back()->with('error', 'Passwords do not match.');
+        }
+
+        $uid = (string) session()->get('userId');
+
+        try {
+            $this->firestore->getAuth()->updateUser($uid, ['password' => $newPassword]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::processChangePassword - Firebase update failed: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to update password. Please try again.');
+        }
+
+        try {
+            $this->firestore->getDb()->collection('users')->document($uid)->set([
+                'must_change_password'     => false,
+                'temp_password_expires_at' => null,
+            ], ['merge' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::processChangePassword - Firestore update failed: ' . $e->getMessage());
+        }
+
+        session()->destroy();
+
+        return redirect()->to('/login')->with('success', 'Password changed successfully. Please log in with your new password.');
     }
 
     public function register() {

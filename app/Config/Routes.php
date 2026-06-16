@@ -19,6 +19,8 @@ $routes->get('register', 'Auth::register');
 $routes->get('auth/register', 'Auth::register');
 $routes->post('auth/processRegister', 'Auth::processRegister');
 $routes->post('auth/logout', 'Auth::logout');
+$routes->get('change-password', 'Auth::changePassword');
+$routes->post('auth/processChangePassword', 'Auth::processChangePassword');
 
 $routes->get('dashboard', 'Dashboard::index');
 

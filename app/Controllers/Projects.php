@@ -907,8 +907,9 @@ class Projects extends BaseController
 
         $rawPmId = $this->normalizeReferenceValue($personnel['project_manager_id'] ?? null);
         $rawSeId = $this->normalizeReferenceValue($personnel['site_engineer_id'] ?? null);
-        $project['pm_id_normalized'] = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
-        $project['se_id_normalized'] = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
+        $project['pm_id_normalized']  = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
+        $project['se_id_normalized']  = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
+        $project['region_resolved']   = $this->resolveRegion((string) ($project['location_label'] ?? ''));
 
         return $project;
     }

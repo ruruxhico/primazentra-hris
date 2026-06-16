@@ -48,8 +48,9 @@
                 </p>
               </div>
 
-              <p style="color:#c0392b; font-size:13px; background:#fde8e8; padding:10px 14px; border-radius:6px;">
-                &#9888; For security, you will be asked to change this password on your first login.
+              <p style="color:#c0392b; font-size:13px; background:#fde8e8; padding:10px 14px; border-radius:6px; margin:0;">
+                &#9888; This temporary password <strong>expires in 15 minutes</strong> from the time this email was sent.
+                Log in immediately and set a new password before it expires.
               </p>
 
               <!-- App Download Section -->

@@ -99,7 +99,14 @@ function rr_url(array $params): string {
         </thead>
         <tbody>
         <?php if (empty($requests)): ?>
-            <tr><td colspan="8" class="pz-table-empty">No requests found.</td></tr>
+            <?php $hasFilters = $filterStatus !== '' || $filterCategory !== '' || $filterSearch !== ''; ?>
+            <tr><td colspan="8" class="pz-table-empty <?= $hasFilters ? 'pz-table-empty--filter' : '' ?>">
+                <?php if ($hasFilters): ?>
+                    <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                <?php else: ?>
+                    No requests found.
+                <?php endif; ?>
+            </td></tr>
         <?php else: ?>
             <?php foreach ($requests as $r): ?>
             <tr>

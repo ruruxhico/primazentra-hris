@@ -119,7 +119,13 @@
             </tr></thead>
             <tbody>
                 <?php if (empty($equipment)): ?>
-                    <tr><td colspan="5" class="pz-table-empty">No equipment found. <a href="<?= base_url('resources/create?category=Equipment') ?>">Add now</a></td></tr>
+                    <tr><td colspan="5" class="pz-table-empty <?= $eqActiveCount > 0 ? 'pz-table-empty--filter' : '' ?>">
+                        <?php if ($eqActiveCount > 0): ?>
+                            <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                        <?php else: ?>
+                            No equipment found. <a href="<?= base_url('resources/create?category=Equipment') ?>">Add now</a>
+                        <?php endif; ?>
+                    </td></tr>
                 <?php else: ?>
                     <?php foreach ($equipment as $index => $item): ?>
                     <tr>
@@ -189,7 +195,13 @@
             <tbody>
                 <?php $tools = $tools ?? []; ?>
                 <?php if (empty($tools)): ?>
-                    <tr><td colspan="5" class="pz-table-empty">No tools found. <a href="<?= base_url('resources/create?category=Tools') ?>">Add now</a></td></tr>
+                    <tr><td colspan="5" class="pz-table-empty <?= $toolsActiveCount > 0 ? 'pz-table-empty--filter' : '' ?>">
+                        <?php if ($toolsActiveCount > 0): ?>
+                            <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                        <?php else: ?>
+                            No tools found. <a href="<?= base_url('resources/create?category=Tools') ?>">Add now</a>
+                        <?php endif; ?>
+                    </td></tr>
                 <?php else: ?>
                     <?php foreach ($tools as $index => $item): ?>
                     <tr>
@@ -286,10 +298,18 @@
             </tr></thead>
             <tbody>
                 <?php if (empty($manpower)): ?>
-                    <tr><td colspan="8" class="pz-table-empty">No manpower records found. <a href="<?= base_url('resources/create?category=Manpower') ?>">Add now</a></td></tr>
+                    <tr><td colspan="8" class="pz-table-empty <?= $mpActiveCount > 0 ? 'pz-table-empty--filter' : '' ?>">
+                        <?php if ($mpActiveCount > 0): ?>
+                            <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                        <?php else: ?>
+                            No manpower records found. <a href="<?= base_url('resources/create?category=Manpower') ?>">Add now</a>
+                        <?php endif; ?>
+                    </td></tr>
                 <?php else: ?>
                     <?php foreach ($manpower as $index => $person): ?>
-                    <tr>
+                    <tr data-role="<?= esc(strtolower((string)($person['manpower_details']['role'] ?? ''))) ?>"
+                        data-spec="<?= esc(strtolower((string)($person['manpower_details']['specialization'] ?? ''))) ?>"
+                        data-status="<?= esc(strtolower((string)($person['status'] ?? ''))) ?>">
                         <td class="pz-row-num"><?= $mpOffset + $index + 1 ?></td>
                         <td class="pz-row-name"><?= esc((string)($person['name'] ?? 'N/A')) ?></td>
                         <td><?= esc((string)($person['manpower_details']['role'] ?? 'N/A')) ?></td>
@@ -310,6 +330,11 @@
                         </td>
                     </tr>
                     <?php endforeach; ?>
+                    <tr id="mpFilterNoResults" style="display:none">
+                        <td colspan="8" class="pz-table-empty pz-table-empty--filter">
+                            <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                        </td>
+                    </tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -355,15 +380,36 @@
         wireSortChips('eqFilterForm',    'eqSortInput');
         wireSortChips('toolsFilterForm', 'toolsSortInput');
 
-        // Manpower filter chips
+        // Manpower filter chips — real-time client-side
         const mpForm = document.getElementById('mpFilterForm');
+        const mpTable = document.querySelector('#manpower table');
         if (mpForm) {
+            function applyMpFilter() {
+                const roleF   = (document.getElementById('mpRoleInput')   ? document.getElementById('mpRoleInput').value.toLowerCase()   : '');
+                const specF   = (document.getElementById('mpSpecInput')   ? document.getElementById('mpSpecInput').value.toLowerCase()   : '');
+                const statusF = (document.getElementById('mpStatusInput') ? document.getElementById('mpStatusInput').value.toLowerCase() : '');
+                let visible = 0;
+                mpTable && mpTable.querySelectorAll('tbody tr[data-role]').forEach(function (row) {
+                    const show = (!roleF   || (row.dataset.role   || '').toLowerCase() === roleF)   &&
+                                 (!specF   || (row.dataset.spec   || '').toLowerCase() === specF)   &&
+                                 (!statusF || (row.dataset.status || '').toLowerCase().includes(statusF));
+                    row.style.display = show ? '' : 'none';
+                    if (show) visible++;
+                });
+                const noRow = document.getElementById('mpFilterNoResults');
+                if (noRow) noRow.style.display = visible === 0 ? '' : 'none';
+            }
+
             function wireMpChips(selector, hiddenId) {
                 const inp = document.getElementById(hiddenId);
-                mpForm.querySelectorAll(selector).forEach(chip => {
+                mpForm.querySelectorAll(selector).forEach(function (chip) {
                     chip.addEventListener('click', function () {
-                        inp.value = inp.value === this.dataset.val ? '' : this.dataset.val;
-                        mpForm.submit();
+                        const same = inp && inp.value === this.dataset.val;
+                        if (inp) inp.value = same ? '' : this.dataset.val;
+                        mpForm.querySelectorAll(selector).forEach(function (c) {
+                            c.classList.toggle('active', !same && c.dataset.val === chip.dataset.val);
+                        });
+                        applyMpFilter();
                     });
                 });
             }

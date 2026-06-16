@@ -117,11 +117,18 @@
         </thead>
         <tbody>
             <?php if (empty($staff)): ?>
-                <tr><td colspan="7" class="pz-table-empty">No staff members found. <a href="<?= base_url('staff/create') ?>">Add one now</a></td></tr>
+                <?php $hasFilters = !empty($af['ln_range']) || !empty($af['role_filter']); ?>
+                <tr><td colspan="7" class="pz-table-empty <?= $hasFilters ? 'pz-table-empty--filter' : '' ?>">
+                    <?php if ($hasFilters): ?>
+                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                    <?php else: ?>
+                        No staff members found. <a href="<?= base_url('staff/create') ?>">Add one now</a>
+                    <?php endif; ?>
+                </td></tr>
             <?php else: ?>
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($staff as $index => $person): ?>
-                <tr>
+                <tr data-ln="<?= esc(strtolower(substr((string)($person['last_name'] ?? ''), 0, 1))) ?>" data-role="<?= esc(strtolower((string)($person['role'] ?? ''))) ?>">
                     <td class="pz-row-num"><?= $offset + $index + 1 ?></td>
                     <td class="pz-row-name"><?= esc((string)($person['last_name'] ?? 'N/A')) ?></td>
                     <td><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
@@ -141,6 +148,11 @@
                     </td>
                 </tr>
                 <?php endforeach; ?>
+                <tr id="staffFilterNoResults" style="display:none">
+                    <td colspan="7" class="pz-table-empty pz-table-empty--filter">
+                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
+                    </td>
+                </tr>
             <?php endif; ?>
         </tbody>
     </table>
@@ -190,15 +202,39 @@ document.addEventListener('DOMContentLoaded', function () {
         <?php if ($activeCount > 0): ?>filterPanel.classList.add('open');<?php endif; ?>
         filterToggleBtn.addEventListener('click', () => filterPanel.classList.toggle('open'));
     }
-    filterForm && filterForm.querySelectorAll('select').forEach(sel => {
-        sel.addEventListener('change', () => filterForm.submit());
+    const lnRangeInput = document.getElementById('lnRangeInput');
+
+    function applyStaffFilter() {
+        var lnRange    = lnRangeInput ? lnRangeInput.value : '';
+        var roleSel    = filterForm ? filterForm.querySelector('select[name="role_filter"]') : null;
+        var roleFilter = roleSel ? roleSel.value.toLowerCase() : '';
+        var visible    = 0;
+        table && table.querySelectorAll('tbody tr[data-ln]').forEach(function (row) {
+            var show = true;
+            if (lnRange) {
+                var parts = lnRange.toLowerCase().split('-');
+                if (parts.length === 2) { var ln = row.dataset.ln || ''; show = ln >= parts[0] && ln <= parts[1]; }
+            }
+            if (roleFilter) show = show && (row.dataset.role || '') === roleFilter;
+            row.style.display = show ? '' : 'none';
+            if (show) visible++;
+        });
+        var noRow = document.getElementById('staffFilterNoResults');
+        if (noRow) noRow.style.display = visible === 0 ? '' : 'none';
+    }
+
+    filterForm && filterForm.querySelectorAll('select').forEach(function (sel) {
+        sel.addEventListener('change', applyStaffFilter);
     });
 
-    const lnRangeInput = document.getElementById('lnRangeInput');
-    filterForm && filterForm.querySelectorAll('.pz-chip[data-range]').forEach(chip => {
+    filterForm && filterForm.querySelectorAll('.pz-chip[data-range]').forEach(function (chip) {
         chip.addEventListener('click', function () {
-            lnRangeInput.value = lnRangeInput.value === this.dataset.range ? '' : this.dataset.range;
-            filterForm.submit();
+            var same = lnRangeInput && lnRangeInput.value === this.dataset.range;
+            if (lnRangeInput) lnRangeInput.value = same ? '' : this.dataset.range;
+            filterForm && filterForm.querySelectorAll('.pz-chip[data-range]').forEach(function (c) {
+                c.classList.toggle('active', !same && c.dataset.range === chip.dataset.range);
+            });
+            applyStaffFilter();
         });
     });
 

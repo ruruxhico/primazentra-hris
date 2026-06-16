@@ -415,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (visibleCols.length > 0) anyVisible = true;
         });
         var noResults = document.getElementById('dbNoResults');
-        if (noResults) noResults.style.display = anyVisible ? 'none' : '';
+        if (noResults) noResults.style.display = anyVisible ? 'none' : 'block';
     }
 
     function bindPills(containerId, getValue, setter) {

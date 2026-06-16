@@ -107,14 +107,14 @@ $sourceKnown        = !empty($req['source_project_id']);
 <div class="pz-card">
     <p class="pz-card-section">Reserved Resources</p>
     <?php if (empty($reserved)): ?>
-        <p style="font-size:.82rem; color:#7a6040; margin:0">No resources reserved yet. Approval will lock source items before transfer.</p>
+        <p style="font-size:1rem; color:#7a6040; margin:0">No resources reserved yet. Approval will lock source items before transfer.</p>
     <?php else: ?>
         <?php foreach ($reserved as $res): ?>
         <div style="display:flex; align-items:center; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid #f0e8d0;">
             <div>
-                <div style="font-weight:700; font-size:.84rem; color:#2c1a00"><?= esc(is_array($res) ? ($res['name'] ?? $res['id'] ?? '') : $res) ?></div>
+                <div style="font-weight:700; font-size:1rem; color:#2c1a00"><?= esc(is_array($res) ? ($res['name'] ?? $res['id'] ?? '') : $res) ?></div>
                 <?php if (is_array($res) && !empty($res['matched_by'])): ?>
-                <div style="font-size:.74rem; color:#9a7b3a">Matched by: <?= esc($res['matched_by']) ?></div>
+                <div style="font-size:1rem; color:#9a7b3a">Matched by: <?= esc($res['matched_by']) ?></div>
                 <?php endif; ?>
             </div>
             <span class="pz-badge pz-badge-pending">Pending</span>
@@ -129,7 +129,7 @@ $sourceKnown        = !empty($req['source_project_id']);
     <p class="pz-card-section">Approval</p>
 
     <?php if ($isPendingSecondary): ?>
-        <p style="font-size:.82rem; color:#5a4020; margin-bottom:.85rem">
+        <p style="font-size:1rem; color:#5a4020; margin-bottom:.85rem">
             Primary approval done — awaiting secondary approval.
             Approved source: <strong><?= esc($req['approved_source_project_name'] ?? '—') ?></strong>
         </p>
@@ -165,12 +165,12 @@ $sourceKnown        = !empty($req['source_project_id']);
             <input type="hidden" name="approved_source_project_id" value="<?= esc($req['source_project_id']) ?>">
             <div class="pz-form-group" style="max-width:340px; margin-bottom:.85rem">
                 <label>Approved source</label>
-                <div style="font-weight:700; font-size:.86rem; color:#2c1a00; padding:.4rem 0"><?= esc($sourceName) ?></div>
+                <div style="font-weight:700; font-size:1rem; color:#2c1a00; padding:.4rem 0"><?= esc($sourceName) ?></div>
             </div>
             <?php endif; ?>
 
             <?php if ($role === 'Admin'): ?>
-            <label style="display:flex; align-items:center; gap:.5rem; font-size:.8rem; color:#7a6040; margin-bottom:.85rem; cursor:pointer">
+            <label style="display:flex; align-items:center; gap:.5rem; font-size:1rem; color:#7a6040; margin-bottom:.85rem; cursor:pointer">
                 <input type="checkbox" name="bypass_secondary" value="1">
                 Admin bypasses secondary approval and approves immediately
             </label>

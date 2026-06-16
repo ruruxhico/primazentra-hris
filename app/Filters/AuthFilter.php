@@ -8,9 +8,7 @@ use CodeIgniter\HTTP\ResponseInterface;
 
 class AuthFilter implements FilterInterface
 {
-    // Inactivity limits — no activity for this long = auto-logout
-    private const TIMEOUT_DEFAULT     = 14 * 60 * 60;       // 14 hours (covers 7am–8pm office hours + buffer)
-    private const TIMEOUT_REMEMBER_ME = 30 * 24 * 60 * 60;  // 30 days  (remember me users)
+    private const TIMEOUT_DEFAULT = 15 * 60; // 15 minutes of inactivity
 
     public function before(RequestInterface $request, $arguments = null)
     {
@@ -26,19 +24,18 @@ class AuthFilter implements FilterInterface
             return redirect()->to('/auth/login')->with('error', 'Your session has expired. Please log in again.');
         }
 
-        $isRememberMe = $request->getCookie('remember_me') === '1';
-        $timeout      = $isRememberMe ? self::TIMEOUT_REMEMBER_ME : self::TIMEOUT_DEFAULT;
-
-        if ((time() - $lastActivity) > $timeout) {
+        if ((time() - $lastActivity) > self::TIMEOUT_DEFAULT) {
             session()->destroy();
-            $message = $isRememberMe
-                ? 'Your session has expired after 30 days of inactivity. Please log in again.'
-                : 'Your session has expired after 8 hours of inactivity. Please log in again.';
-            return redirect()->to('/auth/login')->with('error', $message);
+            return redirect()->to('/auth/login')->with('error', 'Your session has expired after 15 minutes of inactivity. Please log in again.');
         }
 
         // Sliding window — reset inactivity clock on every page visit
         session()->set('last_activity', time());
+
+        // If user must change their temporary password, redirect to change-password page
+        if (session()->get('force_change_password')) {
+            return redirect()->to('/change-password');
+        }
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)
