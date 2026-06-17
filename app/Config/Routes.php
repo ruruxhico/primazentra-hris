@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use CodeIgniter\Router\RouteCollection;
 
@@ -96,7 +96,13 @@ $routes->post('staff/delete', 'Staff::delete');
 // Backwards-compatible GET delete (optional) - keeps previous behavior when called with segment
 $routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
 
-// Account verification (no auth middleware — user isn't logged in yet)
+<<<<<<< HEAD
+// Account verification (no auth middleware â€” user isn't logged in yet)
 $routes->get('verify-account/(:segment)',  'VerifyAccount::showForm/$1');
 $routes->post('verify-account/(:segment)', 'VerifyAccount::setPassword/$1');
 $routes->get('verification-success',       'VerifyAccount::verificationSuccess');
+=======
+// Trash (soft-delete restore/permanent-delete)
+$routes->post('trash/restore', 'Trash::restore');
+$routes->post('trash/permanent-delete', 'Trash::permanentDelete');
+>>>>>>> worktree-agent-a244a87bff7533231

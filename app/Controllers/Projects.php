@@ -3,10 +3,8 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
-use App\Libraries\StorageService;
+use App\Libraries\TrashService;
 use App\Models\Model_Users;
-use App\Models\Model_Resources;
-use App\Models\Model_Manpower;
 use Config\GoogleMaps;
 
 class Projects extends BaseController
@@ -103,14 +101,17 @@ class Projects extends BaseController
             $offset        = ($currentPage - 1) * $perPage;
             $pagedProjects = array_slice($projects, $offset, $perPage);
 
+            $trashService    = new TrashService($this->firestore);
+            $recentlyDeleted = $trashService->getTrashItems('project');
+
             $data = [
-                'pageTitle'     => 'Projects',
-                'activePage'    => 'projects',
-                'projects'      => $pagedProjects,
-                'pagerOffset'   => $offset,
-                'pmOptions'     => $pmOptions,
-                'seOptions'     => $seOptions,
-                'activeFilters' => [
+                'pageTitle'       => 'Projects',
+                'activePage'      => 'projects',
+                'projects'        => $pagedProjects,
+                'pagerOffset'     => $offset,
+                'pmOptions'       => $pmOptions,
+                'seOptions'       => $seOptions,
+                'activeFilters'   => [
                     'status' => $filterStatus,
                     'region' => $filterRegion,
                     'pm_id'  => $filterPm,
@@ -118,8 +119,9 @@ class Projects extends BaseController
                     'type'   => $filterType,
                     'sort'   => $filterSort,
                 ],
-                'userName' => session()->get('userName') ?? 'User',
-                'role'     => session()->get('role') ?? 'Staff',
+                'recentlyDeleted' => $recentlyDeleted,
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
             ];
 
             return view('projects/projects_view', $data);
@@ -127,16 +129,17 @@ class Projects extends BaseController
             log_message('error', 'Projects::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle'     => 'Projects',
-                'activePage'    => 'projects',
-                'projects'      => [],
-                'pagerOffset'   => 0,
-                'pmOptions'     => [],
-                'seOptions'     => [],
-                'activeFilters' => [],
-                'userName'      => session()->get('userName') ?? 'User',
-                'role'          => session()->get('role') ?? 'Staff',
-                'error'         => 'Unable to fetch projects',
+                'pageTitle'       => 'Projects',
+                'activePage'      => 'projects',
+                'projects'        => [],
+                'pagerOffset'     => 0,
+                'pmOptions'       => [],
+                'seOptions'       => [],
+                'activeFilters'   => [],
+                'recentlyDeleted' => [],
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
+                'error'           => 'Unable to fetch projects',
             ];
 
             return view('projects/projects_view', $data);
@@ -154,7 +157,6 @@ class Projects extends BaseController
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
-                $projectData['attachments'] = $this->uploadAttachments($projectId);
                 $projectData['created_at'] = time();
                 $projectData['updated_at'] = time();
 
@@ -180,10 +182,6 @@ class Projects extends BaseController
                 if ($this->request->getPost('add_tasks_now')) {
                     $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
                     $this->writeTasksFlat($projectId, $flatTasks);
-                }
-
-                if ($this->request->getPost('add_resources_now')) {
-                    return redirect()->to('projects/' . $projectId . '/resources');
                 }
 
                 return redirect()->to('projects')->with('success', 'Project created successfully!');
@@ -224,10 +222,6 @@ class Projects extends BaseController
                 $projectData['created_at'] = $existing['created_at'] ?? time();
                 $projectData['updated_at'] = time();
 
-                $existingAttachments = is_array($existing['attachments'] ?? null) ? $existing['attachments'] : [];
-                $newAttachments      = $this->uploadAttachments($id);
-                $projectData['attachments'] = array_merge($existingAttachments, $newAttachments);
-
                 // If user did not opt to add/update tasks now, preserve existing overall progress
                 $addTasksNow = (bool) $this->request->getPost('add_tasks_now');
                 if (!$addTasksNow) {
@@ -247,10 +241,6 @@ class Projects extends BaseController
                 if ($addTasksNow) {
                     $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
                     $this->writeTasksFlat($id, $flatTasks);
-                }
-
-                if ($this->request->getPost('add_resources_now')) {
-                    return redirect()->to('projects/' . $id . '/resources');
                 }
 
                 return redirect()->to('projects')->with('success', 'Project updated successfully!');
@@ -290,6 +280,29 @@ class Projects extends BaseController
                     return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
                 }
 
+                // Snapshot project data before deletion
+                $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = (string) ($data['project_name'] ?? $id);
+
+                // Read tasks subcollection with __id preserved
+                $tasks = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('tasks')->documents() as $tDoc) {
+                    if ($tDoc->exists()) $tasks[] = ['__id' => $tDoc->id()] + $tDoc->data();
+                }
+                // Read milestones subcollection with __id preserved
+                $milestones = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                    if ($mDoc->exists()) $milestones[] = ['__id' => $mDoc->id()] + $mDoc->data();
+                }
+
+                // Move to trash before hard-deleting
+                (new TrashService($this->firestore))->moveToTrash(
+                    'project', $id, $name, $data,
+                    ['tasks' => $tasks, 'milestones' => $milestones],
+                    session()->get('userName')
+                );
+
                 $this->deleteProjectTasks($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
 
@@ -298,6 +311,29 @@ class Projects extends BaseController
 
             // GET fallback when id passed as parameter
             if ($id) {
+                // Snapshot project data before deletion
+                $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = (string) ($data['project_name'] ?? $id);
+
+                // Read tasks subcollection with __id preserved
+                $tasks = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('tasks')->documents() as $tDoc) {
+                    if ($tDoc->exists()) $tasks[] = ['__id' => $tDoc->id()] + $tDoc->data();
+                }
+                // Read milestones subcollection with __id preserved
+                $milestones = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                    if ($mDoc->exists()) $milestones[] = ['__id' => $mDoc->id()] + $mDoc->data();
+                }
+
+                // Move to trash before hard-deleting
+                (new TrashService($this->firestore))->moveToTrash(
+                    'project', $id, $name, $data,
+                    ['tasks' => $tasks, 'milestones' => $milestones],
+                    session()->get('userName')
+                );
+
                 $this->deleteProjectTasks($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
                 return redirect()->to('projects')->with('success', 'Project deleted successfully!');
@@ -335,270 +371,6 @@ class Projects extends BaseController
         }
     }
 
-    public function resources(string $id)
-    {
-        try {
-            $project = $this->getProjectById($id);
-            if (!$project) {
-                return redirect()->to('projects')->with('error', 'Project not found');
-            }
-
-            $db = $this->firestore->getDb();
-
-            // Load all assignments for this project
-            $assigned = [];
-            foreach ($db->collection('project')->document($id)->collection('assigned_resources')->documents() as $doc) {
-                if ($doc->exists()) {
-                    $d = $doc->data();
-                    $d['assignment_id'] = $doc->id();
-                    $assigned[] = $d;
-                }
-            }
-
-            // Quick-lookup sets
-            $assignedManpowerIds = [];
-            $equipmentAssignedCounts = [];
-            $toolAssignedCounts = [];
-            foreach ($assigned as $a) {
-                if (($a['type'] ?? '') === 'manpower') {
-                    $assignedManpowerIds[$a['ref_id']] = $a['assignment_id'];
-                } elseif (($a['type'] ?? '') === 'equipment') {
-                    $equipmentAssignedCounts[$a['ref_id']] = ($equipmentAssignedCounts[$a['ref_id']] ?? 0) + 1;
-                } elseif (($a['type'] ?? '') === 'tools') {
-                    $toolAssignedCounts[$a['ref_id']] = ($toolAssignedCounts[$a['ref_id']] ?? 0) + 1;
-                }
-            }
-
-            // Resources
-            $resourceModel = new Model_Resources();
-            $allEquipment  = $resourceModel->getEquipment();
-            $allTools      = $resourceModel->getTools();
-
-            // Manpower
-            $manpowerModel = new Model_Manpower();
-            $allManpower   = [];
-            try {
-                $allManpower = $manpowerModel->getAllManpower();
-            } catch (\Throwable $e) {
-                log_message('warning', 'Projects::resources manpower fetch - ' . $e->getMessage());
-            }
-
-            // Partition assigned for the "Currently Assigned" panel
-            $assignedManpower  = array_values(array_filter($assigned, fn($a) => ($a['type'] ?? '') === 'manpower'));
-            $assignedEquipment = array_values(array_filter($assigned, fn($a) => ($a['type'] ?? '') === 'equipment'));
-            $assignedTools     = array_values(array_filter($assigned, fn($a) => ($a['type'] ?? '') === 'tools'));
-
-            // Group equipment/tools by ref_id for display counts
-            $assignedEqGroups = [];
-            foreach (array_merge($assignedEquipment, $assignedTools) as $a) {
-                $rid = $a['ref_id'];
-                if (!isset($assignedEqGroups[$rid])) {
-                    $assignedEqGroups[$rid] = ['name' => $a['name'], 'count' => 0];
-                }
-                $assignedEqGroups[$rid]['count']++;
-            }
-
-            // Fetch item stats (total qty, available) for each equipment and tool
-            $resourceItemStats = [];
-            foreach (array_merge($allEquipment, $allTools) as $res) {
-                $total = 0; $available = 0;
-                foreach ($db->collection('resource')->document($res['id'])->collection('items')->documents() as $itemDoc) {
-                    if ($itemDoc->exists()) {
-                        $total++;
-                        if (($itemDoc->data()['status'] ?? '') === 'Available') $available++;
-                    }
-                }
-                $resourceItemStats[$res['id']] = ['total' => $total, 'available' => $available];
-            }
-
-            return view('projects/project_resources', [
-                'pageTitle'               => 'Resources',
-                'activePage'              => 'projects',
-                'project'                 => $project,
-                'projectId'               => $id,
-                'assignedManpower'        => $assignedManpower,
-                'assignedEqGroups'        => $assignedEqGroups,
-                'allManpower'             => $allManpower,
-                'allEquipment'            => $allEquipment,
-                'allTools'                => $allTools,
-                'assignedManpowerIds'     => $assignedManpowerIds,
-                'equipmentAssignedCounts' => $equipmentAssignedCounts,
-                'toolAssignedCounts'      => $toolAssignedCounts,
-                'resourceItemStats'       => $resourceItemStats,
-                'userName'                => session()->get('userName') ?? 'User',
-                'role'                    => session()->get('role') ?? 'Staff',
-            ]);
-        } catch (\Exception $e) {
-            log_message('error', 'Projects::resources - ' . $e->getMessage());
-            return redirect()->to('projects/show/' . $id)->with('error', 'Unable to load resources');
-        }
-    }
-
-    public function assignResource(string $id)
-    {
-        try {
-            $type     = (string) ($this->request->getPost('type')      ?? '');
-            $refId    = (string) ($this->request->getPost('ref_id')    ?? '');
-            $name     = (string) ($this->request->getPost('name')      ?? '');
-            $unitId   = (string) ($this->request->getPost('unit_id')   ?? '') ?: null;
-            $unitName = (string) ($this->request->getPost('unit_name') ?? '') ?: null;
-
-            if (!$type || !$refId) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Missing required fields']);
-            }
-
-            $db         = $this->firestore->getDb();
-            $projectRef = $db->collection('project')->document($id);
-
-            $projectSnap = $projectRef->snapshot();
-            if (!$projectSnap->exists()) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Project not found']);
-            }
-
-            $projectName = (string) ($projectSnap->get('project_name') ?? '');
-
-            $assignRef = $projectRef->collection('assigned_resources')->add([
-                'type'        => $type,
-                'ref_id'      => $refId,
-                'name'        => $name,
-                'unit_id'     => $unitId,
-                'unit_name'   => $unitName,
-                'assigned_at' => time(),
-            ]);
-
-            if ($type === 'manpower') {
-                $db->collection('manpower')->document($refId)->set([
-                    'status'              => 'Unavailable',
-                    'assigned_project_id' => $id,
-                    'current_site'        => $projectName,
-                ], ['merge' => true]);
-            } elseif (in_array($type, ['equipment', 'tools'], true) && $unitId) {
-                $db->collection('resource')->document($refId)
-                    ->collection('items')->document($unitId)
-                    ->set(['status' => 'In-Use', 'assigned_project_id' => $id], ['merge' => true]);
-            }
-
-            return $this->response->setJSON(['success' => true, 'assignment_id' => $assignRef->id()]);
-        } catch (\Exception $e) {
-            log_message('error', 'Projects::assignResource - ' . $e->getMessage());
-            return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign resource']);
-        }
-    }
-
-    public function unassignResource(string $id)
-    {
-        try {
-            $assignmentId = (string) ($this->request->getPost('assignment_id') ?? '');
-            if (!$assignmentId) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Missing assignment_id']);
-            }
-
-            $db         = $this->firestore->getDb();
-            $projectRef = $db->collection('project')->document($id);
-            $assignSnap = $projectRef->collection('assigned_resources')->document($assignmentId)->snapshot();
-
-            if (!$assignSnap->exists()) {
-                return $this->response->setJSON(['success' => false, 'message' => 'Assignment not found']);
-            }
-
-            $a = $assignSnap->data();
-            $projectRef->collection('assigned_resources')->document($assignmentId)->delete();
-
-            if (($a['type'] ?? '') === 'manpower') {
-                $db->collection('manpower')->document($a['ref_id'])->set([
-                    'status'              => 'Available',
-                    'assigned_project_id' => null,
-                    'current_site'        => null,
-                ], ['merge' => true]);
-            } elseif (in_array($a['type'] ?? '', ['equipment', 'tools'], true) && !empty($a['unit_id'])) {
-                $db->collection('resource')->document($a['ref_id'])
-                    ->collection('items')->document($a['unit_id'])
-                    ->set(['status' => 'Available', 'assigned_project_id' => null], ['merge' => true]);
-            }
-
-            return $this->response->setJSON(['success' => true]);
-        } catch (\Exception $e) {
-            log_message('error', 'Projects::unassignResource - ' . $e->getMessage());
-            return $this->response->setJSON(['success' => false, 'message' => 'Failed to unassign resource']);
-        }
-    }
-
-    public function getEquipmentUnits(string $projectId, string $resourceId)
-    {
-        try {
-            $db    = $this->firestore->getDb();
-            $items = [];
-
-            foreach ($db->collection('resource')->document($resourceId)->collection('items')->documents() as $doc) {
-                if ($doc->exists()) {
-                    $d       = $doc->data();
-                    $d['id'] = $doc->id();
-                    $items[] = $d;
-                }
-            }
-
-            // Which units are already assigned to this project
-            $assignedUnits = [];
-            foreach ($db->collection('project')->document($projectId)->collection('assigned_resources')->documents() as $doc) {
-                if ($doc->exists()) {
-                    $a = $doc->data();
-                    if (($a['ref_id'] ?? '') === $resourceId && !empty($a['unit_id'])) {
-                        $assignedUnits[$a['unit_id']] = $doc->id();
-                    }
-                }
-            }
-
-            foreach ($items as &$item) {
-                $item['assignment_id']           = $assignedUnits[$item['id']] ?? null;
-                $item['assigned_to_this_project'] = isset($assignedUnits[$item['id']]);
-            }
-            unset($item);
-
-            return $this->response->setJSON(['success' => true, 'items' => $items, 'resource_id' => $resourceId]);
-        } catch (\Exception $e) {
-            log_message('error', 'Projects::getEquipmentUnits - ' . $e->getMessage());
-            return $this->response->setJSON(['success' => false, 'message' => 'Failed to fetch units']);
-        }
-    }
-
-    private function uploadAttachments(string $projectId): array
-    {
-        $files = $this->request->getFileMultiple('attachments') ?? [];
-        if (empty($files)) return [];
-
-        $results = [];
-        try {
-            $storage = new StorageService();
-
-            foreach ($files as $file) {
-                if (!$file instanceof \CodeIgniter\HTTP\Files\UploadedFile) continue;
-                if (!$file->isValid() || $file->hasMoved()) continue;
-                if ($file->getError() !== UPLOAD_ERR_OK) continue;
-
-                $original  = $file->getClientName();
-                $mime      = $file->getMimeType();
-                $size      = $file->getSize();
-                $safeName  = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $original);
-                $storePath = "projects/{$projectId}/attachments/{$safeName}";
-
-                $url = $storage->upload($file->getTempName(), $storePath, $mime);
-
-                $results[] = [
-                    'name'        => $original,
-                    'path'        => $storePath,
-                    'url'         => $url,
-                    'size'        => $size,
-                    'type'        => $mime,
-                    'uploaded_at' => time(),
-                ];
-            }
-        } catch (\Throwable $e) {
-            log_message('error', 'Projects::uploadAttachments - ' . $e->getMessage());
-        }
-
-        return $results;
-    }
-
     private function buildProjectPayload(): array
     {
         $projectName = trim((string) $this->request->getPost('project_name'));
@@ -611,7 +383,6 @@ class Projects extends BaseController
 
         return [
             'project_name' => $projectName,
-            'client_name'  => trim((string) $this->request->getPost('client_name')),
             'project_type' => $projectType,
             'status' => $status,
             'budget' => $budget,
@@ -907,9 +678,8 @@ class Projects extends BaseController
 
         $rawPmId = $this->normalizeReferenceValue($personnel['project_manager_id'] ?? null);
         $rawSeId = $this->normalizeReferenceValue($personnel['site_engineer_id'] ?? null);
-        $project['pm_id_normalized']  = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
-        $project['se_id_normalized']  = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
-        $project['region_resolved']   = $this->resolveRegion((string) ($project['location_label'] ?? ''));
+        $project['pm_id_normalized'] = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
+        $project['se_id_normalized'] = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
 
         return $project;
     }

@@ -15,27 +15,76 @@
         </div>
         <div class="confirm-actions">
             <button id="confirmCancel" class="btn-toolbar">Cancel</button>
-            <button id="confirmOk" class="btn-toolbar btn-add">Delete</button>
+            <button id="confirmOk" class="btn-toolbar btn-add">OK</button>
         </div>
     </div>
 </div>
 
-<div class="pz-page-header">
+<div class="resource-header">
     <h1>Staff</h1>
 </div>
 
 <?php if (session()->getFlashdata('success')): ?>
-    <div class="pz-alert pz-alert-success">
-        <span class="material-symbols-outlined" style="font-size:1rem">check_circle</span>
-        <?= session()->getFlashdata('success') ?>
-    </div>
+    <div class="alert-success">✓ <?= session()->getFlashdata('success') ?></div>
 <?php endif; ?>
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="pz-alert pz-alert-error">
-        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
-        <?= session()->getFlashdata('error') ?>
-    </div>
+    <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
+
+<style>
+.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
+.filter-rows  { display:flex; flex-direction:column; gap:12px; }
+.filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.filter-row label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; min-width:80px; }
+.filter-row select { padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; background:#fff; }
+.ln-ranges    { display:flex; flex-wrap:wrap; gap:6px; }
+.ln-chip      { padding:4px 10px; border:1px solid #ccc; border-radius:4px; font-size:12px; font-weight:600; cursor:pointer; background:#fff; color:#444; transition:background .15s,color .15s,border-color .15s; }
+.ln-chip:hover   { border-color:#8C701C; color:#8C701C; }
+.ln-chip.active  { background:#8C701C; color:#fff; border-color:#8C701C; }
+.filter-footer   { display:flex; align-items:center; gap:10px; margin-top:14px; }
+.filter-badge    { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
+
+/* Checkbox column */
+.pz-col-check { width: 36px; text-align: center; }
+.pz-col-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #c8a951; }
+
+/* Bulk action bar */
+.bulk-action-bar {
+    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+    background: #3a2a0a; color: #fff; border-radius: 30px;
+    padding: 0.65rem 1.2rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 200;
+    animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.bulk-count { font-size: 0.88rem; font-weight: 600; }
+.bulk-delete-btn {
+    display: flex; align-items: center; gap: 0.3rem;
+    background: #e53e3e; color: #fff; border: none; border-radius: 20px;
+    padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.bulk-delete-btn:hover { background: #c53030; }
+.bulk-delete-btn .material-symbols-outlined { font-size: 16px; }
+
+/* Recently Deleted section */
+.recently-deleted-wrap { margin-top: 1.5rem; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
+.rd-toggle-btn {
+    width: 100%; display: flex; align-items: center; gap: 0.5rem;
+    background: #fdf8ee; border: none; padding: 0.75rem 1rem;
+    font-size: 0.88rem; font-weight: 700; color: #5c3d11; cursor: pointer;
+    font-family: inherit; text-align: left;
+}
+.rd-toggle-btn:hover { background: #f5e7b2; }
+.rd-toggle-btn .material-symbols-outlined { font-size: 18px; color: #8c701c; }
+.rd-chevron { margin-left: auto; transition: transform 0.2s; }
+.rd-badge {
+    background: #e53e3e; color: #fff; border-radius: 10px;
+    font-size: 0.72rem; font-weight: 800; padding: 0.1rem 0.45rem; line-height: 1.4;
+}
+.rd-panel { padding: 0.75rem 1rem; background: #fff; }
+.rd-empty { color: #aaa; font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+.rd-table { font-size: 0.84rem; }
+</style>
 
 <?php
     $activeFilters = $activeFilters ?? [];
@@ -45,46 +94,44 @@
 ?>
 
 <div class="page-module">
+<div class="resource-controls">
+    <input type="text" id="searchStaff" placeholder="🔍 Search staff..." class="search-input">
 
-<!-- Toolbar -->
-<div class="pz-toolbar">
-    <div class="pz-search-wrap">
-        <span class="material-symbols-outlined">search</span>
-        <input type="text" id="searchStaff" placeholder="Search staff…" class="pz-search">
-    </div>
-    <div class="pz-toolbar-right">
-        <button type="button" class="pz-btn pz-btn-outline" id="filterToggleBtn">
-            <span class="material-symbols-outlined">filter_list</span>
-            Filter<?php if ($activeCount > 0): ?><span class="pz-filter-badge"><?= $activeCount ?></span><?php endif; ?>
-        </button>
-        <a href="<?= base_url('staff/create') ?>" class="pz-btn pz-btn-primary">
-            <span class="material-symbols-outlined">add</span> Add
-        </a>
-        <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">upload</span> Import</button>
-        <button class="pz-btn pz-btn-ghost"><span class="material-symbols-outlined">download</span> Export</button>
-    </div>
+    <button type="button" class="btn btn-filter" id="filterToggleBtn">
+        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
+    </button>
+
+    <a href="<?= base_url('staff/create') ?>" class="btn btn-success">
+        + ADD
+    </a>
+
+    <button class="btn btn-import">
+        ⬇ IMPORT
+    </button>
+
+    <button class="btn btn-export">
+        ⬆ EXPORT
+    </button>
 </div>
 
 <!-- Filter Panel -->
-<div id="filterPanel" class="pz-filter-panel">
+<div id="filterPanel" class="filter-panel" style="display:none">
     <form id="filterForm" method="get" action="<?= base_url('staff') ?>">
         <input type="hidden" id="lnRangeInput" name="ln_range" value="<?= esc($af['ln_range'] ?? '') ?>">
 
-        <div style="margin-bottom:.65rem">
-            <p class="pz-filter-group" style="margin-bottom:.35rem"><label>Last Name</label></p>
-            <div class="pz-chip-row">
-                <?php foreach (['A-C','D-F','G-I','J-L','M-O','P-R','S-U','V-Z'] as $range): ?>
-                <button type="button"
-                        class="pz-chip <?= ($af['ln_range'] ?? '') === $range ? 'active' : '' ?>"
-                        data-range="<?= $range ?>"><?= $range ?></button>
-                <?php endforeach; ?>
-            </div>
-        </div>
+        <div class="filter-rows">
 
-        <div class="pz-filter-grid" style="max-width:320px">
-            <div class="pz-filter-group">
-                <label>Role</label>
-                <select name="role_filter">
+            <div class="filter-row">
+                <label>Last Name</label>
+                <div class="ln-ranges">
+                    <?php foreach (['A-C','D-F','G-I','J-L','M-O','P-R','S-U','V-Z'] as $range): ?>
+                    <button type="button"
+                            class="ln-chip <?= ($af['ln_range'] ?? '') === $range ? 'active' : '' ?>"
+                            data-range="<?= $range ?>"><?= $range ?></button>
+                    <?php endforeach; ?>
+                </div>
+                <label style="min-width:unset">Role</label>
+                <select name="role_filter" style="flex:1;min-width:120px">
                     <option value="">All Roles</option>
                     <?php foreach ($roleOptions as $r): ?>
                     <option value="<?= esc($r) ?>" <?= ($af['role_filter'] ?? '') === $r ? 'selected' : '' ?>><?= esc($r) ?></option>
@@ -92,67 +139,58 @@
                 </select>
             </div>
         </div>
-
-        <div class="pz-filter-footer">
-            <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-ghost pz-btn-sm">
-                <span class="material-symbols-outlined">restart_alt</span> Reset
-            </a>
+        <div class="filter-footer">
+            <a href="<?= base_url('staff') ?>" class="btn btn-secondary">Reset</a>
         </div>
     </form>
 </div>
 
-<!-- Table -->
-<div class="pz-table-wrap">
-    <table id="staffTable" class="pz-table">
+<!-- Staff Table -->
+<div class="table-container">
+    <table id="staffTable" class="resource-table">
         <thead>
             <tr>
-                <th>#</th>
-                <th>Last Name</th>
-                <th>First Name</th>
-                <th>Middle Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th class="center">Actions</th>
+                <th class="pz-col-check"><input type="checkbox" class="select-all-cb" title="Select all"></th>
+                <th>NO.</th>
+                <th>LAST NAME</th>
+                <th>FIRST NAME</th>
+                <th>MIDDLE NAME</th>
+                <th>EMAIL</th>
+                <th>ROLE</th>
+                <th class="text-center">ACTIONS</th>
             </tr>
         </thead>
         <tbody>
             <?php if (empty($staff)): ?>
-                <?php $hasFilters = !empty($af['ln_range']) || !empty($af['role_filter']); ?>
-                <tr><td colspan="7" class="pz-table-empty <?= $hasFilters ? 'pz-table-empty--filter' : '' ?>">
-                    <?php if ($hasFilters): ?>
-                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
-                    <?php else: ?>
+                <tr>
+                    <td colspan="8" class="empty-state">
                         No staff members found. <a href="<?= base_url('staff/create') ?>">Add one now</a>
-                    <?php endif; ?>
-                </td></tr>
+                    </td>
+                </tr>
             <?php else: ?>
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($staff as $index => $person): ?>
-                <tr data-ln="<?= esc(strtolower(substr((string)($person['last_name'] ?? ''), 0, 1))) ?>" data-role="<?= esc(strtolower((string)($person['role'] ?? ''))) ?>">
-                    <td class="pz-row-num"><?= $offset + $index + 1 ?></td>
-                    <td class="pz-row-name"><?= esc((string)($person['last_name'] ?? 'N/A')) ?></td>
-                    <td><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
-                    <td class="pz-row-muted"><?= esc((string)($person['middle_name'] ?? '—')) ?></td>
-                    <td class="pz-row-muted"><?= esc((string)($person['email'] ?? 'N/A')) ?></td>
-                    <td>
-                        <?php
-                            $role = strtolower($person['role'] ?? '');
-                            $rbc  = str_contains($role,'admin') ? 'pz-badge-rejected' : (str_contains($role,'manager') ? 'pz-badge-deployed' : (str_contains($role,'engineer') ? 'pz-badge-maintenance' : 'pz-badge-available'));
-                        ?>
-                        <span class="pz-badge <?= $rbc ?>"><?= esc((string)($person['role'] ?? 'Staff')) ?></span>
-                    </td>
-                    <td class="actions">
-                        <a href="<?= base_url('staff/show/' . $person['id']) ?>" class="pz-btn-icon" title="View"><span class="material-symbols-outlined">visibility</span></a>
-                        <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="pz-btn-icon" title="Edit"><span class="material-symbols-outlined">edit</span></a>
-                        <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="pz-btn-icon danger action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
-                    </td>
-                </tr>
+                    <tr>
+                        <td class="pz-col-check">
+                            <input type="checkbox" class="row-cb" value="<?= esc((string)$person['id']) ?>" data-name="<?= esc(trim(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>">
+                        </td>
+                        <td><?= $offset + $index + 1 ?></td>
+                        <td><strong><?= esc((string)($person['last_name'] ?? 'N/A')) ?></strong></td>
+                        <td><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($person['middle_name'] ?? 'N/A')) ?></td>
+                        <td><?= esc((string)($person['email'] ?? 'N/A')) ?></td>
+                        <td>
+                            <span class="role-badge">
+                                <?= esc((string)($person['role'] ?? 'STAFF')) ?>
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <a href="<?= base_url('staff/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                            <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                        </td>
+                    </tr>
                 <?php endforeach; ?>
-                <tr id="staffFilterNoResults" style="display:none">
-                    <td colspan="7" class="pz-table-empty pz-table-empty--filter">
-                        <span class="material-symbols-outlined" style="font-size:1.3rem;vertical-align:middle;margin-right:.3rem;opacity:.55">filter_list_off</span>No record found for the selected filter combination.
-                    </td>
-                </tr>
             <?php endif; ?>
         </tbody>
     </table>
@@ -162,26 +200,78 @@
     <?= service('pager')->links('staff', 'bootstrap_full') ?>
 </div>
 
+<!-- Bulk Action Bar -->
+<div class="bulk-action-bar" id="bulkActionBar" style="display:none">
+    <span class="bulk-count" id="bulkCount">0 selected</span>
+    <button type="button" class="bulk-delete-btn" id="bulkDeleteBtn">
+        <span class="material-symbols-outlined">delete</span> Delete Selected
+    </button>
+</div>
+
+<!-- Recently Deleted Section -->
+<?php $recentlyDeleted = $recentlyDeleted ?? []; ?>
+<div class="recently-deleted-wrap" id="recentlyDeletedWrap">
+    <button type="button" class="rd-toggle-btn" id="rdToggleBtn">
+        <span class="material-symbols-outlined">restore_from_trash</span>
+        Recently Deleted
+        <?php if (!empty($recentlyDeleted)): ?>
+        <span class="rd-badge"><?= count($recentlyDeleted) ?></span>
+        <?php endif; ?>
+        <span class="material-symbols-outlined rd-chevron">expand_more</span>
+    </button>
+    <div class="rd-panel" id="rdPanel" style="display:none">
+        <?php if (empty($recentlyDeleted)): ?>
+        <p class="rd-empty">No recently deleted items.</p>
+        <?php else: ?>
+        <table class="resource-table rd-table">
+            <thead><tr>
+                <th>Name</th>
+                <th>Deleted By</th>
+                <th>Deleted</th>
+                <th>Expires</th>
+                <th class="text-center">Actions</th>
+            </tr></thead>
+            <tbody>
+            <?php foreach ($recentlyDeleted as $rd): ?>
+            <tr data-trash-id="<?= esc($rd['id']) ?>">
+                <td><?= esc($rd['name'] ?? '—') ?></td>
+                <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
+                <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
+                <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
+                <td class="text-center" style="white-space:nowrap">
+                    <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                    <button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                </td>
+            </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div>
+</div>
+
 </div><!-- /.page-module -->
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
     const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
-    const confirmDialog  = document.getElementById('confirmDialog');
+    const confirmDialog = document.getElementById('confirmDialog');
     const confirmMessage = document.getElementById('confirmMessage');
-    const confirmOk      = document.getElementById('confirmOk');
-    const confirmCancel  = document.getElementById('confirmCancel');
-    const toast          = document.getElementById('customToast');
+    const confirmOk = document.getElementById('confirmOk');
+    const confirmCancel = document.getElementById('confirmCancel');
+    const toast = document.getElementById('customToast');
+    const DELETE_URL = '<?= base_url('staff/delete') ?>';
 
-    function showToast(msg, type) {
+    function showToast(message, type = 'info') {
         if (!toast) return;
         toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
-        toast.innerText = msg;
+        toast.innerText = message;
         setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
     }
 
     function animateRowOut(row) {
+        if (!row) return;
         const h = row.offsetHeight;
         row.style.height = h + 'px';
         row.style.overflow = 'hidden';
@@ -194,103 +284,217 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(() => row.remove(), 280);
     }
 
-    // Filter panel
+    // — Filter panel toggle —
     const filterToggleBtn = document.getElementById('filterToggleBtn');
     const filterPanel     = document.getElementById('filterPanel');
     const filterForm      = document.getElementById('filterForm');
     if (filterToggleBtn && filterPanel) {
-        <?php if ($activeCount > 0): ?>filterPanel.classList.add('open');<?php endif; ?>
-        filterToggleBtn.addEventListener('click', () => filterPanel.classList.toggle('open'));
-    }
-    const lnRangeInput = document.getElementById('lnRangeInput');
-
-    function applyStaffFilter() {
-        var lnRange    = lnRangeInput ? lnRangeInput.value : '';
-        var roleSel    = filterForm ? filterForm.querySelector('select[name="role_filter"]') : null;
-        var roleFilter = roleSel ? roleSel.value.toLowerCase() : '';
-        var visible    = 0;
-        table && table.querySelectorAll('tbody tr[data-ln]').forEach(function (row) {
-            var show = true;
-            if (lnRange) {
-                var parts = lnRange.toLowerCase().split('-');
-                if (parts.length === 2) { var ln = row.dataset.ln || ''; show = ln >= parts[0] && ln <= parts[1]; }
-            }
-            if (roleFilter) show = show && (row.dataset.role || '') === roleFilter;
-            row.style.display = show ? '' : 'none';
-            if (show) visible++;
+        <?php if ($activeCount > 0): ?>
+        filterPanel.style.display = 'block';
+        <?php endif; ?>
+        filterToggleBtn.addEventListener('click', function () {
+            filterPanel.style.display = filterPanel.style.display === 'none' ? 'block' : 'none';
         });
-        var noRow = document.getElementById('staffFilterNoResults');
-        if (noRow) noRow.style.display = visible === 0 ? '' : 'none';
     }
 
-    filterForm && filterForm.querySelectorAll('select').forEach(function (sel) {
-        sel.addEventListener('change', applyStaffFilter);
-    });
+    // — Auto-submit: role dropdown → immediate; ln chips → toggle + immediate —
+    if (filterForm) {
+        filterForm.querySelectorAll('select').forEach(function (sel) {
+            sel.addEventListener('change', function () { filterForm.submit(); });
+        });
 
-    filterForm && filterForm.querySelectorAll('.pz-chip[data-range]').forEach(function (chip) {
-        chip.addEventListener('click', function () {
-            var same = lnRangeInput && lnRangeInput.value === this.dataset.range;
-            if (lnRangeInput) lnRangeInput.value = same ? '' : this.dataset.range;
-            filterForm && filterForm.querySelectorAll('.pz-chip[data-range]').forEach(function (c) {
-                c.classList.toggle('active', !same && c.dataset.range === chip.dataset.range);
+        const lnRangeInput = document.getElementById('lnRangeInput');
+        filterForm.querySelectorAll('.ln-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                const range = this.dataset.range;
+                lnRangeInput.value = lnRangeInput.value === range ? '' : range;
+                filterForm.submit();
             });
-            applyStaffFilter();
         });
-    });
+    }
 
-    // Search
     const search = document.getElementById('searchStaff');
-    const table  = document.getElementById('staffTable');
-    search && search.addEventListener('input', function () {
-        const q = this.value.trim().toLowerCase();
-        table.querySelectorAll('tbody tr').forEach(row => {
-            row.style.display = q === '' || row.innerText.toLowerCase().includes(q) ? '' : 'none';
+    const table = document.getElementById('staffTable');
+    if (search && table) {
+        search.addEventListener('input', function () {
+            const q = this.value.trim().toLowerCase();
+            table.querySelectorAll('tbody tr').forEach(row => {
+                row.style.display = q === '' || row.innerText.toLowerCase().includes(q) ? '' : 'none';
+            });
+        });
+    }
+
+    // ── Bulk select ─────────────────────────────────────────────
+    const bulkBar     = document.getElementById('bulkActionBar');
+    const bulkCount   = document.getElementById('bulkCount');
+    const bulkDelBtn  = document.getElementById('bulkDeleteBtn');
+    const selectAllCb = document.querySelector('.select-all-cb');
+
+    function getChecked() {
+        return Array.from(document.querySelectorAll('.row-cb:checked'));
+    }
+
+    function updateBulkBar() {
+        const checked = getChecked();
+        if (bulkBar) bulkBar.style.display = checked.length > 0 ? 'flex' : 'none';
+        if (bulkCount) bulkCount.textContent = checked.length + ' selected';
+    }
+
+    selectAllCb && selectAllCb.addEventListener('change', function () {
+        document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = this.checked; });
+        updateBulkBar();
+    });
+
+    document.querySelectorAll('.row-cb').forEach(cb => {
+        cb.addEventListener('change', function () {
+            if (selectAllCb) {
+                const all = document.querySelectorAll('.row-cb');
+                selectAllCb.checked = all.length > 0 && [...all].every(c => c.checked);
+                selectAllCb.indeterminate = getChecked().length > 0 && !selectAllCb.checked;
+            }
+            updateBulkBar();
         });
     });
 
-    // Delete
-    let pendingDeleteId = null;
-    let pendingRow = null;
+    bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
+        const checked = getChecked();
+        if (!checked.length) return;
+        const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
+        pendingDeleteId = '__bulk__';
+        pendingBulkItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
+        confirmDialog.classList.add('open');
+    });
+
+    // ── Single delete ─────────────────────────────────────────────
+    let pendingDeleteId  = null;
+    let pendingRow       = null;
+    let pendingBulkItems = [];
 
     document.querySelectorAll('.action-delete').forEach(btn => {
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             pendingDeleteId = this.dataset.id;
             pendingRow = this.closest('tr');
-            confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this staff member') + '"?';
+            const name = this.dataset.name || 'this staff member';
+            confirmMessage.innerText = 'Delete "' + name + '"?';
             confirmDialog.classList.add('open');
         });
     });
 
-    confirmCancel?.addEventListener('click', () => {
-        pendingDeleteId = null; pendingRow = null;
+    confirmCancel?.addEventListener('click', function () {
+        pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
         confirmDialog.classList.remove('open');
     });
 
-    confirmOk?.addEventListener('click', () => {
+    confirmOk?.addEventListener('click', function () {
         if (!pendingDeleteId) return;
+
+        // Bulk delete path
+        if (pendingDeleteId === '__bulk__') {
+            const items = [...pendingBulkItems];
+            pendingBulkItems = [];
+            pendingDeleteId = null;
+            confirmDialog.classList.remove('open');
+
+            let done = 0;
+            items.forEach(item => {
+                const body = new URLSearchParams();
+                if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+                body.append('id', item.id);
+                fetch(DELETE_URL, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body: body.toString()
+                })
+                .then(r => r.json())
+                .then(data => { if (data && data.success) animateRowOut(item.row); })
+                .finally(() => {
+                    done++;
+                    if (done === items.length) showToast(items.length + ' item(s) deleted', 'success');
+                });
+            });
+            return;
+        }
+
+        // Single delete path
         const body = new URLSearchParams();
         if (csrfName && csrfHash) body.append(csrfName, csrfHash);
         body.append('id', pendingDeleteId);
 
-        fetch('<?= base_url('staff/delete') ?>', {
-            method: 'POST', credentials: 'same-origin',
+        fetch(DELETE_URL, {
+            method: 'POST',
+            credentials: 'same-origin',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
             body: body.toString()
         })
         .then(r => r.json())
         .then(data => {
             if (data && data.success) {
-                showToast('Staff member deleted', 'success');
-                if (pendingRow) animateRowOut(pendingRow);
+                showToast('Staff deleted', 'success');
+                animateRowOut(pendingRow);
             } else {
                 showToast(data.message || 'Delete failed', 'error');
             }
         })
-        .catch(() => showToast('Error deleting staff member', 'error'))
+        .catch(() => showToast('Error deleting staff', 'error'))
         .finally(() => {
             pendingDeleteId = null; pendingRow = null;
             confirmDialog.classList.remove('open');
+        });
+    });
+
+    // ── Recently Deleted ────────────────────────────────────────
+    const rdToggleBtn = document.getElementById('rdToggleBtn');
+    const rdPanel     = document.getElementById('rdPanel');
+
+    rdToggleBtn && rdToggleBtn.addEventListener('click', function () {
+        const open = rdPanel && rdPanel.style.display !== 'none';
+        if (rdPanel) rdPanel.style.display = open ? 'none' : '';
+        const chevron = this.querySelector('.rd-chevron');
+        if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+    });
+
+    document.querySelectorAll('.rd-restore-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const trashId = this.dataset.id;
+            const row = this.closest('tr');
+            const fd = new FormData();
+            fd.append(csrfName, csrfHash);
+            fd.append('trash_id', trashId);
+            fetch('<?= base_url('trash/restore') ?>', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast((data.name || 'Item') + ' restored', 'success');
+                        animateRowOut(row);
+                    } else {
+                        showToast(data.message || 'Restore failed', 'error');
+                    }
+                })
+                .catch(() => showToast('Restore failed', 'error'));
+        });
+    });
+
+    document.querySelectorAll('.rd-perma-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const trashId = this.dataset.id;
+            const row = this.closest('tr');
+            if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+            const fd = new FormData();
+            fd.append(csrfName, csrfHash);
+            fd.append('trash_id', trashId);
+            fetch('<?= base_url('trash/permanent-delete') ?>', { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Permanently deleted', 'success');
+                        animateRowOut(row);
+                    } else {
+                        showToast(data.message || 'Failed', 'error');
+                    }
+                })
+                .catch(() => showToast('Failed', 'error'));
         });
     });
 });
