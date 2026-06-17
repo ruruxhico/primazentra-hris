@@ -31,16 +31,64 @@
 .sort-chip.active { background:#8C701C; color:#fff; border-color:#8C701C; }
 .filter-footer { display:flex; align-items:center; gap:10px; margin-top:14px; }
 .filter-badge  { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
+
+/* Checkbox column */
+.pz-col-check { width: 36px; text-align: center; }
+.pz-col-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #c8a951; }
+
+/* Bulk action bar */
+.bulk-action-bar {
+    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+    background: #3a2a0a; color: #fff; border-radius: 30px;
+    padding: 0.65rem 1.2rem; display: flex; align-items: center; gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 200;
+    animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+.bulk-count { font-size: 0.88rem; font-weight: 600; }
+.bulk-delete-btn {
+    display: flex; align-items: center; gap: 0.3rem;
+    background: #e53e3e; color: #fff; border: none; border-radius: 20px;
+    padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.bulk-delete-btn:hover { background: #c53030; }
+.bulk-delete-btn .material-symbols-outlined { font-size: 16px; }
+
+/* Recently Deleted section */
+.recently-deleted-wrap { margin-top: 1.5rem; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
+.rd-toggle-btn {
+    width: 100%; display: flex; align-items: center; gap: 0.5rem;
+    background: #fdf8ee; border: none; padding: 0.75rem 1rem;
+    font-size: 0.88rem; font-weight: 700; color: #5c3d11; cursor: pointer;
+    font-family: inherit; text-align: left;
+}
+.rd-toggle-btn:hover { background: #f5e7b2; }
+.rd-toggle-btn .material-symbols-outlined { font-size: 18px; color: #8c701c; }
+.rd-chevron { margin-left: auto; transition: transform 0.2s; }
+.rd-badge {
+    background: #e53e3e; color: #fff; border-radius: 10px;
+    font-size: 0.72rem; font-weight: 800; padding: 0.1rem 0.45rem; line-height: 1.4;
+}
+.rd-panel { padding: 0.75rem 1rem; background: #fff; }
+.rd-empty { color: #aaa; font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+.rd-table { font-size: 0.84rem; }
 </style>
 
 <?php
-    $activeEquipFilters    = $activeEquipFilters    ?? [];
-    $activeToolFilters     = $activeToolFilters     ?? [];
-    $activeManpowerFilters = $activeManpowerFilters ?? [];
-    $activeTab             = $activeTab             ?? 'equipment';
-    $eqActiveCount         = count(array_filter($activeEquipFilters));
-    $toolsActiveCount      = count(array_filter($activeToolFilters));
-    $mpActiveCount         = count(array_filter($activeManpowerFilters));
+    $activeEquipFilters       = $activeEquipFilters       ?? [];
+    $activeToolFilters        = $activeToolFilters        ?? [];
+    $activeManpowerFilters    = $activeManpowerFilters    ?? [];
+    $activeTab                = $activeTab                ?? 'equipment';
+    $eqActiveCount            = count(array_filter($activeEquipFilters));
+    $toolsActiveCount         = count(array_filter($activeToolFilters));
+    $mpActiveCount            = count(array_filter($activeManpowerFilters));
+    $recentlyDeletedResources = $recentlyDeletedResources ?? [];
+    $recentlyDeletedManpower  = $recentlyDeletedManpower  ?? [];
+
+    // Partition recently deleted resources by category
+    $rdEquipment = array_values(array_filter($recentlyDeletedResources, fn($r) => strcasecmp((string)($r['data']['category'] ?? ''), 'Equipment') === 0));
+    $rdTools     = array_values(array_filter($recentlyDeletedResources, fn($r) => strcasecmp((string)($r['data']['category'] ?? ''), 'Tools') === 0));
+    $rdManpower  = $recentlyDeletedManpower;
 ?>
 
 <div class="resource-header">
@@ -106,9 +154,10 @@
 
     <!-- Equipment Table -->
     <div class="table-container">
-        <table class="resource-table">
+        <table class="resource-table" id="equipmentTable">
             <thead>
                 <tr>
+                    <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="equipment" title="Select all"></th>
                     <th>NO.</th>
                     <th>EQUIPMENT NAME</th>
                     <th>TOTAL QUANTITY</th>
@@ -119,11 +168,14 @@
             <tbody>
                 <?php if (empty($equipment)): ?>
                     <tr>
-                        <td colspan="5" class="text-center">No equipment found.</td>
+                        <td colspan="6" class="text-center">No equipment found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($equipment as $index => $item): ?>
                         <tr>
+                            <td class="pz-col-check">
+                                <input type="checkbox" class="row-cb eq-cb" value="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? '')) ?>">
+                            </td>
                             <td><?= $index + 1 ?></td>
                             <td>
                                 <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
@@ -140,6 +192,39 @@
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Recently Deleted - Equipment -->
+    <div class="recently-deleted-wrap" id="rdWrapEquipment">
+        <button type="button" class="rd-toggle-btn" id="rdToggleBtnEquipment">
+            <span class="material-symbols-outlined">restore_from_trash</span>
+            Recently Deleted
+            <?php if (!empty($rdEquipment)): ?><span class="rd-badge"><?= count($rdEquipment) ?></span><?php endif; ?>
+            <span class="material-symbols-outlined rd-chevron">expand_more</span>
+        </button>
+        <div class="rd-panel" id="rdPanelEquipment" style="display:none">
+            <?php if (empty($rdEquipment)): ?>
+            <p class="rd-empty">No recently deleted equipment.</p>
+            <?php else: ?>
+            <table class="resource-table rd-table">
+                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <tbody>
+                <?php foreach ($rdEquipment as $rd): ?>
+                <tr data-trash-id="<?= esc($rd['id']) ?>">
+                    <td><?= esc($rd['name'] ?? '—') ?></td>
+                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
+                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
+                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -189,9 +274,10 @@
 
     <!-- Tools Table -->
     <div class="table-container">
-        <table class="resource-table">
+        <table class="resource-table" id="toolsTable">
             <thead>
                 <tr>
+                    <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="tools" title="Select all"></th>
                     <th>NO.</th>
                     <th>TOOL NAME</th>
                     <th>TOTAL QUANTITY</th>
@@ -200,16 +286,17 @@
                 </tr>
             </thead>
             <tbody>
-                <?php
-                    $tools = $tools ?? [];
-                ?>
+                <?php $tools = $tools ?? []; ?>
                 <?php if (empty($tools)): ?>
                     <tr>
-                        <td colspan="5" class="text-center">No tools found.</td>
+                        <td colspan="6" class="text-center">No tools found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($tools as $index => $item): ?>
                         <tr>
+                            <td class="pz-col-check">
+                                <input type="checkbox" class="row-cb tools-cb" value="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? '')) ?>">
+                            </td>
                             <td><?= $index + 1 ?></td>
                             <td>
                                 <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
@@ -226,6 +313,39 @@
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Recently Deleted - Tools -->
+    <div class="recently-deleted-wrap" id="rdWrapTools">
+        <button type="button" class="rd-toggle-btn" id="rdToggleBtnTools">
+            <span class="material-symbols-outlined">restore_from_trash</span>
+            Recently Deleted
+            <?php if (!empty($rdTools)): ?><span class="rd-badge"><?= count($rdTools) ?></span><?php endif; ?>
+            <span class="material-symbols-outlined rd-chevron">expand_more</span>
+        </button>
+        <div class="rd-panel" id="rdPanelTools" style="display:none">
+            <?php if (empty($rdTools)): ?>
+            <p class="rd-empty">No recently deleted tools.</p>
+            <?php else: ?>
+            <table class="resource-table rd-table">
+                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <tbody>
+                <?php foreach ($rdTools as $rd): ?>
+                <tr data-trash-id="<?= esc($rd['id']) ?>">
+                    <td><?= esc($rd['name'] ?? '—') ?></td>
+                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
+                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
+                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -297,9 +417,10 @@
 
     <!-- Manpower Table -->
     <div class="table-container">
-        <table class="resource-table">
+        <table class="resource-table" id="manpowerTable">
             <thead>
                 <tr>
+                    <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="manpower" title="Select all"></th>
                     <th>ID</th>
                     <th>RESOURCE NAME</th>
                     <th>ROLE</th>
@@ -313,12 +434,14 @@
             <tbody>
                 <?php if (empty($manpower)): ?>
                     <tr>
-                            No manpower records found.
-                        </td>
+                        <td colspan="9" class="text-center">No manpower records found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($manpower as $index => $person): ?>
                         <tr>
+                            <td class="pz-col-check">
+                                <input type="checkbox" class="row-cb mp-cb" value="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? '')) ?>">
+                            </td>
                             <td><?= $index + 1 ?></td>
                             <td><?= isset($person['name']) ? esc((string)$person['name']) : 'N/A' ?></td>
                             <td><?= isset($person['manpower_details']['role']) ? esc((string)$person['manpower_details']['role']) : 'N/A' ?></td>
@@ -342,6 +465,39 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Recently Deleted - Manpower -->
+    <div class="recently-deleted-wrap" id="rdWrapManpower">
+        <button type="button" class="rd-toggle-btn" id="rdToggleBtnManpower">
+            <span class="material-symbols-outlined">restore_from_trash</span>
+            Recently Deleted
+            <?php if (!empty($rdManpower)): ?><span class="rd-badge"><?= count($rdManpower) ?></span><?php endif; ?>
+            <span class="material-symbols-outlined rd-chevron">expand_more</span>
+        </button>
+        <div class="rd-panel" id="rdPanelManpower" style="display:none">
+            <?php if (empty($rdManpower)): ?>
+            <p class="rd-empty">No recently deleted manpower.</p>
+            <?php else: ?>
+            <table class="resource-table rd-table">
+                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <tbody>
+                <?php foreach ($rdManpower as $rd): ?>
+                <tr data-trash-id="<?= esc($rd['id']) ?>">
+                    <td><?= esc($rd['name'] ?? '—') ?></td>
+                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
+                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
+                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -352,9 +508,40 @@
         const selectedBtn = document.getElementById('tab-' + tabName);
         if (selectedTab) selectedTab.classList.add('tab-content-active');
         if (selectedBtn) selectedBtn.classList.add('tab-btn-active');
+        updateBulkBar();
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
+        const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
+        const confirmDialog = document.getElementById('confirmDialog');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmOk = document.getElementById('confirmOk');
+        const confirmCancel = document.getElementById('confirmCancel');
+        const toast = document.getElementById('customToast');
+        const DELETE_URL = '<?= base_url('resources/delete') ?>';
+
+        function showToast(message, type='info') {
+            if (!toast) return;
+            toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+            toast.innerText = message;
+            setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
+        }
+
+        function animateRowOut(row) {
+            if (!row) return;
+            const h = row.offsetHeight;
+            row.style.height = h + 'px';
+            row.style.overflow = 'hidden';
+            requestAnimationFrame(() => {
+                row.style.transition = 'height 260ms ease, opacity 260ms ease, transform 260ms ease';
+                row.style.height = '0';
+                row.style.opacity = '0';
+                row.style.transform = 'translateX(-8px)';
+            });
+            setTimeout(() => row.remove(), 280);
+        }
+
         // — Equipment filter panel —
         const eqToggle  = document.getElementById('eqFilterToggleBtn');
         const eqPanel   = document.getElementById('eqFilterPanel');
@@ -420,26 +607,11 @@
             wireMpChips('.mp-status-chip', 'mpStatusInput');
         }
 
-        const csrfName = document.querySelector('meta[name="csrf-name"]')?.getAttribute('content');
-        const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.getAttribute('content');
-        const confirmDialog = document.getElementById('confirmDialog');
-        const confirmMessage = document.getElementById('confirmMessage');
-        const confirmOk = document.getElementById('confirmOk');
-        const confirmCancel = document.getElementById('confirmCancel');
-        const toast = document.getElementById('customToast');
-
-        function showToast(message, type='info') {
-            if (!toast) return;
-            toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
-            toast.innerText = message;
-            setTimeout(() => { toast.className = 'custom-toast'; }, 3000);
-        }
-
+        // Search
         function attachSearch(inputId, tableSelector) {
             const search = document.getElementById(inputId);
             const table = document.querySelector(tableSelector);
             if (!search || !table) return;
-
             search.addEventListener('input', function () {
                 const q = this.value.trim().toLowerCase();
                 table.querySelectorAll('tbody tr').forEach(row => {
@@ -447,13 +619,70 @@
                 });
             });
         }
-
         attachSearch('searchEquipment', '#equipment .resource-table');
         attachSearch('searchTools', '#tools .resource-table');
         attachSearch('searchManpower', '#manpower .resource-table');
 
-        let pendingDeleteId = null;
-        let pendingRow = null;
+        // ── Bulk select ─────────────────────────────────────────────
+        const bulkBar    = document.getElementById('bulkActionBar');
+        const bulkCountEl = document.getElementById('bulkCount');
+        const bulkDelBtn  = document.getElementById('bulkDeleteBtn');
+
+        function getActiveTabName() {
+            const active = document.querySelector('.tab-content.tab-content-active');
+            return active ? active.id : 'equipment';
+        }
+
+        function getCheckedInTab(tabId) {
+            const tab = document.getElementById(tabId);
+            return tab ? Array.from(tab.querySelectorAll('.row-cb:checked')) : [];
+        }
+
+        window.updateBulkBar = function () {
+            const tab = getActiveTabName();
+            const checked = getCheckedInTab(tab);
+            if (bulkBar) bulkBar.style.display = checked.length > 0 ? 'flex' : 'none';
+            if (bulkCountEl) bulkCountEl.textContent = checked.length + ' selected';
+        };
+
+        // Wire select-all and row checkboxes for each tab
+        ['equipment', 'tools', 'manpower'].forEach(tabId => {
+            const tabEl = document.getElementById(tabId);
+            if (!tabEl) return;
+            const selectAll = tabEl.querySelector('.select-all-cb');
+
+            selectAll && selectAll.addEventListener('change', function () {
+                tabEl.querySelectorAll('.row-cb').forEach(cb => { cb.checked = this.checked; });
+                updateBulkBar();
+            });
+
+            tabEl.querySelectorAll('.row-cb').forEach(cb => {
+                cb.addEventListener('change', function () {
+                    if (selectAll) {
+                        const all = tabEl.querySelectorAll('.row-cb');
+                        selectAll.checked = all.length > 0 && [...all].every(c => c.checked);
+                        selectAll.indeterminate = getCheckedInTab(tabId).length > 0 && !selectAll.checked;
+                    }
+                    updateBulkBar();
+                });
+            });
+        });
+
+        bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
+            const tab = getActiveTabName();
+            const checked = getCheckedInTab(tab);
+            if (!checked.length) return;
+            const names = checked.map(c => c.dataset.name || c.value).join(', ');
+            confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
+            pendingDeleteId = '__bulk__';
+            pendingBulkItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
+            confirmDialog.classList.add('open');
+        });
+
+        // ── Single delete ─────────────────────────────────────────────
+        let pendingDeleteId  = null;
+        let pendingRow       = null;
+        let pendingBulkItems = [];
 
         document.querySelectorAll('.action-delete').forEach(btn => {
             btn.addEventListener('click', function (e) {
@@ -461,24 +690,52 @@
                 pendingDeleteId = this.dataset.id;
                 pendingRow = this.closest('tr');
                 const name = this.dataset.name || 'this resource';
-                confirmMessage.innerText = `Delete ${name}?`;
+                confirmMessage.innerText = 'Delete "' + name + '"?';
                 confirmDialog.classList.add('open');
             });
         });
 
         confirmCancel?.addEventListener('click', function () {
-            pendingDeleteId = null;
-            pendingRow = null;
+            pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
             confirmDialog.classList.remove('open');
         });
 
         confirmOk?.addEventListener('click', function () {
             if (!pendingDeleteId) return;
+
+            // Bulk delete path
+            if (pendingDeleteId === '__bulk__') {
+                const items = [...pendingBulkItems];
+                pendingBulkItems = [];
+                pendingDeleteId = null;
+                confirmDialog.classList.remove('open');
+
+                let done = 0;
+                items.forEach(item => {
+                    const body = new URLSearchParams();
+                    if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+                    body.append('id', item.id);
+                    fetch(DELETE_URL, {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                        body: body.toString()
+                    })
+                    .then(r => r.json())
+                    .then(data => { if (data && data.success) animateRowOut(item.row); })
+                    .finally(() => {
+                        done++;
+                        if (done === items.length) showToast(items.length + ' item(s) deleted', 'success');
+                    });
+                });
+                return;
+            }
+
+            // Single delete path
             const body = new URLSearchParams();
             if (csrfName && csrfHash) body.append(csrfName, csrfHash);
             body.append('id', pendingDeleteId);
 
-            fetch('<?= base_url('resources/delete') ?>', {
+            fetch(DELETE_URL, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
@@ -488,22 +745,85 @@
             .then(data => {
                 if (data && data.success) {
                     showToast('Resource deleted', 'success');
-                    if (pendingRow) {
-                        pendingRow.classList.add('removing');
-                        setTimeout(() => pendingRow?.remove(), 350);
-                    }
+                    animateRowOut(pendingRow);
                 } else {
                     showToast(data.message || 'Delete failed', 'error');
                 }
             })
             .catch(() => showToast('Error deleting resource', 'error'))
             .finally(() => {
-                pendingDeleteId = null;
-                pendingRow = null;
+                pendingDeleteId = null; pendingRow = null;
                 confirmDialog.classList.remove('open');
+            });
+        });
+
+        // ── Recently Deleted panels ─────────────────────────────────
+        function wireRdPanel(btnId, panelId) {
+            const btn   = document.getElementById(btnId);
+            const panel = document.getElementById(panelId);
+            if (!btn || !panel) return;
+            btn.addEventListener('click', function () {
+                const open = panel.style.display !== 'none';
+                panel.style.display = open ? 'none' : '';
+                const chevron = this.querySelector('.rd-chevron');
+                if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
+            });
+        }
+        wireRdPanel('rdToggleBtnEquipment', 'rdPanelEquipment');
+        wireRdPanel('rdToggleBtnTools',     'rdPanelTools');
+        wireRdPanel('rdToggleBtnManpower',  'rdPanelManpower');
+
+        document.querySelectorAll('.rd-restore-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const trashId = this.dataset.id;
+                const row = this.closest('tr');
+                const fd = new FormData();
+                fd.append(csrfName, csrfHash);
+                fd.append('trash_id', trashId);
+                fetch('<?= base_url('trash/restore') ?>', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast((data.name || 'Item') + ' restored', 'success');
+                            animateRowOut(row);
+                        } else {
+                            showToast(data.message || 'Restore failed', 'error');
+                        }
+                    })
+                    .catch(() => showToast('Restore failed', 'error'));
+            });
+        });
+
+        document.querySelectorAll('.rd-perma-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const trashId = this.dataset.id;
+                const row = this.closest('tr');
+                if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+                const fd = new FormData();
+                fd.append(csrfName, csrfHash);
+                fd.append('trash_id', trashId);
+                fetch('<?= base_url('trash/permanent-delete') ?>', { method: 'POST', body: fd })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast('Permanently deleted', 'success');
+                            animateRowOut(row);
+                        } else {
+                            showToast(data.message || 'Failed', 'error');
+                        }
+                    })
+                    .catch(() => showToast('Failed', 'error'));
             });
         });
     });
 </script>
+
+<!-- Bulk Action Bar (shared across tabs) -->
+<div class="bulk-action-bar" id="bulkActionBar" style="display:none">
+    <span class="bulk-count" id="bulkCount">0 selected</span>
+    <button type="button" class="bulk-delete-btn" id="bulkDeleteBtn">
+        <span class="material-symbols-outlined">delete</span> Delete Selected
+    </button>
+</div>
 
 <?= $this->endSection() ?>

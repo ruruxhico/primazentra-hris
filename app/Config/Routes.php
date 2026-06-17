@@ -79,3 +79,7 @@ $routes->get('staff/show/(:segment)', 'Staff::show/$1');
 $routes->post('staff/delete', 'Staff::delete');
 // Backwards-compatible GET delete (optional) - keeps previous behavior when called with segment
 $routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
+
+// Trash (soft-delete restore/permanent-delete)
+$routes->post('trash/restore', 'Trash::restore');
+$routes->post('trash/permanent-delete', 'Trash::permanentDelete');

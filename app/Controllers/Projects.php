@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use Config\GoogleMaps;
 
@@ -100,14 +101,17 @@ class Projects extends BaseController
             $offset        = ($currentPage - 1) * $perPage;
             $pagedProjects = array_slice($projects, $offset, $perPage);
 
+            $trashService    = new TrashService($this->firestore);
+            $recentlyDeleted = $trashService->getTrashItems('project');
+
             $data = [
-                'pageTitle'     => 'Projects',
-                'activePage'    => 'projects',
-                'projects'      => $pagedProjects,
-                'pagerOffset'   => $offset,
-                'pmOptions'     => $pmOptions,
-                'seOptions'     => $seOptions,
-                'activeFilters' => [
+                'pageTitle'       => 'Projects',
+                'activePage'      => 'projects',
+                'projects'        => $pagedProjects,
+                'pagerOffset'     => $offset,
+                'pmOptions'       => $pmOptions,
+                'seOptions'       => $seOptions,
+                'activeFilters'   => [
                     'status' => $filterStatus,
                     'region' => $filterRegion,
                     'pm_id'  => $filterPm,
@@ -115,8 +119,9 @@ class Projects extends BaseController
                     'type'   => $filterType,
                     'sort'   => $filterSort,
                 ],
-                'userName' => session()->get('userName') ?? 'User',
-                'role'     => session()->get('role') ?? 'Staff',
+                'recentlyDeleted' => $recentlyDeleted,
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
             ];
 
             return view('projects/projects_view', $data);
@@ -124,16 +129,17 @@ class Projects extends BaseController
             log_message('error', 'Projects::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle'     => 'Projects',
-                'activePage'    => 'projects',
-                'projects'      => [],
-                'pagerOffset'   => 0,
-                'pmOptions'     => [],
-                'seOptions'     => [],
-                'activeFilters' => [],
-                'userName'      => session()->get('userName') ?? 'User',
-                'role'          => session()->get('role') ?? 'Staff',
-                'error'         => 'Unable to fetch projects',
+                'pageTitle'       => 'Projects',
+                'activePage'      => 'projects',
+                'projects'        => [],
+                'pagerOffset'     => 0,
+                'pmOptions'       => [],
+                'seOptions'       => [],
+                'activeFilters'   => [],
+                'recentlyDeleted' => [],
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
+                'error'           => 'Unable to fetch projects',
             ];
 
             return view('projects/projects_view', $data);
@@ -274,6 +280,29 @@ class Projects extends BaseController
                     return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
                 }
 
+                // Snapshot project data before deletion
+                $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = (string) ($data['project_name'] ?? $id);
+
+                // Read tasks subcollection with __id preserved
+                $tasks = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('tasks')->documents() as $tDoc) {
+                    if ($tDoc->exists()) $tasks[] = ['__id' => $tDoc->id()] + $tDoc->data();
+                }
+                // Read milestones subcollection with __id preserved
+                $milestones = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                    if ($mDoc->exists()) $milestones[] = ['__id' => $mDoc->id()] + $mDoc->data();
+                }
+
+                // Move to trash before hard-deleting
+                (new TrashService($this->firestore))->moveToTrash(
+                    'project', $id, $name, $data,
+                    ['tasks' => $tasks, 'milestones' => $milestones],
+                    session()->get('userName')
+                );
+
                 $this->deleteProjectTasks($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
 
@@ -282,6 +311,29 @@ class Projects extends BaseController
 
             // GET fallback when id passed as parameter
             if ($id) {
+                // Snapshot project data before deletion
+                $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = (string) ($data['project_name'] ?? $id);
+
+                // Read tasks subcollection with __id preserved
+                $tasks = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('tasks')->documents() as $tDoc) {
+                    if ($tDoc->exists()) $tasks[] = ['__id' => $tDoc->id()] + $tDoc->data();
+                }
+                // Read milestones subcollection with __id preserved
+                $milestones = [];
+                foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                    if ($mDoc->exists()) $milestones[] = ['__id' => $mDoc->id()] + $mDoc->data();
+                }
+
+                // Move to trash before hard-deleting
+                (new TrashService($this->firestore))->moveToTrash(
+                    'project', $id, $name, $data,
+                    ['tasks' => $tasks, 'milestones' => $milestones],
+                    session()->get('userName')
+                );
+
                 $this->deleteProjectTasks($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
                 return redirect()->to('projects')->with('success', 'Project deleted successfully!');

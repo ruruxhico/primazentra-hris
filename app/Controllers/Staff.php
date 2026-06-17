@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use Google\Cloud\Core\Timestamp;
 
@@ -105,18 +106,22 @@ class Staff extends BaseController
             $offset    = ($currentPage - 1) * $perPage;
             $pagedStaff = array_slice($staff, $offset, $perPage);
 
+            $trashService    = new TrashService($this->firestore);
+            $recentlyDeleted = $trashService->getTrashItems('staff');
+
             $data = [
-                'pageTitle'     => 'Staff',
-                'activePage'    => 'staff',
-                'staff'         => $pagedStaff,
-                'pagerOffset'   => $offset,
-                'roleOptions'   => $roleOptions,
-                'activeFilters' => [
+                'pageTitle'       => 'Staff',
+                'activePage'      => 'staff',
+                'staff'           => $pagedStaff,
+                'pagerOffset'     => $offset,
+                'roleOptions'     => $roleOptions,
+                'activeFilters'   => [
                     'ln_range'    => $filterLnRange,
                     'role_filter' => $filterRole,
                 ],
-                'userName' => session()->get('userName') ?? 'User',
-                'role'     => session()->get('role') ?? 'Staff',
+                'recentlyDeleted' => $recentlyDeleted,
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
             ];
 
             return view('staff/staff_view', $data);
@@ -124,15 +129,16 @@ class Staff extends BaseController
             log_message('error', 'Staff::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle'     => 'Staff',
-                'activePage'    => 'staff',
-                'staff'         => [],
-                'pagerOffset'   => 0,
-                'roleOptions'   => [],
-                'activeFilters' => [],
-                'userName'      => session()->get('userName') ?? 'User',
-                'role'          => session()->get('role') ?? 'Staff',
-                'error'         => 'Unable to fetch staff',
+                'pageTitle'       => 'Staff',
+                'activePage'      => 'staff',
+                'staff'           => [],
+                'pagerOffset'     => 0,
+                'roleOptions'     => [],
+                'activeFilters'   => [],
+                'recentlyDeleted' => [],
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
+                'error'           => 'Unable to fetch staff',
             ];
 
             return view('staff/staff_view', $data);
@@ -292,6 +298,13 @@ class Staff extends BaseController
                     return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
                 }
 
+                // Soft-delete: snapshot then move to trash (do NOT delete Firebase Auth here)
+                $snap = $this->firestore->getDb()->collection('users')->document($idFromPost)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $idFromPost);
+                (new TrashService($this->firestore))->moveToTrash('staff', $idFromPost, $name, $data, [], session()->get('userName'));
+
+                // Only delete the Firestore doc (Auth deletion deferred to permanent delete)
                 $this->firestore->getDb()->collection('users')->document($idFromPost)->delete();
 
                 return $this->response->setJSON(['success' => true, 'message' => 'Staff member deleted']);
@@ -304,6 +317,12 @@ class Staff extends BaseController
         // Fallback: traditional GET with segment - redirect back to staff list
         if ($id !== null) {
             try {
+                // Soft-delete: snapshot then move to trash (do NOT delete Firebase Auth here)
+                $snap = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $id);
+                (new TrashService($this->firestore))->moveToTrash('staff', $id, $name, $data, [], session()->get('userName'));
+
                 $this->firestore->getDb()->collection('users')->document($id)->delete();
                 return redirect()->to('staff')->with('success', 'Staff member deleted successfully!');
             } catch (\Exception $e) {

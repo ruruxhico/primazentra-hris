@@ -4,16 +4,20 @@ namespace App\Controllers;
 
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
+use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
 
 class Resources extends BaseController
 {
     protected $model;
     protected $manpowerModel;
+    protected FirestoreService $firestore;
 
     public function __construct()
     {
         $this->model = new Model_Resources();
         $this->manpowerModel = new Model_Manpower();
+        $this->firestore = new FirestoreService();
     }
 
     /**
@@ -84,16 +88,22 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
+            $trashService = new TrashService($this->firestore);
+            $recentlyDeletedResources = $trashService->getTrashItems('resource');
+            $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
+
             return view('resources/resources_view', [
-                'equipment'             => $equipment,
-                'tools'                 => $tools,
-                'manpower'              => $manpower,
-                'activeEquipFilters'    => ['eq_sort'    => $eqSort],
-                'activeToolFilters'     => ['tools_sort' => $toolsSort],
-                'activeManpowerFilters' => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
-                'activeTab'             => $this->request->getGet('tab') ?? 'equipment',
-                'userName'           => session()->get('userName') ?? 'User',
-                'role'               => session()->get('role') ?? 'User',
+                'equipment'                 => $equipment,
+                'tools'                     => $tools,
+                'manpower'                  => $manpower,
+                'activeEquipFilters'        => ['eq_sort'    => $eqSort],
+                'activeToolFilters'         => ['tools_sort' => $toolsSort],
+                'activeManpowerFilters'     => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
+                'activeTab'                 => $this->request->getGet('tab') ?? 'equipment',
+                'recentlyDeletedResources'  => $recentlyDeletedResources,
+                'recentlyDeletedManpower'   => $recentlyDeletedManpower,
+                'userName'                  => session()->get('userName') ?? 'User',
+                'role'                      => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error loading resources: ' . $e->getMessage());
@@ -285,7 +295,7 @@ class Resources extends BaseController
     }
 
     /**
-     * Delete a resource
+     * Delete a resource (soft-delete via TrashService before hard-delete)
      */
     public function delete($id = null)
     {
@@ -300,9 +310,36 @@ class Resources extends BaseController
                 // delete from resource or manpower collection depending where it exists
                 $res = $this->model->getResourceById($id);
                 if ($res) {
+                    // Snapshot raw Firestore data
+                    $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
+                    $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;
+                    $name    = (string) ($rawData['name'] ?? $id);
+
+                    // Read items subcollection with __id preserved
+                    $items = [];
+                    foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                        if ($itemDoc->exists()) {
+                            $items[] = ['__id' => $itemDoc->id()] + $itemDoc->data();
+                        }
+                    }
+
+                    (new TrashService($this->firestore))->moveToTrash(
+                        'resource', $id, $name, $rawData,
+                        ['items' => $items],
+                        session()->get('userName')
+                    );
+
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
+                    $mpData = $this->manpowerModel->getManpowerById($id);
+                    if ($mpData) {
+                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        (new TrashService($this->firestore))->moveToTrash(
+                            'manpower', $id, $mpName, $mpData, [],
+                            session()->get('userName')
+                        );
+                    }
                     $this->manpowerModel->deleteManpower($id);
                 }
 
@@ -312,9 +349,34 @@ class Resources extends BaseController
             if ($id) {
                 $res = $this->model->getResourceById($id);
                 if ($res) {
+                    $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
+                    $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;
+                    $name    = (string) ($rawData['name'] ?? $id);
+
+                    $items = [];
+                    foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                        if ($itemDoc->exists()) {
+                            $items[] = ['__id' => $itemDoc->id()] + $itemDoc->data();
+                        }
+                    }
+
+                    (new TrashService($this->firestore))->moveToTrash(
+                        'resource', $id, $name, $rawData,
+                        ['items' => $items],
+                        session()->get('userName')
+                    );
+
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
+                    $mpData = $this->manpowerModel->getManpowerById($id);
+                    if ($mpData) {
+                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        (new TrashService($this->firestore))->moveToTrash(
+                            'manpower', $id, $mpName, $mpData, [],
+                            session()->get('userName')
+                        );
+                    }
                     $this->manpowerModel->deleteManpower($id);
                 }
                 return redirect()->to('resources')->with('success', 'Resource deleted successfully!');
