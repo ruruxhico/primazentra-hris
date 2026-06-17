@@ -7,6 +7,7 @@
     $items = $items ?? [];
     $projectSites = $projectSites ?? [];
     $warehouseLocations = $warehouseLocations ?? [];
+    $defaultWarehouseAddress = $defaultWarehouseAddress ?? '';
     $isEdit = !empty($resource['id'] ?? null);
     $formAction = $isEdit ? base_url('resources/update/' . $resource['id']) : base_url('resources/store');
     $hasItems = !empty($items);
@@ -53,6 +54,30 @@
 .unit-qty-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: #7a5c1e; letter-spacing: 0.3px; }
 .equipment-remove-btn { background: transparent !important; border: 1.5px solid #e53e3e !important; color: #e53e3e !important; border-radius: 8px !important; }
 .equipment-remove-btn:hover { background: #e53e3e !important; color: #fff !important; }
+/* ── Warehouse default banner ─────────────────────────────── */
+.warehouse-default-banner { display:flex; align-items:flex-start; gap:0.55rem; background:#fdf8ee; border:1px solid #d4b87a; border-radius:9px; padding:0.6rem 0.85rem; margin-bottom:0.75rem; font-size:0.83rem; }
+.wdb-icon { font-size:18px !important; color:#8c701c; margin-top:1px; flex-shrink:0; }
+.wdb-body { flex:1; min-width:0; }
+.wdb-label { color:#8c701c; font-weight:700; margin-right:0.3rem; }
+.wdb-address { color:#3a2a0a; word-break:break-word; }
+.wdb-not-set { color:#aaa; font-style:italic; }
+.wdb-edit-form { display:flex; flex-direction:column; gap:0.4rem; margin-top:0.2rem; }
+.wdb-input-row { display:flex; gap:0.4rem; align-items:center; }
+.wdb-action-row { display:flex; gap:0.4rem; justify-content:flex-end; }
+.wdb-input { flex:1; min-width:0; padding:0.3rem 0.6rem; border:1.5px solid #d4b87a; border-radius:7px; font-size:0.82rem; background:#fff; box-sizing:border-box; font-family:inherit; }
+.wdb-save-btn { padding:0.3rem 0.75rem; background:#c8a951; color:#fff; border:none; border-radius:7px; font-size:0.8rem; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.wdb-save-btn:hover { background:#8c701c; }
+.wdb-save-btn:disabled { opacity:0.6; cursor:not-allowed; }
+.wdb-cancel-btn { padding:0.3rem 0.55rem; background:none; border:1px solid #ccc; border-radius:7px; font-size:0.8rem; cursor:pointer; font-family:inherit; color:#666; }
+.wdb-map-btn { padding:0.3rem 0.65rem; background:#fff; border:1.5px solid #d4b87a; border-radius:7px; font-size:0.8rem; color:#7a5c1e; cursor:pointer; font-family:inherit; white-space:nowrap; }
+.wdb-map-btn:hover { background:#f5e7b2; }
+.wdb-edit-btn { background:none; border:1px solid #d4b87a; border-radius:6px; font-size:0.74rem; color:#8c701c; cursor:pointer; padding:0.18rem 0.5rem; font-family:inherit; flex-shrink:0; margin-top:1px; }
+.wdb-edit-btn:hover { background:#f5e7b2; }
+/* ── Warehouse saved chip (per card) ─────────────────────── */
+.warehouse-saved-strip { margin-top:0.35rem; }
+.warehouse-use-saved-btn { display:inline-flex; align-items:center; gap:0.3rem; background:#fdf8ee; border:1px solid #d4b87a; border-radius:20px; padding:0.2rem 0.75rem 0.2rem 0.55rem; font-size:0.75rem; color:#5c3d11; cursor:pointer; font-family:inherit; transition:background 0.15s; max-width:100%; }
+.warehouse-use-saved-btn:hover { background:#f5e7b2; border-color:#a0782a; }
+.wss-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; font-weight:600; }
 </style>
 
 <a href="<?= base_url('resources') ?>" class="pz-back-link">
@@ -99,6 +124,31 @@
                 <div class="equipment-section-head">
                     <h2>Specific Units</h2>
                     <p>Add the physical units tied to this tool model.</p>
+                </div>
+
+                <div class="warehouse-default-banner" id="warehouseDefaultBanner">
+                    <span class="material-symbols-outlined wdb-icon">warehouse</span>
+                    <div class="wdb-body">
+                        <div id="wdbStatic">
+                            <span class="wdb-label">Default warehouse:</span>
+                            <?php if ($defaultWarehouseAddress): ?>
+                                <span class="wdb-address" id="wdbAddress"><?= esc($defaultWarehouseAddress) ?></span>
+                            <?php else: ?>
+                                <span class="wdb-not-set" id="wdbAddress">Not set — click Edit to save one</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="wdb-edit-form" id="wdbEditForm" style="display:none">
+                            <div class="wdb-input-row">
+                                <input type="text" id="wdbInput" class="wdb-input" placeholder="Enter default warehouse address" value="<?= esc($defaultWarehouseAddress) ?>">
+                                <button type="button" id="wdbMapBtn" class="wdb-map-btn">Map</button>
+                            </div>
+                            <div class="wdb-action-row">
+                                <button type="button" id="wdbSaveBtn" class="wdb-save-btn">Save</button>
+                                <button type="button" id="wdbCancelBtn" class="wdb-cancel-btn">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" id="wdbEditBtn" class="wdb-edit-btn">Edit</button>
                 </div>
 
                 <div class="unit-cards-container" id="equipmentItemsContainer">
@@ -174,6 +224,14 @@
                                                     <input type="text" name="items[<?= $index ?>][address]" class="equipment-warehouse-input" list="warehouseLocationSuggestions" value="<?= esc($currentAddress) ?>" placeholder="Type warehouse location or pick on map">
                                                     <button type="button" class="equipment-map-btn">Map</button>
                                                 </div>
+                                                <?php if ($defaultWarehouseAddress): ?>
+                                                <div class="warehouse-saved-strip" <?= $locationType === 'Project Site' ? 'style="display:none"' : '' ?>>
+                                                    <button type="button" class="warehouse-use-saved-btn">
+                                                        <span class="material-symbols-outlined" style="font-size:13px">push_pin</span>
+                                                        Use saved: <span class="wss-label"><?= esc($defaultWarehouseAddress) ?></span>
+                                                    </button>
+                                                </div>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </div>
@@ -281,6 +339,12 @@
                             <input type="text" name="__INDEX__[address]" class="equipment-warehouse-input" list="warehouseLocationSuggestions" placeholder="Type warehouse location or pick on map">
                             <button type="button" class="equipment-map-btn">Map</button>
                         </div>
+                        <div class="warehouse-saved-strip" style="display:none">
+                            <button type="button" class="warehouse-use-saved-btn">
+                                <span class="material-symbols-outlined" style="font-size:13px">push_pin</span>
+                                Use saved: <span class="wss-label"></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -321,6 +385,8 @@
 <script>
 var _eqMap = null, _eqMarker = null, _eqAuto = null;
 window.initEquipmentMap = function () { /* Maps API ready; map created lazily on modal open */ };
+
+var warehouseDefault = <?= json_encode($defaultWarehouseAddress) ?>;
 
 document.addEventListener('DOMContentLoaded', function () {
     var checkbox  = document.getElementById('add_specific_units_now');
@@ -405,6 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var warehouseWrap = card.querySelector('.equipment-address-warehouse');
         var projectSelect = card.querySelector('.equipment-address-select');
         var warehouseInput = card.querySelector('.equipment-warehouse-input');
+        var savedStrip    = card.querySelector('.warehouse-saved-strip');
         var currentType = (typeSelect && typeSelect.value) || 'Warehouse';
 
         if (currentType === 'Project Site') {
@@ -414,6 +481,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (projectSelect) projectSelect.disabled = false;
             if (warehouseInput) warehouseInput.disabled = true;
             if (projectSelect && card.dataset.projectValue) projectSelect.value = card.dataset.projectValue;
+            if (savedStrip) savedStrip.style.display = 'none';
         } else {
             card.dataset.projectValue = (projectSelect && projectSelect.value) || card.dataset.projectValue || '';
             projectWrap.style.display = 'none';
@@ -422,6 +490,11 @@ document.addEventListener('DOMContentLoaded', function () {
             if (warehouseInput) {
                 warehouseInput.disabled = false;
                 if (card.dataset.warehouseValue) warehouseInput.value = card.dataset.warehouseValue;
+            }
+            if (savedStrip && warehouseDefault) {
+                savedStrip.style.display = '';
+                var lbl = savedStrip.querySelector('.wss-label');
+                if (lbl) lbl.textContent = warehouseDefault;
             }
         }
     }
@@ -486,6 +559,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (typeSelect && !typeSelect.value) typeSelect.value = 'Warehouse';
         syncLocationFields(card);
+
+        var wi = card.querySelector('.equipment-warehouse-input');
+        if (warehouseDefault && wi && !wi.value && !card.dataset.warehouseValue) {
+            wi.value = warehouseDefault;
+            card.dataset.warehouseValue = warehouseDefault;
+        }
+
+        var savedBtn = card.querySelector('.warehouse-use-saved-btn');
+        if (savedBtn && wi) {
+            savedBtn.addEventListener('click', function () {
+                wi.value = warehouseDefault;
+                card.dataset.warehouseValue = warehouseDefault;
+            });
+        }
     }
 
     window.toggleUnit = function (header) {
@@ -666,6 +753,78 @@ document.addEventListener('DOMContentLoaded', function () {
     container.querySelectorAll('.unit-card').forEach(bindCard);
     recalculateSerialIndices();
     setSectionVisible(checkbox ? checkbox.checked : false);
+
+    // ── Warehouse default banner ────────────────────────────────
+    var wdbEditBtn  = document.getElementById('wdbEditBtn');
+    var wdbSaveBtn  = document.getElementById('wdbSaveBtn');
+    var wdbCancelBtn= document.getElementById('wdbCancelBtn');
+    var wdbMapBtn   = document.getElementById('wdbMapBtn');
+    var wdbStatic   = document.getElementById('wdbStatic');
+    var wdbEditForm = document.getElementById('wdbEditForm');
+    var wdbInput    = document.getElementById('wdbInput');
+    var wdbAddress  = document.getElementById('wdbAddress');
+
+    if (wdbMapBtn) {
+        wdbMapBtn.addEventListener('click', function () {
+            activeWarehouseInput = wdbInput;
+            mapPendingAddress = (wdbInput && wdbInput.value.trim()) || '';
+            openMapModal();
+        });
+    }
+
+    if (wdbEditBtn) {
+        wdbEditBtn.addEventListener('click', function () {
+            wdbStatic.style.display = 'none';
+            wdbEditForm.style.display = 'flex';
+            wdbInput.value = warehouseDefault;
+            wdbEditBtn.style.display = 'none';
+            wdbInput.focus();
+        });
+    }
+
+    if (wdbCancelBtn) {
+        wdbCancelBtn.addEventListener('click', function () {
+            wdbStatic.style.display = '';
+            wdbEditForm.style.display = 'none';
+            wdbEditBtn.style.display = '';
+        });
+    }
+
+    if (wdbSaveBtn) {
+        wdbSaveBtn.addEventListener('click', function () {
+            var newAddr = (wdbInput && wdbInput.value.trim()) || '';
+            if (!newAddr) { wdbInput && wdbInput.focus(); return; }
+            wdbSaveBtn.disabled = true;
+            wdbSaveBtn.textContent = 'Saving…';
+            var csrfName = '<?= csrf_token() ?>';
+            var csrfEl = document.querySelector('input[name="' + csrfName + '"]');
+            var fd = new FormData();
+            fd.append('warehouse_default_address', newAddr);
+            if (csrfEl) fd.append(csrfName, csrfEl.value);
+            fetch('<?= base_url('resources/warehouse-default') ?>', { method: 'POST', body: fd })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        warehouseDefault = data.address;
+                        wdbAddress.textContent = data.address;
+                        wdbAddress.className = 'wdb-address';
+                        wdbStatic.style.display = '';
+                        wdbEditForm.style.display = 'none';
+                        wdbEditBtn.style.display = '';
+                        document.querySelectorAll('.wss-label').forEach(function (el) { el.textContent = data.address; });
+                        document.querySelectorAll('.warehouse-saved-strip').forEach(function (el) {
+                            var c = el.closest('.unit-card');
+                            var lt = c && c.querySelector('.equipment-location-type');
+                            if (!lt || lt.value !== 'Project Site') el.style.display = '';
+                        });
+                    } else {
+                        alert('Could not save: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(function () { alert('Network error — warehouse address not saved.'); })
+                .finally(function () { wdbSaveBtn.disabled = false; wdbSaveBtn.textContent = 'Save'; });
+        });
+    }
 });
 </script>
 

@@ -68,6 +68,7 @@ $routes->post('resources/delete', 'Resources::delete');
 $routes->get('resources/delete/(:segment)', 'Resources::delete/$1');
 $routes->get('resources/viewItems/(:segment)', 'Resources::viewItems/$1');
 $routes->post('resources/addItem/(:segment)', 'Resources::addItem/$1');
+$routes->post('resources/warehouse-default', 'Resources::saveWarehouseDefault');
 // Equipment CRUD
 $routes->post('resources/equipment/create', 'Resources::createEquipment');
 $routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');
@@ -92,17 +93,16 @@ $routes->post('staff/create', 'Staff::create');
 $routes->get('staff/update/(:segment)', 'Staff::update/$1');
 $routes->post('staff/update/(:segment)', 'Staff::update/$1');
 $routes->get('staff/show/(:segment)', 'Staff::show/$1');
+$routes->post('staff/resend-credentials/(:segment)', 'Staff::resendCredentials/$1');
 $routes->post('staff/delete', 'Staff::delete');
 // Backwards-compatible GET delete (optional) - keeps previous behavior when called with segment
 $routes->get('staff/delete/(:segment)', 'Staff::delete/$1');
 
-<<<<<<< HEAD
-// Account verification (no auth middleware â€” user isn't logged in yet)
+// Account verification (no auth middleware - user isn't logged in yet)
 $routes->get('verify-account/(:segment)',  'VerifyAccount::showForm/$1');
 $routes->post('verify-account/(:segment)', 'VerifyAccount::setPassword/$1');
 $routes->get('verification-success',       'VerifyAccount::verificationSuccess');
-=======
+
 // Trash (soft-delete restore/permanent-delete)
 $routes->post('trash/restore', 'Trash::restore');
 $routes->post('trash/permanent-delete', 'Trash::permanentDelete');
->>>>>>> worktree-agent-a244a87bff7533231

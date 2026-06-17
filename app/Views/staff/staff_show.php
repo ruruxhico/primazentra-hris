@@ -6,6 +6,19 @@
     <span class="material-symbols-outlined">arrow_back</span> Staff
 </a>
 
+<?php if (session()->getFlashdata('success')): ?>
+    <div class="pz-alert pz-alert-success">
+        <span class="material-symbols-outlined" style="font-size:1rem">check_circle</span>
+        <?= session()->getFlashdata('success') ?>
+    </div>
+<?php endif; ?>
+<?php if (session()->getFlashdata('error')): ?>
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
+        <?= session()->getFlashdata('error') ?>
+    </div>
+<?php endif; ?>
+
 <div class="pz-page-header">
     <h1><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ? $staff['middle_name'] . ' ' : '') . ($staff['last_name'] ?? ''))) ?></h1>
     <p><?= esc((string)($staff['role'] ?? '')) ?></p>
@@ -25,16 +38,39 @@
 
         <span class="pz-info-label">Role</span>
         <span class="pz-info-value"><?= esc((string)($staff['role'] ?? '—')) ?></span>
+
+        <?php if (!empty($staff['must_change_password'])): ?>
+        <span class="pz-info-label">Password Status</span>
+        <span class="pz-info-value">
+            <span class="pz-badge pz-badge-pending">Temporary password not yet changed</span>
+        </span>
+        <?php endif; ?>
     </div>
 
     <div class="pz-card-actions">
         <a href="<?= base_url('staff/update/' . ($staffId ?? '')) ?>" class="pz-btn pz-btn-primary">
             <span class="material-symbols-outlined">edit</span> Edit
         </a>
-        <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-outline">
+        <?php if (in_array($role ?? '', ['Admin', 'Operations Manager', 'Project Manager'])): ?>
+        <form method="POST" action="<?= base_url('staff/resend-credentials/' . ($staffId ?? '')) ?>" id="resendForm" style="display:inline">
+            <?= csrf_field() ?>
+            <button type="button" class="pz-btn pz-btn-outline" onclick="confirmResend()">
+                <span class="material-symbols-outlined">send</span> Resend Credentials
+            </button>
+        </form>
+        <?php endif; ?>
+        <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-ghost">
             <span class="material-symbols-outlined">arrow_back</span> Back
         </a>
     </div>
 </div>
+
+<script>
+function confirmResend() {
+    if (confirm('Send a new temporary password to <?= esc(addslashes($staff['email'] ?? '')) ?>?\n\nThe staff member will receive a new login email and must change the password within 15 minutes.')) {
+        document.getElementById('resendForm').submit();
+    }
+}
+</script>
 
 <?= $this->endSection() ?>

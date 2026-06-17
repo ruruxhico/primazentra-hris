@@ -1,8 +1,10 @@
-<?php
+﻿<?php
 
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Libraries\MilestoneProgressService;
+use App\Libraries\StorageService;
 use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use Config\GoogleMaps;
@@ -33,7 +35,7 @@ class Projects extends BaseController
                 $projects[] = $this->enrichProjectForView($projectData);
             }
 
-            // — Build PM / SE option lists from actual project data —
+            // â€” Build PM / SE option lists from actual project data â€”
             $pmOptions = [];
             $seOptions = [];
             foreach ($projects as $p) {
@@ -51,7 +53,7 @@ class Projects extends BaseController
             asort($pmOptions);
             asort($seOptions);
 
-            // — Read filters from GET —
+            // â€” Read filters from GET â€”
             $filterStatus = trim((string) ($this->request->getGet('status') ?? ''));
             $filterRegion = trim((string) ($this->request->getGet('region') ?? ''));
             $filterPm     = trim((string) ($this->request->getGet('pm_id') ?? ''));
@@ -59,7 +61,7 @@ class Projects extends BaseController
             $filterType   = trim((string) ($this->request->getGet('type') ?? ''));
             $filterSort   = trim((string) ($this->request->getGet('sort') ?? ''));
 
-            // — Apply filters —
+            // â€” Apply filters â€”
             if ($filterStatus !== '') {
                 $projects = array_values(array_filter($projects, fn($p) =>
                     strcasecmp((string) ($p['status'] ?? ''), $filterStatus) === 0));
@@ -81,7 +83,7 @@ class Projects extends BaseController
                     strcasecmp((string) ($p['project_type'] ?? ''), $filterType) === 0));
             }
 
-            // — Sort —
+            // â€” Sort â€”
             if ($filterSort === 'progress_desc') {
                 usort($projects, fn($a, $b) =>
                     (float) ($b['overall_progress'] ?? 0) <=> (float) ($a['overall_progress'] ?? 0));
@@ -90,7 +92,7 @@ class Projects extends BaseController
                     (float) ($a['overall_progress'] ?? 0) <=> (float) ($b['overall_progress'] ?? 0));
             }
 
-            // — Paginate —
+            // â€” Paginate â€”
             $perPage     = config('Pager')->perPage;
             $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
             $total       = count($projects);
@@ -180,8 +182,14 @@ class Projects extends BaseController
                 }
 
                 if ($this->request->getPost('add_tasks_now')) {
-                    $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
+                    $rawPhases   = $this->request->getPost('phases') ?? [];
+                    $weightError = $this->validateMilestoneWeights($rawPhases);
+                    if ($weightError) {
+                        return redirect()->back()->withInput()->with('error', $weightError);
+                    }
+                    $flatTasks = $this->normalizePhases($rawPhases);
                     $this->writeTasksFlat($projectId, $flatTasks);
+                    $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
                 }
 
                 return redirect()->to('projects')->with('success', 'Project created successfully!');
@@ -239,8 +247,14 @@ class Projects extends BaseController
                 log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
                 if ($addTasksNow) {
-                    $flatTasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
+                    $rawPhases   = $this->request->getPost('phases') ?? [];
+                    $weightError = $this->validateMilestoneWeights($rawPhases);
+                    if ($weightError) {
+                        return redirect()->back()->withInput()->with('error', $weightError);
+                    }
+                    $flatTasks = $this->normalizePhases($rawPhases);
                     $this->writeTasksFlat($id, $flatTasks);
+                    $this->writeMilestonesFlat($id, $this->normalizeToMilestones($rawPhases));
                 }
 
                 return redirect()->to('projects')->with('success', 'Project updated successfully!');
@@ -304,6 +318,7 @@ class Projects extends BaseController
                 );
 
                 $this->deleteProjectTasks($id);
+                $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
 
                 return $this->response->setJSON(['success' => true]);
@@ -335,6 +350,7 @@ class Projects extends BaseController
                 );
 
                 $this->deleteProjectTasks($id);
+                $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
                 return redirect()->to('projects')->with('success', 'Project deleted successfully!');
             }
@@ -357,13 +373,74 @@ class Projects extends BaseController
                 return redirect()->to('projects')->with('error', 'Project not found');
             }
 
+            $milestones   = $this->getMilestonesOrdered($id);
+            $startDate    = $project['start_date_value'] ?? '';
+            $endDate      = $project['end_date_value']   ?? '';
+            $reportDate   = date('Y-m-d');
+            $actualToDate = (float) ($project['overall_progress'] ?? 0);
+
+            $curveData        = null;
+            $plannedToDate    = null;
+            $variance         = null;
+            $ewd              = null;
+            $weeklyTargets    = [];
+            $milestoneSummary = [];
+
+            if (!empty($milestones)) {
+                // Build per-milestone summary rows (always, even without a curve)
+                $svc        = new MilestoneProgressService();
+                $cumPlanned = 0.0;
+                $cumActual  = 0.0;
+
+                foreach ($milestones as $m) {
+                    $weight = (float) ($m['weight'] ?? 0);
+                    $isDone = in_array(strtolower((string)($m['status'] ?? '')), ['done', 'completed'], true)
+                              || !empty($m['actualCompletionDate']);
+
+                    $cumPlanned += $weight;
+                    if ($isDone) $cumActual += $weight;
+
+                    $dated = !empty($m['targetDate']);
+                    $milestoneSummary[] = [
+                        'name'       => (string) ($m['name']       ?? ''),
+                        'targetDate' => $dated ? (string) $m['targetDate'] : null,
+                        'plannedPct' => $dated ? round($cumPlanned, 2) : null,
+                        'actualPct'  => round($cumActual, 2),
+                        'variance'   => $dated ? round($cumActual - $cumPlanned, 2) : null,
+                        'status'     => (string) ($m['status'] ?? 'Pending'),
+                    ];
+                }
+
+                // Curve and time-based metrics only when a project start date exists
+                if ($startDate !== '') {
+                    $curveData     = $svc->computeCurve($milestones, $startDate, $endDate ?: null);
+                    $plannedToDate = $svc->sampleAt($curveData['controlPoints'], $reportDate);
+                    $variance      = round($actualToDate - $plannedToDate, 2);
+                    $weeklyTargets = $svc->weeklyTargets($curveData['controlPoints'], $startDate, $reportDate);
+
+                    $dailyRate = $svc->dailyRateAt($curveData['controlPoints'], $reportDate);
+                    if ($dailyRate > 0) {
+                        $ewd = round($variance / $dailyRate, 1);
+                    }
+                }
+            }
+
             return view('projects/projects_show', [
-                'pageTitle' => 'Project Detail',
-                'activePage' => 'projects',
-                'project' => $project,
-                'projectId' => $id,
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'Staff'
+                'pageTitle'        => 'Project Detail',
+                'activePage'       => 'projects',
+                'project'          => $project,
+                'projectId'        => $id,
+                'milestones'       => $milestones,
+                'curveData'        => $curveData,
+                'plannedToDate'    => $plannedToDate,
+                'actualToDate'     => $actualToDate,
+                'variance'         => $variance,
+                'ewd'              => $ewd,
+                'weeklyTargets'    => $weeklyTargets,
+                'milestoneSummary' => $milestoneSummary,
+                'reportDate'       => $reportDate,
+                'userName'         => session()->get('userName') ?? 'User',
+                'role'             => session()->get('role') ?? 'Staff',
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Projects::show - ' . $e->getMessage());
@@ -457,6 +534,102 @@ class Projects extends BaseController
         }
     }
 
+    // â”€â”€ Milestone helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /** Convert raw POST phases into the milestone schema for Firestore. */
+    private function normalizeToMilestones(array $rawPhases): array
+    {
+        $milestones = [];
+        $order      = 1;
+
+        foreach ($rawPhases as $phase) {
+            $name = trim((string) ($phase['name'] ?? ''));
+            if ($name === '') continue;
+
+            $targetDate = trim((string) ($phase['site_date'] ?? ''));
+
+            $milestones[] = [
+                'name'                 => $name,
+                'order'                => $order++,
+                'weight'               => (float) ($phase['weight'] ?? 0),
+                'targetDate'           => $targetDate !== '' ? $targetDate : null,
+                'actualCompletionDate' => null,
+                'status'               => 'Pending',
+            ];
+        }
+
+        return $milestones;
+    }
+
+    /** Validate that non-empty milestone weights sum to 100 (Â±0.5%). Returns an error string or null. */
+    private function validateMilestoneWeights(array $rawPhases): ?string
+    {
+        $total = 0.0;
+        foreach ($rawPhases as $phase) {
+            if (trim((string) ($phase['name'] ?? '')) === '') continue;
+            $total += (float) ($phase['weight'] ?? 0);
+        }
+        $total = round($total, 1);
+        if (abs($total - 100.0) > 0.5) {
+            return 'Milestone weights must sum to 100%. Current total: ' . number_format($total, 1) . '%.';
+        }
+        return null;
+    }
+
+    /** Write milestone documents (full replace) to projects/{id}/milestones. */
+    private function writeMilestonesFlat(string $projectId, array $milestones): void
+    {
+        $ref = $this->firestore->getDb()
+            ->collection('project')->document($projectId)->collection('milestones');
+
+        foreach ($ref->documents() as $existing) {
+            if ($existing->exists()) $ref->document($existing->id())->delete();
+        }
+
+        foreach ($milestones as $m) {
+            $docId = bin2hex(random_bytes(8));
+            $ref->document($docId)->set([
+                'name'                 => (string) ($m['name']   ?? ''),
+                'order'                => (int)    ($m['order']  ?? 0),
+                'weight'               => (float)  ($m['weight'] ?? 0),
+                'targetDate'           => $m['targetDate'] ?: null,
+                'actualCompletionDate' => $m['actualCompletionDate'] ?? null,
+                'status'               => (string) ($m['status'] ?? 'Pending'),
+            ]);
+        }
+    }
+
+    /** Delete all milestones for a project. */
+    private function deleteProjectMilestones(string $projectId): void
+    {
+        $ref = $this->firestore->getDb()
+            ->collection('project')->document($projectId)->collection('milestones');
+
+        foreach ($ref->documents() as $doc) {
+            if ($doc->exists()) $ref->document($doc->id())->delete();
+        }
+    }
+
+    /** Load milestones ordered by the `order` field. */
+    private function getMilestonesOrdered(string $projectId): array
+    {
+        $ref        = $this->firestore->getDb()
+            ->collection('project')->document($projectId)->collection('milestones');
+        $milestones = [];
+
+        foreach ($ref->documents() as $doc) {
+            if ($doc->exists()) {
+                $data       = $doc->data();
+                $data['id'] = $doc->id();
+                $milestones[] = $data;
+            }
+        }
+
+        usort($milestones, static fn($a, $b) => (int)($a['order'] ?? 0) <=> (int)($b['order'] ?? 0));
+
+        return $milestones;
+    }
+
     private function deleteProjectTasks(string $projectId): void
     {
         $tasksRef = $this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks');
@@ -490,6 +663,10 @@ class Projects extends BaseController
                 return trim((string)($t['task_name'] ?? '')) !== '';
             }));
 
+            $phaseQty      = max(0, (int)($phase['qty']      ?? 1));
+            $phaseUnit     = trim((string)($phase['unit']     ?? 'pcs')) ?: 'pcs';
+            $phaseSiteDate = isset($phase['site_date']) ? trim((string)$phase['site_date']) : '';
+
             if (empty($validTasks)) {
                 // Phase with no tasks: store as a single phase-level entry
                 $flat[] = [
@@ -497,10 +674,13 @@ class Projects extends BaseController
                     'phase_name'         => $phaseName,
                     'task_name'          => '',
                     'weight_percent'     => $phaseWeight,
-                    'qty'                => 0,
-                    'unit'               => 'pcs',
+                    'qty'                => $phaseQty,
+                    'unit'               => $phaseUnit,
                     'completion_percent' => 0.0,
                     'status'             => 'Pending',
+                    'phase_qty'          => $phaseQty,
+                    'phase_unit'         => $phaseUnit,
+                    'phase_site_date'    => $phaseSiteDate,
                 ];
                 continue;
             }
@@ -519,6 +699,9 @@ class Projects extends BaseController
                     'unit'               => trim((string)($task['unit'] ?? 'pcs')) ?: 'pcs',
                     'completion_percent' => (float)($task['completion_percent'] ?? 0),
                     'status'             => $this->normalizeTaskStatus((string)($task['status'] ?? 'Pending')),
+                    'phase_qty'          => $phaseQty,
+                    'phase_unit'         => $phaseUnit,
+                    'phase_site_date'    => $phaseSiteDate,
                 ];
             }
         }
@@ -540,23 +723,18 @@ class Projects extends BaseController
 
             if (!isset($phaseMap[$phaseName])) {
                 $phaseMap[$phaseName] = count($phases);
-                $phases[] = ['name' => $phaseName, 'weight' => 0.0, 'tasks' => []];
+                $phases[] = [
+                    'name'      => $phaseName,
+                    'weight'    => 0.0,
+                    'tasks'     => [],
+                    'qty'       => isset($task['phase_qty'])      ? $task['phase_qty']      : ($task['qty'] ?? 1),
+                    'unit'      => isset($task['phase_unit'])     ? $task['phase_unit']     : ($task['unit'] ?? 'pcs'),
+                    'site_date' => isset($task['phase_site_date']) ? $task['phase_site_date'] : '',
+                ];
             }
 
             $pIdx = $phaseMap[$phaseName];
             $phases[$pIdx]['weight'] += (float)($task['weight_percent'] ?? 0);
-
-            $taskName = trim((string)($task['task_name'] ?? ''));
-            if ($taskName !== '') {
-                $phases[$pIdx]['tasks'][] = [
-                    'id'                 => $task['id'] ?? '',
-                    'task_name'          => $taskName,
-                    'qty'                => $task['qty'] ?? 0,
-                    'unit'               => $task['unit'] ?? 'pcs',
-                    'completion_percent' => $task['completion_percent'] ?? 0,
-                    'status'             => $task['status'] ?? 'Pending',
-                ];
-            }
         }
 
         // Round accumulated weights to 1 decimal
@@ -694,7 +872,7 @@ class Projects extends BaseController
         $normalizedId = preg_replace('#^.*/#', '', $rawUserId) ?: $rawUserId;
 
         $raw = $this->usersModel->getUserById($normalizedId);
-        // getUserById returns ['id' => ..., 'data' => [...]] — unwrap the data array
+        // getUserById returns ['id' => ..., 'data' => [...]] â€” unwrap the data array
         $user = is_array($raw['data'] ?? null) ? $raw['data'] : $raw;
 
         // Backward compatibility: older records may store email in *_id fields.
@@ -814,8 +992,8 @@ class Projects extends BaseController
 
         $luzon = [
             'metro manila','ncr','manila','quezon city','makati','pasig','taguig',
-            'mandaluyong','marikina','caloocan','las piñas','muntinlupa','navotas',
-            'parañaque','pasay','san juan','valenzuela','pateros',
+            'mandaluyong','marikina','caloocan','las piÃ±as','muntinlupa','navotas',
+            'paraÃ±aque','pasay','san juan','valenzuela','pateros',
             'ilocos norte','ilocos sur','la union','pangasinan',
             'benguet','baguio','ifugao','kalinga','mountain province','apayao','abra',
             'cagayan','isabela','nueva vizcaya','quirino','batanes',

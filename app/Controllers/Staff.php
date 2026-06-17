@@ -282,6 +282,43 @@ class Staff extends BaseController
         }
     }
 
+    public function resendCredentials($id)
+    {
+        try {
+            $doc = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
+            if (!$doc->exists()) {
+                return redirect()->to('staff')->with('error', 'Staff member not found.');
+            }
+
+            $data      = $doc->data();
+            $email     = $data['email']      ?? '';
+            $firstName = $data['first_name'] ?? 'Staff';
+
+            if ($email === '') {
+                return redirect()->back()->with('error', 'Staff member has no email on record.');
+            }
+
+            $tempPassword = $this->generateTempPassword();
+
+            // Update Firebase Auth password
+            $firebaseAuth = $this->firestore->getAuth();
+            $firebaseAuth->updateUser($id, ['password' => $tempPassword]);
+
+            // Reset must_change_password + fresh 15-minute expiry
+            $this->firestore->getDb()->collection('users')->document($id)->update([
+                ['path' => 'must_change_password',     'value' => true],
+                ['path' => 'temp_password_expires_at', 'value' => time() + (15 * 60)],
+            ]);
+
+            $this->sendWelcomeEmail($email, $firstName, $tempPassword);
+
+            return redirect()->to('staff/show/' . $id)->with('success', 'New credentials sent to ' . $email . '. The temporary password expires in 15 minutes.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Staff::resendCredentials - ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to resend credentials: ' . $e->getMessage());
+        }
+    }
+
     public function delete($id = null)
     {
         // If this is an AJAX/POST request, expect the ID in POST and return JSON

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Controllers;
 
@@ -6,6 +6,7 @@ use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
 use App\Libraries\FirestoreService;
 use App\Libraries\TrashService;
+use Config\GoogleMaps;
 
 class Resources extends BaseController
 {
@@ -54,7 +55,7 @@ class Resources extends BaseController
                 // fail gracefully; leave manpower empty
             }
 
-            // — Read and apply equipment/tools sort filters —
+            // â€” Read and apply equipment/tools sort filters â€”
             $eqSort    = trim((string) ($this->request->getGet('eq_sort')    ?? ''));
             $toolsSort = trim((string) ($this->request->getGet('tools_sort') ?? ''));
 
@@ -70,7 +71,7 @@ class Resources extends BaseController
                 usort($tools, fn($a, $b) => ($b['available_units_display'] ?? 0) <=> ($a['available_units_display'] ?? 0));
             }
 
-            // — Read and apply manpower filters —
+            // â€” Read and apply manpower filters â€”
             $mpRole   = trim((string) ($this->request->getGet('mp_role')   ?? ''));
             $mpSpec   = trim((string) ($this->request->getGet('mp_spec')   ?? ''));
             $mpStatus = trim((string) ($this->request->getGet('mp_status') ?? ''));
@@ -116,6 +117,7 @@ class Resources extends BaseController
     public function create()
     {
         $category = $this->request->getGet('category') ?? '';
+        $mapsKey = (new GoogleMaps())->browserKey;
 
         if ($category === 'Manpower') {
             return redirect()->to('manpower/create');
@@ -136,6 +138,8 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -156,6 +160,8 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -235,6 +241,8 @@ class Resources extends BaseController
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -439,14 +447,14 @@ class Resources extends BaseController
             // Ensure derived fields (like name from manpower_details) are present
             $resource = $this->normalizeResourceForView($resource);
 
-            // — Read unit-level filters —
+            // â€” Read unit-level filters â€”
             $filterBrand     = trim((string) ($this->request->getGet('brand')     ?? ''));
             $filterModelNo   = trim((string) ($this->request->getGet('model_no')  ?? ''));
             $filterCondition = trim((string) ($this->request->getGet('condition') ?? ''));
             $filterStatus    = trim((string) ($this->request->getGet('status')    ?? ''));
             $filterLocType   = trim((string) ($this->request->getGet('loc_type')  ?? ''));
 
-            // — Apply filters —
+            // â€” Apply filters â€”
             if ($filterBrand !== '') {
                 $items = array_values(array_filter($items, fn($i) =>
                     str_contains(strtolower((string) ($i['brand'] ?? '')), strtolower($filterBrand))));
@@ -990,6 +998,40 @@ class Resources extends BaseController
         }
 
         return $warehouses;
+    }
+
+    private function getDefaultWarehouseAddress(): string
+    {
+        try {
+            $doc = $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->snapshot();
+            if ($doc->exists()) {
+                return trim((string) ($doc->data()['default_address'] ?? ''));
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::getDefaultWarehouseAddress - ' . $e->getMessage());
+        }
+        return '';
+    }
+
+    public function saveWarehouseDefault()
+    {
+        try {
+            $address = trim((string) ($this->request->getPost('warehouse_default_address') ?? ''));
+            if ($address === '') {
+                return $this->response->setJSON(['success' => false, 'message' => 'Address cannot be empty']);
+            }
+            $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->set(['default_address' => $address, 'updated_at' => time()], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'address' => $address]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::saveWarehouseDefault - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to save']);
+        }
     }
 
     private function getPrimaryConditionLabel($summary): string

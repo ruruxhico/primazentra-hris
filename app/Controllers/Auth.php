@@ -160,8 +160,19 @@ class Auth extends BaseController {
             return redirect()->back()->withInput()->with('error', 'Unable to reset password: ' . $e->getMessage());
         }
 
-        // Do not touch must_change_password here; that flag is used for non-admin role policy.
-        // The password itself lives only in Firebase Auth, so there is no Firestore password data to sync.
+        // Clear the temporary-password flags so the user is not bounced to /change-password on next login
+        try {
+            $fbUser = $this->firestore->getAuth()->getUserByEmail($email);
+            $uid    = (string) $fbUser->uid;
+            if ($uid !== '') {
+                $this->firestore->getDb()->collection('users')->document($uid)->update([
+                    ['path' => 'must_change_password',     'value' => false],
+                    ['path' => 'temp_password_expires_at', 'value' => null],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'processResetPassword: failed to clear must_change_password for ' . $email . ': ' . $e->getMessage());
+        }
 
         return redirect()->to('/login')->with('success', 'Your password has been reset successfully. You may now sign in.');
     }
@@ -235,7 +246,7 @@ class Auth extends BaseController {
 
                 if (time() > $expiresTs) {
                     return redirect()->back()->withInput()->with('error',
-                        'Your temporary password has expired. Please contact your administrator to have your account reset.');
+                        'Your temporary password has expired. <a href="' . base_url('forgot-password') . '" style="color:#7b1f1f;font-weight:700;text-decoration:underline;">Use Forgot Password</a> to set a new one, or contact your administrator.');
                 }
             }
 
@@ -245,7 +256,8 @@ class Auth extends BaseController {
                 'userId'                  => $user['id'],
                 'userName'                => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
                 'role'                    => $userData['role'],
-                'last_activity'           => time(),
+                'login_time'              => time(),
+                'remember_me'             => $rememberMe,
                 'force_change_password'   => true,
                 'temp_password_expires_at'=> $expiresTs ?? null,
             ]);
@@ -254,11 +266,12 @@ class Auth extends BaseController {
         }
 
         session()->set([
-            'isLoggedIn' => true,
-            'userId'     => $user['id'],
-            'userName'   => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
-            'role'       => $userData['role'],
-            'last_activity' => time(),
+            'isLoggedIn'  => true,
+            'userId'      => $user['id'],
+            'userName'    => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
+            'role'        => $userData['role'],
+            'login_time'  => time(),
+            'remember_me' => $rememberMe,
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);
