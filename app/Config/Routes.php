@@ -106,3 +106,10 @@ $routes->get('verification-success',       'VerifyAccount::verificationSuccess')
 // Trash (soft-delete restore/permanent-delete)
 $routes->post('trash/restore', 'Trash::restore');
 $routes->post('trash/permanent-delete', 'Trash::permanentDelete');
+
+// Export (XLSX, PDF, Print)
+$routes->get('export', 'Export::index');
+
+// Import (template download + file processing)
+$routes->get('import/template', 'Import::template');
+$routes->post('import/process', 'Import::process');

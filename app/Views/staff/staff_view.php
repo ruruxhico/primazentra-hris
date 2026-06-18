@@ -105,11 +105,7 @@
         + ADD
     </a>
 
-    <button class="btn btn-import">
-        ⬇ IMPORT
-    </button>
-
-    <button class="btn btn-export">
+    <button class="btn btn-export" data-module="staff" onclick="openStaffExportModal()">
         ⬆ EXPORT
     </button>
 </div>
@@ -497,6 +493,38 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(() => showToast('Failed', 'error'));
         });
     });
+});
+</script>
+
+<!-- Export Modal -->
+<div id="exportModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 18px;color:#1a3c5e;font-size:17px;">Export Staff</h3>
+    <p style="margin:0 0 18px;color:#555;font-size:13px;">Choose a format to download:</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <a id="exportXlsx" href="<?= base_url('export?module=staff&format=xlsx') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;">
+        <span style="font-size:20px;">📊</span> Download XLSX
+      </a>
+      <a id="exportPdf" href="<?= base_url('export?module=staff&format=pdf') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;">
+        <span style="font-size:20px;">📄</span> Download PDF
+      </a>
+      <a id="exportPrint" href="<?= base_url('export?module=staff&format=print') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #27ae60;border-radius:8px;text-decoration:none;color:#27ae60;font-weight:600;font-size:14px;">
+        <span style="font-size:20px;">🖨️</span> Open Printable View
+      </a>
+    </div>
+    <div style="text-align:right;margin-top:18px;">
+      <button onclick="document.getElementById('exportModal').hidden=true;document.getElementById('exportModal').style.display='none';" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openStaffExportModal() {
+  const m = document.getElementById('exportModal');
+  m.hidden = false; m.style.display = 'flex';
+}
+document.getElementById('exportModal')?.addEventListener('click', function(e) {
+  if (e.target === this) { this.hidden = true; this.style.display = 'none'; }
 });
 </script>
 

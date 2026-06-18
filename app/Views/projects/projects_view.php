@@ -102,11 +102,11 @@
         + ADD
     </a>
 
-    <button class="btn btn-import">
+    <button class="btn btn-import" id="importBtn" data-module="projects">
         ⬇ IMPORT
     </button>
 
-    <button class="btn btn-export">
+    <button class="btn btn-export" id="exportBtn" data-module="projects">
         ⬆ EXPORT
     </button>
 </div>
@@ -527,7 +527,162 @@ document.addEventListener('DOMContentLoaded', function () {
                 .catch(() => showToast('Failed', 'error'));
         });
     });
+    // ── Export / Import ──────────────────────────────────────────────────────
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+
+    exportBtn.addEventListener('click', () => openExportModal(exportBtn.dataset.module));
+    importBtn.addEventListener('click', () => openImportModal(importBtn.dataset.module));
 });
+</script>
+
+<!-- Export Modal -->
+<div id="exportModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;" hidden>
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 18px;color:#1a3c5e;font-size:17px;">Export Projects</h3>
+    <p style="margin:0 0 18px;color:#555;font-size:13px;">Choose a format to download:</p>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <a id="exportXlsx" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;transition:background .15s;">
+        <span style="font-size:20px;">📊</span> Download XLSX
+      </a>
+      <a id="exportPdf" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;transition:background .15s;">
+        <span style="font-size:20px;">📄</span> Download PDF
+      </a>
+      <a id="exportPrint" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #27ae60;border-radius:8px;text-decoration:none;color:#27ae60;font-weight:600;font-size:14px;transition:background .15s;">
+        <span style="font-size:20px;">🖨️</span> Open Printable View
+      </a>
+    </div>
+    <div style="text-align:right;margin-top:18px;">
+      <button onclick="closeExportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div id="importModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 6px;color:#1a3c5e;font-size:17px;">Import Projects</h3>
+    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
+    <div id="importDropZone" style="border:2px dashed #b0c4d8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#888;font-size:13px;transition:border-color .15s;">
+      <div style="font-size:28px;margin-bottom:6px;">📂</div>
+      Click or drag &amp; drop your .xlsx file here
+      <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none;">
+    </div>
+    <div id="importFileName" style="margin-top:8px;font-size:12px;color:#555;"></div>
+    <div id="importResult" style="margin-top:10px;font-size:13px;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
+      <button onclick="closeImportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Cancel</button>
+      <button id="importSubmitBtn" onclick="submitImport()" style="padding:8px 18px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const baseUrl = '<?= base_url() ?>';
+  const csrfName = document.querySelector('meta[name="csrf-name"]')?.content;
+  const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.content;
+  let currentImportModule = '';
+
+  window.openExportModal = function (module) {
+    const m = document.getElementById('exportModal');
+    document.getElementById('exportXlsx').href  = baseUrl + 'export?module=' + module + '&format=xlsx';
+    document.getElementById('exportPdf').href   = baseUrl + 'export?module=' + module + '&format=pdf';
+    document.getElementById('exportPrint').href = baseUrl + 'export?module=' + module + '&format=print';
+    m.hidden = false;
+    m.style.display = 'flex';
+  };
+
+  window.closeExportModal = function () {
+    const m = document.getElementById('exportModal');
+    m.hidden = true;
+    m.style.display = 'none';
+  };
+
+  window.openImportModal = function (module) {
+    currentImportModule = module;
+    const m = document.getElementById('importModal');
+    document.getElementById('importTplLink').href = baseUrl + 'import/template?module=' + module;
+    document.getElementById('importFileName').textContent = '';
+    document.getElementById('importResult').textContent = '';
+    document.getElementById('importFileInput').value = '';
+    m.hidden = false;
+    m.style.display = 'flex';
+  };
+
+  window.closeImportModal = function () {
+    const m = document.getElementById('importModal');
+    m.hidden = true;
+    m.style.display = 'none';
+  };
+
+  window.submitImport = function () {
+    const fileInput = document.getElementById('importFileInput');
+    const resultEl = document.getElementById('importResult');
+    if (!fileInput.files.length) {
+      resultEl.style.color = '#c0392b';
+      resultEl.textContent = 'Please select a file first.';
+      return;
+    }
+    const btn = document.getElementById('importSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+    resultEl.style.color = '#555';
+    resultEl.textContent = 'Processing...';
+
+    const fd = new FormData();
+    fd.append('module', currentImportModule);
+    fd.append('import_file', fileInput.files[0]);
+    if (csrfName) fd.append(csrfName, csrfHash);
+
+    fetch(baseUrl + 'import/process', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.textContent = 'Import';
+        if (data.success) {
+          resultEl.style.color = '#27ae60';
+          resultEl.textContent = '✓ ' + data.message;
+          setTimeout(() => { closeImportModal(); location.reload(); }, 1800);
+        } else {
+          resultEl.style.color = '#c0392b';
+          resultEl.textContent = '✗ ' + (data.message || 'Import failed.');
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'Import';
+        resultEl.style.color = '#c0392b';
+        resultEl.textContent = 'Network error. Try again.';
+      });
+  };
+
+  // Drop zone
+  const dz = document.getElementById('importDropZone');
+  const fi = document.getElementById('importFileInput');
+  const fn = document.getElementById('importFileName');
+  if (dz) {
+    dz.addEventListener('click', () => fi.click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor = '#1a3c5e'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor = '#b0c4d8'; });
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.style.borderColor = '#b0c4d8';
+      if (e.dataTransfer.files.length) { fi.files = e.dataTransfer.files; fn.textContent = '📎 ' + fi.files[0].name; }
+    });
+    fi.addEventListener('change', () => { if (fi.files.length) fn.textContent = '📎 ' + fi.files[0].name; });
+  }
+
+  // Close on backdrop click
+  ['exportModal', 'importModal'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', function (e) {
+      if (e.target === this) {
+        this.hidden = true;
+        this.style.display = 'none';
+      }
+    });
+  });
+}());
 </script>
 
 <?= $this->endSection() ?>
