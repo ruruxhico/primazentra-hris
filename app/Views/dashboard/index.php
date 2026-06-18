@@ -1,4 +1,4 @@
-﻿<?= $this->extend('layouts/main') ?>
+<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
 <?php if (!empty($googleMapsBrowserKey)): ?>
