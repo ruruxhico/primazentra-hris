@@ -828,12 +828,35 @@
 
 <!-- Export Modal -->
 <div id="exportModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-    <h3 id="exportModalTitle" style="margin:0 0 18px;color:#1a3c5e;font-size:17px;">Export</h3>
-    <p style="margin:0 0 18px;color:#555;font-size:13px;">Choose a format to download:</p>
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:340px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 id="exportModalTitle" style="margin:0 0 6px;color:#1a3c5e;font-size:17px;">Export</h3>
+
+    <!-- Radio buttons: only shown for equipment/tools -->
+    <div id="exportSubtypeWrap" style="display:none;margin:14px 0;background:#f5f8fb;border:1px solid #d0dce8;border-radius:8px;padding:12px 16px;">
+      <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#1a3c5e;text-transform:uppercase;letter-spacing:.4px;">Export Type</p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
+        <input type="radio" name="exportSubtype" value="models" checked style="margin-top:2px;accent-color:#1a3c5e;">
+        <span style="font-size:13px;color:#333;">
+          <strong>Models only</strong><br>
+          <span style="font-size:11px;color:#777;">One row per model with condition summary counts</span>
+        </span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+        <input type="radio" name="exportSubtype" value="units" style="margin-top:2px;accent-color:#1a3c5e;">
+        <span style="font-size:13px;color:#333;">
+          <strong>All specific units per model</strong><br>
+          <span style="font-size:11px;color:#777;">One row per unit across all models in one file</span>
+        </span>
+      </label>
+    </div>
+
+    <p style="margin:12px 0 14px;color:#555;font-size:13px;">Choose a format to download:</p>
     <div style="display:flex;flex-direction:column;gap:10px;">
       <a id="exportXlsx" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;">
         <span style="font-size:20px;">📊</span> Download XLSX
+      </a>
+      <a id="exportCsv" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #7b5ea7;border-radius:8px;text-decoration:none;color:#7b5ea7;font-weight:600;font-size:14px;">
+        <span style="font-size:20px;">📋</span> Download CSV
       </a>
       <a id="exportPdf" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;">
         <span style="font-size:20px;">📄</span> Download PDF
@@ -874,12 +897,28 @@
   const csrfHash = document.querySelector('meta[name="csrf-hash"]')?.content;
   let currentImportModule = '';
 
+  const resourceModules = ['equipment', 'tools'];
+
+  function buildExportLinks(module, subtype) {
+    const sub = resourceModules.includes(module) ? '&subtype=' + subtype : '';
+    document.getElementById('exportXlsx').href  = baseUrl + 'export?module=' + module + '&format=xlsx'  + sub;
+    document.getElementById('exportCsv').href   = baseUrl + 'export?module=' + module + '&format=csv'   + sub;
+    document.getElementById('exportPdf').href   = baseUrl + 'export?module=' + module + '&format=pdf'   + sub;
+    document.getElementById('exportPrint').href = baseUrl + 'export?module=' + module + '&format=print' + sub;
+  }
+
   window.openExportModal = function (module, label) {
     const m = document.getElementById('exportModal');
     document.getElementById('exportModalTitle').textContent = 'Export ' + (label || module);
-    document.getElementById('exportXlsx').href  = baseUrl + 'export?module=' + module + '&format=xlsx';
-    document.getElementById('exportPdf').href   = baseUrl + 'export?module=' + module + '&format=pdf';
-    document.getElementById('exportPrint').href = baseUrl + 'export?module=' + module + '&format=print';
+    m.dataset.module = module;
+
+    const isResource = resourceModules.includes(module);
+    document.getElementById('exportSubtypeWrap').style.display = isResource ? 'block' : 'none';
+
+    // Reset radio to "models"
+    document.querySelectorAll('input[name="exportSubtype"]').forEach(r => { r.checked = r.value === 'models'; });
+
+    buildExportLinks(module, 'models');
     m.hidden = false; m.style.display = 'flex';
   };
 
@@ -887,6 +926,13 @@
     const m = document.getElementById('exportModal');
     m.hidden = true; m.style.display = 'none';
   };
+
+  document.querySelectorAll('input[name="exportSubtype"]').forEach(radio => {
+    radio.addEventListener('change', function () {
+      const module = document.getElementById('exportModal').dataset.module || '';
+      buildExportLinks(module, this.value);
+    });
+  });
 
   window.openImportModal = function (module) {
     currentImportModule = module;

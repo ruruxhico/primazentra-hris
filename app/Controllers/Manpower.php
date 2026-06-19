@@ -19,6 +19,7 @@ class Manpower extends BaseController
     public function create()
     {
         return view('resources/manpower_form', [
+            'pageTitle' => 'Add Manpower',
             'resource' => [
                 'category' => 'Manpower',
                 'status' => 'Available',
@@ -100,6 +101,7 @@ class Manpower extends BaseController
             }
 
             return view('resources/manpower_form', [
+                'pageTitle' => 'Edit Manpower',
                 'resource' => $resource,
                 'projects' => $this->getProjectOptions(),
                 'projectSites' => $this->getProjectSiteOptions(),

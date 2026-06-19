@@ -545,6 +545,9 @@ document.addEventListener('DOMContentLoaded', function () {
       <a id="exportXlsx" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;transition:background .15s;">
         <span style="font-size:20px;">📊</span> Download XLSX
       </a>
+      <a id="exportCsv" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #7b5ea7;border-radius:8px;text-decoration:none;color:#7b5ea7;font-weight:600;font-size:14px;transition:background .15s;">
+        <span style="font-size:20px;">📋</span> Download CSV
+      </a>
       <a id="exportPdf" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;transition:background .15s;">
         <span style="font-size:20px;">📄</span> Download PDF
       </a>
@@ -587,6 +590,7 @@ document.addEventListener('DOMContentLoaded', function () {
   window.openExportModal = function (module) {
     const m = document.getElementById('exportModal');
     document.getElementById('exportXlsx').href  = baseUrl + 'export?module=' + module + '&format=xlsx';
+    document.getElementById('exportCsv').href   = baseUrl + 'export?module=' + module + '&format=csv';
     document.getElementById('exportPdf').href   = baseUrl + 'export?module=' + module + '&format=pdf';
     document.getElementById('exportPrint').href = baseUrl + 'export?module=' + module + '&format=print';
     m.hidden = false;

@@ -461,6 +461,7 @@ class Projects extends BaseController
         return [
             'project_name' => $projectName,
             'project_type' => $projectType,
+            'client_name'  => trim((string) $this->request->getPost('client_name')),
             'status' => $status,
             'budget' => $budget,
             'start_date' => $this->normalizeDateValue($this->request->getPost('start_date')),

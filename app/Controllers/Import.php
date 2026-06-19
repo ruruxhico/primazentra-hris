@@ -16,8 +16,8 @@ class Import extends BaseController
     // Maps module → [headers, notes row values]
     private const TEMPLATES = [
         'projects' => [
-            'headers' => ['Project Name*', 'Type*', 'Location Address', 'Status*', 'Start Date (YYYY-MM-DD)', 'End Date (YYYY-MM-DD)', 'Budget'],
-            'notes'   => ['e.g. Tower A', 'Residential / Commercial / Industrial', 'Full address', 'Planned / On Going / Completed / Halted', 'e.g. 2025-01-01', 'e.g. 2025-12-31', 'Numeric, e.g. 500000'],
+            'headers' => ['Project Name*', 'Site Address', 'Latitude', 'Longitude', 'Region', 'Client', 'Project Type*', 'Budget', 'Project Manager', 'Site Engineer', 'Status', 'Start Date (MM/DD/YYYY)', 'End Date (MM/DD/YYYY)'],
+            'notes'   => ['e.g. Tower A', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Luzon / Visayas / Mindanao (auto if blank)', 'e.g. DITO Telecommunity', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Numeric, e.g. 500000', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'PLANNED / ON-GOING / COMPLETED / HALTED (defaults to PLANNED)', 'e.g. 01/01/2025', 'e.g. 12/31/2025'],
         ],
         'equipment' => [
             'headers' => ['Name*', 'Model/Code', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
@@ -28,8 +28,8 @@ class Import extends BaseController
             'notes'   => ['e.g. Drill Machine', 'e.g. DR-100', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 10', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
         ],
         'manpower' => [
-            'headers' => ['First Name*', 'Last Name*', 'Role*', 'Specialization', 'Status*', 'Contact Number', 'Skills (comma-separated)'],
-            'notes'   => ['e.g. Juan', 'e.g. dela Cruz', 'e.g. Carpenter / Electrician / Mason', 'e.g. Structural works', 'Available / Deployed / On Leave', 'e.g. 09171234567', 'e.g. Welding, Masonry'],
+            'headers' => ['First Name*', 'Middle Name', 'Last Name*', 'Role*', 'Specialization', 'Skills (semicolon-separated)', 'Status*'],
+            'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'e.g. Carpenter / Electrician / Mason', 'e.g. Structural works', 'e.g. Welding; Masonry', 'Available / Deployed / On Leave'],
         ],
     ];
 
@@ -163,38 +163,81 @@ class Import extends BaseController
 
     // ── Importers ────────────────────────────────────────────────────────────
 
+    // Columns (0-indexed per template):
+    // 0:Project Name* | 1:Site Address | 2:Latitude | 3:Longitude | 4:Region | 5:Client
+    // 6:Project Type* | 7:Budget | 8:Project Manager | 9:Site Engineer | 10:Status
+    // 11:Start Date (MM/DD/YYYY) | 12:End Date (MM/DD/YYYY)
     private function importProjects(array $rows): array
     {
-        // Columns (0-indexed): Name, Type, Location, Status, StartDate, EndDate, Budget
         $db = $this->firestore->getDb();
         $imported = 0;
         $skipped  = 0;
         $now = time();
 
+        // Pre-load users for PM/SE name resolution
+        $usersMap = [];
+        foreach ($db->collection('users')->documents() as $udoc) {
+            if (!$udoc->exists()) continue;
+            $u = $udoc->data();
+            $fullName = strtolower(trim(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '')));
+            if ($fullName !== '') $usersMap[$fullName] = $udoc->id();
+        }
+
         foreach ($rows as $row) {
             $name = trim((string) ($row[0] ?? ''));
-            $type = trim((string) ($row[1] ?? ''));
+            $type = trim((string) ($row[6] ?? ''));
             if ($name === '' || $type === '') { $skipped++; continue; }
 
-            $status = trim((string) ($row[3] ?? '')) ?: 'Planned';
+            $address = trim((string) ($row[1] ?? ''));
+            $lat     = is_numeric($row[2] ?? '') ? (float) $row[2] : null;
+            $lng     = is_numeric($row[3] ?? '') ? (float) $row[3] : null;
+            $region  = trim((string) ($row[4] ?? ''));
+            $client  = trim((string) ($row[5] ?? ''));
+            $status  = trim((string) ($row[10] ?? '')) ?: 'PLANNED';
+            $pmName  = strtolower(trim((string) ($row[8] ?? '')));
+            $seName  = strtolower(trim((string) ($row[9] ?? '')));
+
+            $pmId = !empty($pmName) ? ($usersMap[$pmName] ?? null) : null;
+            $seId = !empty($seName) ? ($usersMap[$seName] ?? null) : null;
+
             $db->collection('project')->newDocument()->set([
                 'project_name'       => $name,
                 'project_type'       => $type,
-                'location'           => ['address' => trim((string) ($row[2] ?? ''))],
+                'client_name'        => $client,
                 'status'             => $status,
-                'start_date'         => trim((string) ($row[4] ?? '')),
-                'end_date'           => trim((string) ($row[5] ?? '')),
-                'budget'             => is_numeric($row[6] ?? '') ? (float) $row[6] : 0,
+                'budget'             => is_numeric($row[7] ?? '') ? (float) $row[7] : 0,
+                'start_date'         => $this->parseDateMDY((string) ($row[11] ?? '')),
+                'end_date'           => $this->parseDateMDY((string) ($row[12] ?? '')),
                 'overall_progress'   => 0,
                 'completion_percent' => 0,
-                'personnel'          => ['project_manager_id' => null, 'site_engineer_id' => null],
-                'created_at'         => $now,
-                'updated_at'         => $now,
+                'project_manager_id' => $pmId,
+                'site_engineer_id'   => $seId,
+                'personnel'          => ['project_manager_id' => $pmId, 'site_engineer_id' => $seId],
+                'location'           => [
+                    'address'  => $address,
+                    'geopoint' => ['lat' => $lat, 'lng' => $lng],
+                ],
+                'region'     => $region,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
             $imported++;
         }
 
         return [$imported, $skipped, null];
+    }
+
+    private function parseDateMDY(string $val): string
+    {
+        $val = trim($val);
+        if ($val === '') return '';
+        // Accept MM/DD/YYYY → convert to YYYY-MM-DD
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $val, $m)) {
+            return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[1], (int)$m[2]);
+        }
+        // Already YYYY-MM-DD
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) return substr($val, 0, 10);
+        return $val;
     }
 
     private function importResources(array $rows, string $category): array
@@ -237,32 +280,44 @@ class Import extends BaseController
 
     private function importManpower(array $rows): array
     {
-        // Columns: FirstName, LastName, Role, Specialization, Status, Contact, Skills
+        // Columns: FirstName, MiddleName, LastName, Role, Specialization, Skills, Status
         $db = $this->firestore->getDb();
         $imported = 0;
         $skipped  = 0;
         $now = time();
 
         foreach ($rows as $row) {
-            $firstName = trim((string) ($row[0] ?? ''));
-            $lastName  = trim((string) ($row[1] ?? ''));
-            $role      = trim((string) ($row[2] ?? ''));
+            $firstName  = trim((string) ($row[0] ?? ''));
+            $middleName = trim((string) ($row[1] ?? ''));
+            $lastName   = trim((string) ($row[2] ?? ''));
+            $role       = trim((string) ($row[3] ?? ''));
             if ($firstName === '' || $role === '') { $skipped++; continue; }
 
-            $skillsRaw = trim((string) ($row[6] ?? ''));
-            $skills = $skillsRaw !== '' ? array_map('trim', explode(',', $skillsRaw)) : [];
+            $fullName  = trim($firstName . ($middleName !== '' ? ' ' . $middleName : '') . ' ' . $lastName);
+            $skillsRaw = trim((string) ($row[5] ?? ''));
+            $skills    = $skillsRaw !== ''
+                ? array_values(array_filter(array_map('trim', explode(';', $skillsRaw))))
+                : [];
+
+            try {
+                $empId = 'MP-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+            } catch (\Exception $e) {
+                $empId = 'MP-' . strtoupper(substr(md5(uniqid()), 0, 8));
+            }
 
             $db->collection('manpower')->newDocument()->set([
-                'first_name'      => $firstName,
-                'last_name'       => $lastName,
-                'role'            => $role,
-                'specialization'  => trim((string) ($row[3] ?? '')),
-                'status'          => trim((string) ($row[4] ?? '')) ?: 'Available',
-                'contact_number'  => trim((string) ($row[5] ?? '')),
-                'skills'          => $skills,
-                'category'        => 'Manpower',
-                'created_at'      => $now,
-                'updated_at'      => $now,
+                'name'           => $fullName,
+                'employee_id'    => $empId,
+                'first_name'     => $firstName,
+                'middle_name'    => $middleName !== '' ? $middleName : null,
+                'last_name'      => $lastName,
+                'role'           => $role,
+                'specialization' => trim((string) ($row[4] ?? '')),
+                'skills'         => $skills,
+                'status'         => trim((string) ($row[6] ?? '')) ?: 'Available',
+                'category'       => 'Manpower',
+                'created_at'     => $now,
+                'updated_at'     => $now,
             ]);
             $imported++;
         }

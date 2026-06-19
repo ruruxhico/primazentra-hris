@@ -94,6 +94,7 @@ class Resources extends BaseController
             $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
 
             return view('resources/resources_view', [
+                'pageTitle'                 => 'Resources',
                 'equipment'                 => $equipment,
                 'tools'                     => $tools,
                 'manpower'                  => $manpower,
@@ -125,6 +126,7 @@ class Resources extends BaseController
 
         if ($category === 'Equipment') {
             return view('resources/equipments_form', [
+                'pageTitle' => 'Add Equipment',
                 'resource' => [
                     'category' => 'Equipment',
                     'status' => 'Available',
@@ -147,6 +149,7 @@ class Resources extends BaseController
 
         if ($category === 'Tools') {
             return view('resources/tools_form', [
+                'pageTitle' => 'Add Tools',
                 'resource' => [
                     'category' => 'Tools',
                     'status' => 'Available',
@@ -168,6 +171,7 @@ class Resources extends BaseController
         }
 
         return view('resources/resources_form', [
+            'pageTitle' => 'Add Resource',
             'resource' => [
                 'category' => $category,
                 'status' => 'Available',
@@ -235,7 +239,9 @@ class Resources extends BaseController
                 ? 'resources/equipments_form'
                 : ($category === 'Tools' ? 'resources/tools_form' : 'resources/resources_form');
 
+            $editTitle = $category === 'Equipment' ? 'Edit Equipment' : ($category === 'Tools' ? 'Edit Tools' : 'Edit Resource');
             return view($view, [
+                'pageTitle' => $editTitle,
                 'resource' => $resource,
                 'items' => $isManpower ? [] : $this->model->getResourceItems($id),
                 'projectSites' => $this->getProjectSiteOptions(),
@@ -416,6 +422,7 @@ class Resources extends BaseController
             $resource = $this->normalizeResourceForView($resource);
 
             return view('resources/resources_show', [
+                'pageTitle' => 'Resource Detail',
                 'resource' => $resource,
                 'items' => $isManpower ? [] : $this->model->getResourceItems($id),
                 'userName' => session()->get('userName') ?? 'User',
@@ -477,6 +484,7 @@ class Resources extends BaseController
             }
 
             return view('resources/resource_items', [
+                'pageTitle'     => 'Resource Items',
                 'resource'      => $resource,
                 'items'         => $items,
                 'activeFilters' => [

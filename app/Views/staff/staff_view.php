@@ -505,6 +505,9 @@ document.addEventListener('DOMContentLoaded', function () {
       <a id="exportXlsx" href="<?= base_url('export?module=staff&format=xlsx') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;">
         <span style="font-size:20px;">📊</span> Download XLSX
       </a>
+      <a id="exportCsv" href="<?= base_url('export?module=staff&format=csv') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #7b5ea7;border-radius:8px;text-decoration:none;color:#7b5ea7;font-weight:600;font-size:14px;">
+        <span style="font-size:20px;">📋</span> Download CSV
+      </a>
       <a id="exportPdf" href="<?= base_url('export?module=staff&format=pdf') ?>" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;">
         <span style="font-size:20px;">📄</span> Download PDF
       </a>
