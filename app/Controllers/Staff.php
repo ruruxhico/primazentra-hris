@@ -181,6 +181,20 @@ class Staff extends BaseController
 
                 // Use explicit ID so we can reliably trace new documents
                 $newId = bin2hex(random_bytes(8));
+
+                // Handle profile picture upload
+                $pic = $this->request->getFile('profile_picture');
+                if ($pic && $pic->isValid() && !$pic->hasMoved()) {
+                    $ext = strtolower($pic->getClientExtension());
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
+                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        $filename = $newId . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+                        $pic->move($uploadDir, $filename);
+                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
+                    }
+                }
+
                 $docRef = $this->firestore->getDb()->collection('users')->document($newId);
                 $docRef->set($data);
 
@@ -233,6 +247,23 @@ class Staff extends BaseController
                     $existing = $this->usersModel->getUserByEmail($newEmail);
                     if ($existing && $existing['id'] !== $id) {
                         return redirect()->back()->withInput()->with('error', 'Email is already in use by another staff member.');
+                    }
+                }
+
+                // Handle profile picture upload
+                $pic = $this->request->getFile('profile_picture');
+                if ($pic && $pic->isValid() && !$pic->hasMoved()) {
+                    $ext = strtolower($pic->getClientExtension());
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
+                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        // Remove any previous photo for this user (any extension)
+                        foreach (glob($uploadDir . DIRECTORY_SEPARATOR . $id . '.*') ?: [] as $old) {
+                            @unlink($old);
+                        }
+                        $filename = $id . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+                        $pic->move($uploadDir, $filename);
+                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
                     }
                 }
 
@@ -339,12 +370,19 @@ class Staff extends BaseController
                 $snap = $this->firestore->getDb()->collection('users')->document($idFromPost)->snapshot();
                 $data = $snap->exists() ? $snap->data() : [];
                 $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $idFromPost);
-                (new TrashService($this->firestore))->moveToTrash('staff', $idFromPost, $name, $data, [], session()->get('userName'));
+                $trashId = (new TrashService($this->firestore))->moveToTrash('staff', $idFromPost, $name, $data, [], session()->get('userName'));
 
                 // Only delete the Firestore doc (Auth deletion deferred to permanent delete)
                 $this->firestore->getDb()->collection('users')->document($idFromPost)->delete();
 
-                return $this->response->setJSON(['success' => true, 'message' => 'Staff member deleted']);
+                return $this->response->setJSON([
+                    'success'    => true,
+                    'message'    => 'Staff member deleted',
+                    'trash_id'   => $trashId,
+                    'name'       => $name,
+                    'deleted_by' => session()->get('userName') ?? 'System',
+                    'deleted_at' => time(),
+                ]);
             } catch (\Exception $e) {
                 log_message('error', 'Staff::delete (ajax) - ' . $e->getMessage());
                 return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Failed to delete staff member']);

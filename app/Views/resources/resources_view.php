@@ -207,12 +207,11 @@
             <p class="rd-empty">No recently deleted equipment.</p>
             <?php else: ?>
             <table class="resource-table rd-table">
-                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($rdEquipment as $rd): ?>
                 <tr data-trash-id="<?= esc($rd['id']) ?>">
                     <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td class="text-center" style="white-space:nowrap">
@@ -328,12 +327,11 @@
             <p class="rd-empty">No recently deleted tools.</p>
             <?php else: ?>
             <table class="resource-table rd-table">
-                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($rdTools as $rd): ?>
                 <tr data-trash-id="<?= esc($rd['id']) ?>">
                     <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td class="text-center" style="white-space:nowrap">
@@ -479,12 +477,11 @@
             <p class="rd-empty">No recently deleted manpower.</p>
             <?php else: ?>
             <table class="resource-table rd-table">
-                <thead><tr><th>Name</th><th>Deleted By</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead>
                 <tbody>
                 <?php foreach ($rdManpower as $rd): ?>
                 <tr data-trash-id="<?= esc($rd['id']) ?>">
                     <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td class="text-center" style="white-space:nowrap">
@@ -520,6 +517,11 @@
         const confirmCancel = document.getElementById('confirmCancel');
         const toast = document.getElementById('customToast');
         const DELETE_URL = '<?= base_url('resources/delete') ?>';
+        const BASE_URL   = '<?= base_url() ?>';
+
+        function escHtml(s) {
+            return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
 
         function showToast(message, type='info') {
             if (!toast) return;
@@ -540,6 +542,114 @@
                 row.style.transform = 'translateX(-8px)';
             });
             setTimeout(() => row.remove(), 280);
+        }
+
+        function renumberTable(tableEl, noColIdx) {
+            if (!tableEl) return;
+            const offset = parseInt(tableEl.dataset.offset || '0');
+            let num = offset + 1;
+            tableEl.querySelectorAll('tbody tr').forEach(tr => {
+                if (tr.cells[0] && tr.cells[0].colSpan > 1) return;
+                const td = tr.cells[noColIdx];
+                if (td) td.textContent = num++;
+            });
+        }
+
+        function addRestoredResourceRow(module, id, d) {
+            let tableEl, tabId, cbClass;
+            if (module === 'manpower') {
+                tableEl = document.getElementById('manpowerTable');
+                tabId   = 'manpower';
+                cbClass = 'mp-cb';
+            } else {
+                const cat = (d.category || '').toLowerCase();
+                tableEl = cat === 'tools' ? document.getElementById('toolsTable') : document.getElementById('equipmentTable');
+                tabId   = cat === 'tools' ? 'tools' : 'equipment';
+                cbClass = cat === 'tools' ? 'tools-cb' : 'eq-cb';
+            }
+            if (!tableEl) return;
+            const tbody = tableEl.querySelector('tbody');
+            if (!tbody) return;
+
+            tbody.querySelector('[colspan]')?.closest('tr')?.remove();
+
+            const nameVal = escHtml(d.name || 'N/A');
+            let rowHtml;
+
+            if (module === 'manpower') {
+                const role   = escHtml((d.manpower_details && d.manpower_details.role) || 'N/A');
+                const nextAv = escHtml(d.next_availability || 'N/A');
+                const status = d.status || 'available';
+                const stCls  = 'status-' + status.toLowerCase().replace(/[^a-z]/g, '');
+                const site   = escHtml((d.manpower_details && d.manpower_details.current_site_deployment) || (d.location && d.location.address) || 'N/A');
+                const spec   = escHtml((d.manpower_details && d.manpower_details.specialization) || 'N/A');
+                rowHtml =
+                    '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + nameVal + '"></td>' +
+                    '<td>0</td>' +
+                    '<td>' + nameVal + '</td>' +
+                    '<td>' + role + '</td>' +
+                    '<td>' + nextAv + '</td>' +
+                    '<td><span class="status-badge ' + stCls + '">' + escHtml(status) + '</span></td>' +
+                    '<td>' + site + '</td>' +
+                    '<td>' + spec + '</td>' +
+                    '<td class="text-center">' +
+                        '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
+                        '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+                        '<a href="#" data-id="' + escHtml(id) + '" data-name="' + nameVal + '" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>' +
+                    '</td>';
+            } else {
+                const totalQty = (d.asset_details && d.asset_details.total_quantity)     ?? 0;
+                const availQty = (d.asset_details && d.asset_details.available_quantity) ?? 0;
+                rowHtml =
+                    '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + nameVal + '"></td>' +
+                    '<td>0</td>' +
+                    '<td><strong>' + nameVal + '</strong></td>' +
+                    '<td>' + totalQty + '</td>' +
+                    '<td>' + availQty + '</td>' +
+                    '<td class="text-center">' +
+                        '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
+                        '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+                        '<a href="#" data-id="' + escHtml(id) + '" data-name="' + nameVal + '" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>' +
+                    '</td>';
+            }
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = rowHtml;
+
+            // Wire delete button (matches existing pendingDeleteId pattern)
+            tr.querySelector('.action-delete')?.addEventListener('click', function(e) {
+                e.preventDefault();
+                pendingDeleteId = this.dataset.id;
+                pendingRow = this.closest('tr');
+                confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
+                confirmDialog.classList.add('open');
+            });
+
+            // Wire checkbox for bulk select
+            const newCb = tr.querySelector('.row-cb');
+            if (newCb) {
+                const tabEl     = document.getElementById(tabId);
+                const selectAll = tabEl?.querySelector('.select-all-cb');
+                newCb.addEventListener('change', function() {
+                    if (selectAll) {
+                        const all = tabEl.querySelectorAll('.row-cb');
+                        selectAll.checked = all.length > 0 && [...all].every(c => c.checked);
+                        selectAll.indeterminate = getCheckedInTab(tabId).length > 0 && !selectAll.checked;
+                    }
+                    updateBulkBar();
+                });
+            }
+
+            tr.style.opacity = '0';
+            tr.style.background = '#edf7e6';
+            tbody.appendChild(tr);
+            requestAnimationFrame(() => {
+                tr.style.transition = 'opacity 300ms ease, background 1.2s ease';
+                tr.style.opacity = '1';
+                setTimeout(() => { tr.style.background = ''; }, 1000);
+            });
+
+            renumberTable(tableEl, 1);
         }
 
         // — Equipment filter panel —
@@ -711,6 +821,7 @@
                 confirmDialog.classList.remove('open');
 
                 let done = 0;
+                const affectedTables = new Set();
                 items.forEach(item => {
                     const body = new URLSearchParams();
                     if (csrfName && csrfHash) body.append(csrfName, csrfHash);
@@ -721,10 +832,19 @@
                         body: body.toString()
                     })
                     .then(r => r.json())
-                    .then(data => { if (data && data.success) animateRowOut(item.row); })
+                    .then(data => {
+                        if (data && data.success) {
+                            const tbl = item.row?.closest('table');
+                            if (tbl) affectedTables.add(tbl);
+                            animateRowOut(item.row);
+                        }
+                    })
                     .finally(() => {
                         done++;
-                        if (done === items.length) showToast(items.length + ' item(s) deleted', 'success');
+                        if (done === items.length) {
+                            showToast(items.length + ' item(s) deleted', 'success');
+                            setTimeout(() => affectedTables.forEach(tbl => renumberTable(tbl, 1)), 290);
+                        }
                     });
                 });
                 return;
@@ -745,7 +865,9 @@
             .then(data => {
                 if (data && data.success) {
                     showToast('Resource deleted', 'success');
-                    animateRowOut(pendingRow);
+                    const row = pendingRow;
+                    animateRowOut(row);
+                    setTimeout(() => renumberTable(row?.closest('table'), 1), 290);
                 } else {
                     showToast(data.message || 'Delete failed', 'error');
                 }
@@ -786,6 +908,7 @@
                         if (data.success) {
                             showToast((data.name || 'Item') + ' restored', 'success');
                             animateRowOut(row);
+                            if (data.id && data.data) addRestoredResourceRow(data.module, data.id, data.data);
                         } else {
                             showToast(data.message || 'Restore failed', 'error');
                         }
@@ -875,11 +998,11 @@
 <div id="importModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
   <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
     <h3 id="importModalTitle" style="margin:0 0 6px;color:#1a3c5e;font-size:17px;">Import</h3>
-    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
+    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx or .csv file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
     <div id="importDropZone" style="border:2px dashed #b0c4d8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#888;font-size:13px;">
       <div style="font-size:28px;margin-bottom:6px;">📂</div>
-      Click or drag &amp; drop your .xlsx file here
-      <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none;">
+      Click or drag &amp; drop your .xlsx or .csv file here
+      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>
     <div id="importFileName" style="margin-top:8px;font-size:12px;color:#555;"></div>
     <div id="importResult" style="margin-top:10px;font-size:13px;"></div>

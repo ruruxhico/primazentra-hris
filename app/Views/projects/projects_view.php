@@ -184,7 +184,7 @@
 
 <!-- Projects Table -->
 <div class="table-container">
-    <table id="projectsTable" class="resource-table">
+    <table id="projectsTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
             <tr>
                 <th class="pz-col-check"><input type="checkbox" class="select-all-cb" title="Select all"></th>
@@ -265,7 +265,6 @@
         <table class="resource-table rd-table">
             <thead><tr>
                 <th>Name</th>
-                <th>Deleted By</th>
                 <th>Deleted</th>
                 <th>Expires</th>
                 <th class="text-center">Actions</th>
@@ -274,7 +273,6 @@
             <?php foreach ($recentlyDeleted as $rd): ?>
             <tr data-trash-id="<?= esc($rd['id']) ?>">
                 <td><?= esc($rd['name'] ?? '—') ?></td>
-                <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
                 <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                 <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                 <td class="text-center" style="white-space:nowrap">
@@ -301,6 +299,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmCancel = document.getElementById('confirmCancel');
     const toast = document.getElementById('customToast');
     const DELETE_URL = '<?= base_url('projects/delete') ?>';
+    const BASE_URL   = '<?= base_url() ?>';
+
+    function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 
     function showToast(message, type = 'info') {
         if (!toast) return;
@@ -321,6 +324,78 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.transform = 'translateX(-8px)';
         });
         setTimeout(() => row.remove(), 280);
+    }
+
+    function renumberTable(tableEl, noColIdx) {
+        if (!tableEl) return;
+        const offset = parseInt(tableEl.dataset.offset || '0');
+        let num = offset + 1;
+        tableEl.querySelectorAll('tbody tr').forEach(tr => {
+            if (tr.cells[0] && tr.cells[0].colSpan > 1) return;
+            const td = tr.cells[noColIdx];
+            if (td) td.textContent = num++;
+        });
+    }
+
+    function addRestoredProjectRow(id, d) {
+        const table = document.getElementById('projectsTable');
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        tbody.querySelector('[colspan]')?.closest('tr')?.remove();
+
+        const nameVal  = escHtml(d.project_name || 'N/A');
+        const type     = escHtml(d.project_type || 'N/A');
+        const location = escHtml((d.location && d.location.address) || 'N/A');
+        const progress = d.overall_progress ?? 0;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + escHtml(id) + '" data-name="' + nameVal + '"></td>' +
+            '<td>0</td>' +
+            '<td><strong>' + nameVal + '</strong></td>' +
+            '<td>' + type + '</td>' +
+            '<td>' + location + '</td>' +
+            '<td class="text-center"><span class="progress-badge">' + progress + '%</span></td>' +
+            '<td>—</td>' +
+            '<td>—</td>' +
+            '<td class="text-center" style="white-space:nowrap">' +
+                '<a href="' + BASE_URL + 'projects/show/'   + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
+                '<a href="' + BASE_URL + 'projects/update/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+                '<a href="#" data-id="' + escHtml(id) + '" data-name="' + nameVal + '" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>' +
+            '</td>';
+
+        // Wire delete button (matches existing pendingDeleteId pattern)
+        tr.querySelector('.action-delete')?.addEventListener('click', function(e) {
+            e.preventDefault();
+            pendingDeleteId = this.dataset.id;
+            pendingRow = this.closest('tr');
+            confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this project') + '"?';
+            confirmDialog.classList.add('open');
+        });
+
+        // Wire checkbox for bulk select
+        const newCb = tr.querySelector('.row-cb');
+        if (newCb && selectAllCb) {
+            newCb.addEventListener('change', function() {
+                const all = document.querySelectorAll('.row-cb');
+                selectAllCb.checked = all.length > 0 && [...all].every(c => c.checked);
+                selectAllCb.indeterminate = getChecked().length > 0 && !selectAllCb.checked;
+                updateBulkBar();
+            });
+        }
+
+        tr.style.opacity = '0';
+        tr.style.background = '#edf7e6';
+        tbody.appendChild(tr);
+        requestAnimationFrame(() => {
+            tr.style.transition = 'opacity 300ms ease, background 1.2s ease';
+            tr.style.opacity = '1';
+            setTimeout(() => { tr.style.background = ''; }, 1000);
+        });
+
+        renumberTable(table, 1);
     }
 
     // — Filter panel toggle —
@@ -428,6 +503,7 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmDialog.classList.remove('open');
 
             let done = 0;
+            const projectsTable = document.getElementById('projectsTable');
             items.forEach(item => {
                 const body = new URLSearchParams();
                 if (csrfName && csrfHash) body.append(csrfName, csrfHash);
@@ -441,7 +517,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(data => { if (data && data.success) animateRowOut(item.row); })
                 .finally(() => {
                     done++;
-                    if (done === items.length) showToast(items.length + ' item(s) deleted', 'success');
+                    if (done === items.length) {
+                        showToast(items.length + ' item(s) deleted', 'success');
+                        setTimeout(() => renumberTable(projectsTable, 1), 290);
+                    }
                 });
             });
             return;
@@ -462,7 +541,9 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
             if (data && data.success) {
                 showToast('Project deleted', 'success');
-                animateRowOut(pendingRow);
+                const row = pendingRow;
+                animateRowOut(row);
+                setTimeout(() => renumberTable(document.getElementById('projectsTable'), 1), 290);
             } else {
                 showToast(data.message || 'Delete failed', 'error');
             }
@@ -498,6 +579,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (data.success) {
                         showToast((data.name || 'Item') + ' restored', 'success');
                         animateRowOut(row);
+                        if (data.id && data.data) addRestoredProjectRow(data.id, data.data);
                     } else {
                         showToast(data.message || 'Restore failed', 'error');
                     }
@@ -565,11 +647,11 @@ document.addEventListener('DOMContentLoaded', function () {
 <div id="importModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
   <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
     <h3 style="margin:0 0 6px;color:#1a3c5e;font-size:17px;">Import Projects</h3>
-    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
+    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx or .csv file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
     <div id="importDropZone" style="border:2px dashed #b0c4d8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#888;font-size:13px;transition:border-color .15s;">
       <div style="font-size:28px;margin-bottom:6px;">📂</div>
-      Click or drag &amp; drop your .xlsx file here
-      <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display:none;">
+      Click or drag &amp; drop your .xlsx or .csv file here
+      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>
     <div id="importFileName" style="margin-top:8px;font-size:12px;color:#555;"></div>
     <div id="importResult" style="margin-top:10px;font-size:13px;"></div>

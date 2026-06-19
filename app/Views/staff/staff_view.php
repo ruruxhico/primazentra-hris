@@ -143,10 +143,11 @@
 
 <!-- Staff Table -->
 <div class="table-container">
-    <table id="staffTable" class="resource-table">
+    <table id="staffTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
             <tr>
                 <th class="pz-col-check"><input type="checkbox" class="select-all-cb" title="Select all"></th>
+                <th style="width:44px"></th>
                 <th>NO.</th>
                 <th>LAST NAME</th>
                 <th>FIRST NAME</th>
@@ -159,16 +160,28 @@
         <tbody>
             <?php if (empty($staff)): ?>
                 <tr>
-                    <td colspan="8" class="empty-state">
+                    <td colspan="9" class="empty-state">
                         No staff members found. <a href="<?= base_url('staff/create') ?>">Add one now</a>
                     </td>
                 </tr>
             <?php else: ?>
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($staff as $index => $person): ?>
+                    <?php
+                        $pic = $person['profile_picture'] ?? '';
+                        $ini = strtoupper(substr((string)($person['first_name'] ?? 'S'), 0, 1));
+                    ?>
                     <tr>
                         <td class="pz-col-check">
                             <input type="checkbox" class="row-cb" value="<?= esc((string)$person['id']) ?>" data-name="<?= esc(trim(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>">
+                        </td>
+                        <td style="padding:4px 8px">
+                            <?php if ($pic !== ''): ?>
+                                <img src="<?= asset_url($pic) ?>" alt=""
+                                     style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid #d0dce8;display:block">
+                            <?php else: ?>
+                                <div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e"><?= esc($ini) ?></div>
+                            <?php endif; ?>
                         </td>
                         <td><?= $offset + $index + 1 ?></td>
                         <td><strong><?= esc((string)($person['last_name'] ?? 'N/A')) ?></strong></td>
@@ -222,7 +235,6 @@
         <table class="resource-table rd-table">
             <thead><tr>
                 <th>Name</th>
-                <th>Deleted By</th>
                 <th>Deleted</th>
                 <th>Expires</th>
                 <th class="text-center">Actions</th>
@@ -231,7 +243,6 @@
             <?php foreach ($recentlyDeleted as $rd): ?>
             <tr data-trash-id="<?= esc($rd['id']) ?>">
                 <td><?= esc($rd['name'] ?? '—') ?></td>
-                <td><?= esc($rd['deleted_by'] ?? '—') ?></td>
                 <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                 <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                 <td class="text-center" style="white-space:nowrap">
@@ -257,7 +268,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmOk = document.getElementById('confirmOk');
     const confirmCancel = document.getElementById('confirmCancel');
     const toast = document.getElementById('customToast');
-    const DELETE_URL = '<?= base_url('staff/delete') ?>';
+    const DELETE_URL  = '<?= base_url('staff/delete') ?>';
+    const BASE_URL    = '<?= base_url() ?>';
+    const ASSET_BASE  = '<?= asset_url('') ?>';
 
     function showToast(message, type = 'info') {
         if (!toast) return;
@@ -278,6 +291,17 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.transform = 'translateX(-8px)';
         });
         setTimeout(() => row.remove(), 280);
+    }
+
+    function renumberTable(tableEl, noColIdx) {
+        if (!tableEl) return;
+        const offset = parseInt(tableEl.dataset.offset || '0');
+        let num = offset + 1;
+        tableEl.querySelectorAll('tbody tr').forEach(tr => {
+            if (tr.cells[0] && tr.cells[0].colSpan > 1) return;
+            const td = tr.cells[noColIdx];
+            if (td) td.textContent = num++;
+        });
     }
 
     // — Filter panel toggle —
@@ -341,7 +365,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateBulkBar();
     });
 
-    document.querySelectorAll('.row-cb').forEach(cb => {
+    function wireRowCb(cb) {
         cb.addEventListener('change', function () {
             if (selectAllCb) {
                 const all = document.querySelectorAll('.row-cb');
@@ -350,95 +374,106 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             updateBulkBar();
         });
+    }
+    document.querySelectorAll('.row-cb').forEach(wireRowCb);
+
+    // ── Promise-based custom confirm (no native browser dialogs) ──
+    let _confirmResolve = null;
+    function openConfirm(message) {
+        if (_confirmResolve) return Promise.resolve(false); // block overlap
+        return new Promise(resolve => {
+            _confirmResolve = resolve;
+            confirmMessage.innerText = message;
+            confirmDialog.classList.add('open');
+        });
+    }
+    confirmOk?.addEventListener('click', function () {
+        if (!_confirmResolve) return;
+        const r = _confirmResolve; _confirmResolve = null;
+        confirmDialog.classList.remove('open');
+        r(true);
+    });
+    confirmCancel?.addEventListener('click', function () {
+        if (!_confirmResolve) return;
+        const r = _confirmResolve; _confirmResolve = null;
+        confirmDialog.classList.remove('open');
+        r(false);
     });
 
-    bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
+    // ── Bulk delete ───────────────────────────────────────────────
+    bulkDelBtn && bulkDelBtn.addEventListener('click', async function () {
         const checked = getChecked();
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
-        confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
-        pendingDeleteId = '__bulk__';
-        pendingBulkItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
-        confirmDialog.classList.add('open');
+        if (!await openConfirm('Delete ' + checked.length + ' item(s)?\n' + names)) return;
+
+        const items = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
+        document.querySelectorAll('.row-cb').forEach(c => { c.checked = false; });
+        if (selectAllCb) selectAllCb.checked = false;
+        updateBulkBar();
+
+        let done = 0;
+        const staffTable = document.getElementById('staffTable');
+        items.forEach(item => {
+            const body = new URLSearchParams();
+            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+            body.append('id', item.id);
+            fetch(DELETE_URL, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success) {
+                    animateRowOut(item.row);
+                    if (data.trash_id) addToRecentlyDeleted(data.trash_id, data.name, data.deleted_by, data.deleted_at);
+                }
+            })
+            .finally(() => {
+                done++;
+                if (done === items.length) {
+                    showToast(items.length + ' item(s) deleted', 'success');
+                    setTimeout(() => renumberTable(staffTable, 2), 290);
+                }
+            });
+        });
     });
 
     // ── Single delete ─────────────────────────────────────────────
-    let pendingDeleteId  = null;
-    let pendingRow       = null;
-    let pendingBulkItems = [];
-
-    document.querySelectorAll('.action-delete').forEach(btn => {
-        btn.addEventListener('click', function (e) {
+    function wireDeleteBtn(btn) {
+        btn.addEventListener('click', async function (e) {
             e.preventDefault();
-            pendingDeleteId = this.dataset.id;
-            pendingRow = this.closest('tr');
+            const id   = this.dataset.id;
+            const row  = this.closest('tr');
             const name = this.dataset.name || 'this staff member';
-            confirmMessage.innerText = 'Delete "' + name + '"?';
-            confirmDialog.classList.add('open');
+
+            if (!await openConfirm('Delete "' + name + '"?')) return;
+
+            const body = new URLSearchParams();
+            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+            body.append('id', id);
+
+            fetch(DELETE_URL, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success) {
+                    showToast('Staff deleted', 'success');
+                    animateRowOut(row);
+                    setTimeout(() => renumberTable(document.getElementById('staffTable'), 2), 290);
+                    if (data.trash_id) addToRecentlyDeleted(data.trash_id, data.name, data.deleted_by, data.deleted_at);
+                } else {
+                    showToast(data.message || 'Delete failed', 'error');
+                }
+            })
+            .catch(() => showToast('Error deleting staff', 'error'));
         });
-    });
-
-    confirmCancel?.addEventListener('click', function () {
-        pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
-        confirmDialog.classList.remove('open');
-    });
-
-    confirmOk?.addEventListener('click', function () {
-        if (!pendingDeleteId) return;
-
-        // Bulk delete path
-        if (pendingDeleteId === '__bulk__') {
-            const items = [...pendingBulkItems];
-            pendingBulkItems = [];
-            pendingDeleteId = null;
-            confirmDialog.classList.remove('open');
-
-            let done = 0;
-            items.forEach(item => {
-                const body = new URLSearchParams();
-                if (csrfName && csrfHash) body.append(csrfName, csrfHash);
-                body.append('id', item.id);
-                fetch(DELETE_URL, {
-                    method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-                    body: body.toString()
-                })
-                .then(r => r.json())
-                .then(data => { if (data && data.success) animateRowOut(item.row); })
-                .finally(() => {
-                    done++;
-                    if (done === items.length) showToast(items.length + ' item(s) deleted', 'success');
-                });
-            });
-            return;
-        }
-
-        // Single delete path
-        const body = new URLSearchParams();
-        if (csrfName && csrfHash) body.append(csrfName, csrfHash);
-        body.append('id', pendingDeleteId);
-
-        fetch(DELETE_URL, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-            body: body.toString()
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data && data.success) {
-                showToast('Staff deleted', 'success');
-                animateRowOut(pendingRow);
-            } else {
-                showToast(data.message || 'Delete failed', 'error');
-            }
-        })
-        .catch(() => showToast('Error deleting staff', 'error'))
-        .finally(() => {
-            pendingDeleteId = null; pendingRow = null;
-            confirmDialog.classList.remove('open');
-        });
-    });
+    }
+    document.querySelectorAll('.action-delete').forEach(wireDeleteBtn);
 
     // ── Recently Deleted ────────────────────────────────────────
     const rdToggleBtn = document.getElementById('rdToggleBtn');
@@ -451,10 +486,123 @@ document.addEventListener('DOMContentLoaded', function () {
         if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
     });
 
-    document.querySelectorAll('.rd-restore-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
+    function escHtml(s) {
+        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function fmtTs(ts) {
+        const d = new Date(ts * 1000);
+        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+        return String(d.getDate()).padStart(2,'0') + ' ' + mo + ' ' + d.getFullYear()
+             + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    }
+
+    function addToRecentlyDeleted(trashId, name, deletedBy, deletedAt) {
+        // Expand the panel
+        if (rdPanel) { rdPanel.style.display = ''; }
+        const chevron = rdToggleBtn?.querySelector('.rd-chevron');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+
+        // Badge: increment if exists, otherwise create
+        const wrap = document.getElementById('recentlyDeletedWrap');
+        let badge = wrap?.querySelector('.rd-badge');
+        if (badge) {
+            badge.textContent = parseInt(badge.textContent || '0') + 1;
+        } else if (rdToggleBtn) {
+            badge = document.createElement('span');
+            badge.className = 'rd-badge';
+            badge.textContent = '1';
+            rdToggleBtn.insertBefore(badge, rdToggleBtn.querySelector('.rd-chevron'));
+        }
+
+        // Remove empty-state paragraph if present
+        rdPanel?.querySelector('.rd-empty')?.remove();
+
+        // Get or create the table
+        let tbody = rdPanel?.querySelector('.rd-table tbody');
+        if (!tbody) {
+            const tbl = document.createElement('table');
+            tbl.className = 'resource-table rd-table';
+            tbl.innerHTML = '<thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th class="text-center">Actions</th></tr></thead><tbody></tbody>';
+            rdPanel.appendChild(tbl);
+            tbody = tbl.querySelector('tbody');
+        }
+
+        // Build the row
+        const tr = document.createElement('tr');
+        tr.dataset.trashId = trashId;
+        tr.innerHTML =
+            '<td>' + escHtml(name || '—') + '</td>' +
+            '<td>' + fmtTs(deletedAt) + '</td>' +
+            '<td>30 days</td>' +
+            '<td class="text-center" style="white-space:nowrap">' +
+              '<button type="button" class="action-btn rd-restore-btn" data-id="' + escHtml(trashId) + '" title="Restore"><span class="material-symbols-outlined">restore</span></button>' +
+              '<button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="' + escHtml(trashId) + '" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>' +
+            '</td>';
+
+        // Slide in
+        tr.style.opacity = '0';
+        tr.style.transform = 'translateX(-8px)';
+        tbody.prepend(tr);
+        requestAnimationFrame(() => {
+            tr.style.transition = 'opacity 260ms ease, transform 260ms ease';
+            tr.style.opacity = '1';
+            tr.style.transform = '';
+        });
+    }
+
+    function addRestoredStaffRow(id, d) {
+        const tbody = document.querySelector('#staffTable tbody');
+        if (!tbody) return;
+        tbody.querySelector('[colspan]')?.closest('tr')?.remove();
+
+        const initial  = ((d.first_name || 'S')[0] || 'S').toUpperCase();
+        const fullName = escHtml(((d.first_name || '') + ' ' + (d.last_name || '')).trim());
+        const pic      = d.profile_picture || '';
+
+        const avatarHtml = pic
+            ? '<img src="' + ASSET_BASE + escHtml(pic) + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid #d0dce8;display:block">'
+            : '<div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e">' + escHtml(initial) + '</div>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + escHtml(id) + '" data-name="' + fullName + '"></td>' +
+            '<td style="padding:4px 8px">' + avatarHtml + '</td>' +
+            '<td>0</td>' +
+            '<td><strong>' + escHtml(d.last_name  || 'N/A') + '</strong></td>' +
+            '<td>' + escHtml(d.first_name  || 'N/A') + '</td>' +
+            '<td>' + escHtml(d.middle_name || 'N/A') + '</td>' +
+            '<td>' + escHtml(d.email       || 'N/A') + '</td>' +
+            '<td><span class="role-badge">' + escHtml(d.role || 'STAFF') + '</span></td>' +
+            '<td class="text-center">' +
+                '<a href="' + BASE_URL + 'staff/show/'   + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
+                '<a href="' + BASE_URL + 'staff/update/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+                '<a href="#" data-id="' + escHtml(id) + '" data-name="' + fullName + '" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>' +
+            '</td>';
+
+        wireDeleteBtn(tr.querySelector('.action-delete'));
+        wireRowCb(tr.querySelector('.row-cb'));
+
+        tr.style.opacity = '0';
+        tr.style.background = '#edf7e6';
+        tbody.appendChild(tr);
+        requestAnimationFrame(() => {
+            tr.style.transition = 'opacity 300ms ease, background 1.2s ease';
+            tr.style.opacity = '1';
+            setTimeout(() => { tr.style.background = ''; }, 1000);
+        });
+
+        renumberTable(document.getElementById('staffTable'), 2);
+    }
+
+    // Event delegation for restore / perma-delete (handles both server-rendered and dynamically added rows)
+    rdPanel?.addEventListener('click', async function (e) {
+        const restoreBtn = e.target.closest('.rd-restore-btn');
+        const permaBtn   = e.target.closest('.rd-perma-btn');
+
+        if (restoreBtn) {
+            const trashId = restoreBtn.dataset.id;
+            const row = restoreBtn.closest('tr');
             const fd = new FormData();
             fd.append(csrfName, csrfHash);
             fd.append('trash_id', trashId);
@@ -464,19 +612,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (data.success) {
                         showToast((data.name || 'Item') + ' restored', 'success');
                         animateRowOut(row);
+                        if (data.id && data.data) addRestoredStaffRow(data.id, data.data);
+                        const b = document.querySelector('#recentlyDeletedWrap .rd-badge');
+                        if (b) { const n = parseInt(b.textContent||'0')-1; if (n <= 0) b.remove(); else b.textContent = n; }
                     } else {
                         showToast(data.message || 'Restore failed', 'error');
                     }
                 })
                 .catch(() => showToast('Restore failed', 'error'));
-        });
-    });
+        }
 
-    document.querySelectorAll('.rd-perma-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
-            if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+        if (permaBtn) {
+            const trashId = permaBtn.dataset.id;
+            const row = permaBtn.closest('tr');
+            if (!await openConfirm('Permanently delete this item? This cannot be undone.')) return;
             const fd = new FormData();
             fd.append(csrfName, csrfHash);
             fd.append('trash_id', trashId);
@@ -486,12 +635,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (data.success) {
                         showToast('Permanently deleted', 'success');
                         animateRowOut(row);
+                        const b = document.querySelector('#recentlyDeletedWrap .rd-badge');
+                        if (b) { const n = parseInt(b.textContent||'0')-1; if (n <= 0) b.remove(); else b.textContent = n; }
                     } else {
                         showToast(data.message || 'Failed', 'error');
                     }
                 })
                 .catch(() => showToast('Failed', 'error'));
-        });
+        }
     });
 });
 </script>

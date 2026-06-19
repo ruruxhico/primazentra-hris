@@ -19,9 +19,23 @@
     </div>
 <?php endif; ?>
 
-<div class="pz-page-header">
-    <h1><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ? $staff['middle_name'] . ' ' : '') . ($staff['last_name'] ?? ''))) ?></h1>
-    <p><?= esc((string)($staff['role'] ?? '')) ?></p>
+<div class="pz-page-header" style="display:flex;align-items:center;gap:20px">
+    <?php
+        $pic = $staff['profile_picture'] ?? '';
+        $initials = strtoupper(substr($staff['first_name'] ?? 'S', 0, 1));
+    ?>
+    <?php if ($pic !== ''): ?>
+        <img src="<?= asset_url($pic) ?>?v=<?= time() ?>" alt="Profile"
+             style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #d0dce8;flex-shrink:0">
+    <?php else: ?>
+        <div style="width:72px;height:72px;border-radius:50%;background:#e8eef5;border:3px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#1a3c5e;flex-shrink:0">
+            <?= esc($initials) ?>
+        </div>
+    <?php endif; ?>
+    <div>
+        <h1><?= esc((string)(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ? $staff['middle_name'] . ' ' : '') . ($staff['last_name'] ?? ''))) ?></h1>
+        <p><?= esc((string)($staff['role'] ?? '')) ?></p>
+    </div>
 </div>
 
 <div class="pz-card">

@@ -3,6 +3,13 @@
 
 <?= $this->section('head') ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/css/intlTelInput.css">
+<style>
+.avatar-upload-wrap{display:flex;align-items:center;gap:24px;padding:6px 0}
+.avatar-circle{width:96px;height:96px;border-radius:50%;overflow:hidden;background:#e8eef5;border:3px solid #d0dce8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#1a3c5e;text-transform:uppercase}
+.avatar-circle img{width:100%;height:100%;object-fit:cover}
+.avatar-upload-controls{display:flex;flex-direction:column;gap:8px}
+.avatar-upload-controls small{color:#888;font-size:11px}
+</style>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -23,8 +30,30 @@
 </div>
 
 <div class="pz-form-container">
-    <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>">
+    <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>" enctype="multipart/form-data">
         <?= csrf_field() ?>
+
+        <!-- Profile Picture -->
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Profile Picture</p>
+            <div class="avatar-upload-wrap">
+                <div class="avatar-circle" id="avatarCircle">
+                    <?php if (!empty($staff['profile_picture'])): ?>
+                        <img src="<?= asset_url($staff['profile_picture']) ?>?v=<?= time() ?>" alt="Profile" id="avatarImg">
+                    <?php else: ?>
+                        <span id="avatarInitial"><?= strtoupper(substr((string)($staff['first_name'] ?? 'S'), 0, 1)) ?></span>
+                    <?php endif; ?>
+                </div>
+                <div class="avatar-upload-controls">
+                    <label class="pz-btn pz-btn-outline" for="profile_picture" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+                        <span class="material-symbols-outlined" style="font-size:16px">upload</span> Choose Photo
+                    </label>
+                    <input type="file" id="profile_picture" name="profile_picture" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+                    <small>JPG, PNG, WEBP &middot; Max 2 MB</small>
+                    <small id="avatarFileName" style="color:#1a3c5e;font-weight:600"></small>
+                </div>
+            </div>
+        </div>
 
         <!-- Name row -->
         <div class="pz-form-section">
@@ -136,5 +165,32 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     syncFields();
 });
+
+// Avatar preview
+document.getElementById('profile_picture').addEventListener('change', function () {
+    const file = this.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+        alert('File is too large. Maximum size is 2 MB.');
+        this.value = '';
+        return;
+    }
+    document.getElementById('avatarFileName').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const circle = document.getElementById('avatarCircle');
+        circle.innerHTML = '<img src="' + e.target.result + '" alt="Preview" style="width:100%;height:100%;object-fit:cover">';
+    };
+    reader.readAsDataURL(file);
+});
+
+// Keep initial letter in sync with first name input
+const fnInput = document.querySelector('input[name="first_name"]');
+if (fnInput) {
+    fnInput.addEventListener('input', function () {
+        const initial = document.getElementById('avatarInitial');
+        if (initial) initial.textContent = (this.value.trim()[0] || 'S').toUpperCase();
+    });
+}
 </script>
 <?= $this->endSection() ?>

@@ -81,7 +81,7 @@ class TrashService
             }
 
             $this->db->collection('recently_deleted')->document($trashId)->delete();
-            return ['success' => true, 'module' => $module, 'name' => $d['name'] ?? ''];
+            return ['success' => true, 'module' => $module, 'name' => $d['name'] ?? '', 'id' => $originalId, 'data' => $data];
         } catch (\Throwable $e) {
             log_message('error', 'TrashService::restoreItem - ' . $e->getMessage());
             return ['success' => false, 'message' => 'Restore failed'];

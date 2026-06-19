@@ -112,14 +112,18 @@ class Import extends BaseController
         }
 
         $ext = strtolower($file->getClientExtension());
-        if (!in_array($ext, ['xlsx', 'xls'], true)) {
-            return $this->response->setJSON(['success' => false, 'message' => 'Only .xlsx or .xls files are accepted.']);
+        if (!in_array($ext, ['xlsx', 'xls', 'csv'], true)) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Only .xlsx, .xls, or .csv files are accepted.']);
         }
 
         try {
-            $spreadsheet = IOFactory::load($file->getTempName());
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray(null, true, true, false);
+            if ($ext === 'csv') {
+                $rows = $this->parseCsv($file->getTempName());
+            } else {
+                $spreadsheet = IOFactory::load($file->getTempName());
+                $sheet = $spreadsheet->getActiveSheet();
+                $rows = $sheet->toArray(null, true, true, false);
+            }
         } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'message' => 'Could not read file: ' . $e->getMessage()]);
         }
@@ -225,6 +229,25 @@ class Import extends BaseController
         }
 
         return [$imported, $skipped, null];
+    }
+
+    private function parseCsv(string $path): array
+    {
+        $rows   = [];
+        $handle = fopen($path, 'r');
+        if (!$handle) return $rows;
+
+        // Strip UTF-8 BOM if present (written by our own CSV export)
+        $bom = fread($handle, 3);
+        if ($bom !== "\xEF\xBB\xBF") {
+            rewind($handle);
+        }
+
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = $row;
+        }
+        fclose($handle);
+        return $rows;
     }
 
     private function parseDateMDY(string $val): string
