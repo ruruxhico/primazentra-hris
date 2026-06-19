@@ -82,10 +82,10 @@
                     <label for="status">Status *</label>
                     <select id="status" name="status" required>
                         <option value="">SELECT STATUS</option>
-                        <?php foreach (['PLANNED','ON-GOING','COMPLETED','HALTED'] as $status): ?>
-                            <option value="<?= esc($status) ?>"
-                                <?= ($project['status'] ?? '') === $status ? 'selected' : '' ?>>
-                                <?= esc($status) ?>
+                        <?php foreach (['Planned' => 'Planned', 'On-going' => 'On-going', 'Completed' => 'Completed', 'Past Deadline' => 'Past Deadline', 'Archived' => 'Archived'] as $val => $label): ?>
+                            <option value="<?= esc($val) ?>"
+                                <?= strcasecmp((string)($project['status'] ?? ''), $val) === 0 ? 'selected' : '' ?>>
+                                <?= esc($label) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

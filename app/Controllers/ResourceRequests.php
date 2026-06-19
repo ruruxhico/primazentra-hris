@@ -290,6 +290,38 @@ class ResourceRequests extends BaseController
         }
     }
 
+    // ── Pending JSON (for dashboard polling) ─────────────────────────────
+
+    public function pendingJson()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON([]);
+        }
+
+        try {
+            $all = $this->requestModel->getAll([]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON([]);
+        }
+
+        $result = [];
+        foreach ($all as $r) {
+            if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary'])) continue;
+            $result[] = [
+                'id'            => $r['id'],
+                'status'        => $r['status'],
+                'category'      => strtolower($r['category'] ?? ''),
+                'resource_id'   => $r['resource_id']            ?? '',
+                'resource_name' => $r['resource_name']          ?? '',
+                'source_pid'    => $r['source_project_id']      ?? '',
+                'dest_pid'      => $r['destination_project_id'] ?? '',
+                'dest_pname'    => $r['destination_site_name']  ?? '',
+            ];
+        }
+
+        return $this->response->setJSON($result);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private function jsonError(string $msg, int $code = 400)

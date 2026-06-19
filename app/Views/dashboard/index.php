@@ -308,14 +308,17 @@ function db_render_card(array $p, string $context = 'summary'): string
                 <div class="db-res-group-body">
                     <div class="db-res-drop-zone" data-cat="<?= $cat ?>" data-proj="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>">
                         <?php foreach ($grp['items'] as $res):
-                            $resName  = is_array($res) ? ($res['name']    ?? '') : $res;
-                            $resId    = is_array($res) ? ($res['id']      ?? '') : '';
-                            $resUnitId= is_array($res) ? ($res['unit_id'] ?? '') : '';
+                            $resName   = is_array($res) ? ($res['name']    ?? '') : $res;
+                            $resId     = is_array($res) ? ($res['id']      ?? '') : '';
+                            $resUnitId = is_array($res) ? ($res['unit_id'] ?? '') : '';
+                            $isPending = is_array($res) && !empty($res['pending']);
+                            $reqId     = is_array($res) ? (string)($res['req_id'] ?? '') : '';
                         ?>
-                        <div class="db-pill"
+                        <div class="db-pill<?= $isPending ? ' db-pill--pending' : '' ?>"
                              data-res-name="<?= esc($resName) ?>"
                              data-res-id="<?= esc($resId) ?>"
-                             data-unit-id="<?= esc($resUnitId) ?>">
+                             data-unit-id="<?= esc($resUnitId) ?>"
+                             <?= $isPending ? 'data-pending="1" data-req-id="' . esc($reqId) . '"' : '' ?>>
                             <span class="db-pill-icons">
                                 <span class="material-symbols-outlined">drag_indicator</span>
                                 <span class="material-symbols-outlined"><?= $grp['icon'] ?></span>
@@ -614,33 +617,38 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    var dragging       = false;
-    var dragY          = 0;
-    var rAfId          = null;
-    var scrollEl       = document.scrollingElement || document.documentElement;
+    var dragging        = false;
+    var dragY           = 0;
+    var rAfId           = null;
+    var scrollEl        = document.scrollingElement || document.documentElement;
     var pendingTransfer = null;
 
-    // ── Transfer confirm modal handlers ──────────────────────────────
-    var overlay     = document.getElementById('dndConfirmOverlay');
-    var cancelBtn   = document.getElementById('dndCancelBtn');
-    var confirmBtn  = document.getElementById('dndConfirmBtn');
-
-    function closeModal() {
-        overlay.classList.remove('open');
+    // ── Toast helper ─────────────────────────────────────────────────
+    function showToast(msg) {
+        var toast = document.getElementById('dndToast');
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(function () { toast.classList.remove('show'); }, 3500);
     }
 
+    // ── Transfer confirm modal handlers ──────────────────────────────
+    var overlay    = document.getElementById('dndConfirmOverlay');
+    var cancelBtn  = document.getElementById('dndCancelBtn');
+    var confirmBtn = document.getElementById('dndConfirmBtn');
+
+    function closeModal() { overlay.classList.remove('open'); }
+
     cancelBtn && cancelBtn.addEventListener('click', function () {
-        // Revert pill to its original zone
         if (pendingTransfer) {
             var t = pendingTransfer;
-            var ref = t.fromZone.children[t.oldIndex] || null;
-            t.fromZone.insertBefore(t.pill, ref);
+            t.fromZone.insertBefore(t.pill, t.fromZone.children[t.oldIndex] || null);
         }
         pendingTransfer = null;
         closeModal();
     });
 
-    // Close on backdrop click
     overlay && overlay.addEventListener('click', function (e) {
         if (e.target === overlay) cancelBtn.click();
     });
@@ -648,8 +656,20 @@ document.addEventListener('DOMContentLoaded', function () {
     confirmBtn && confirmBtn.addEventListener('click', function () {
         if (!pendingTransfer) return;
         var t = pendingTransfer;
-        confirmBtn.disabled = true;
+        pendingTransfer = null;
 
+        // 1. Close modal immediately — no waiting for the network call
+        closeModal();
+
+        // 2. Revert pill back to source zone
+        t.fromZone.insertBefore(t.pill, t.fromZone.children[t.oldIndex] || null);
+
+        // 3. Optimistically mark as pending (gray, locked from drag)
+        t.pill.classList.add('db-pill--pending');
+        t.pill.dataset.pending = '1';
+
+        // 4. Submit transfer request
+        confirmBtn.disabled = true;
         fetch('<?= base_url('requests/store') ?>', {
             method: 'POST',
             headers: {
@@ -673,20 +693,21 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (data.success) {
-                var toast = document.getElementById('dndToast');
-                if (toast) {
-                    toast.textContent = 'Transfer request created.';
-                    toast.classList.add('show');
-                    setTimeout(function () { toast.classList.remove('show'); }, 3000);
-                }
+                if (data.id) t.pill.dataset.reqId = data.id;
+                showToast('Transfer request submitted — awaiting approval.');
+            } else {
+                // Server rejected — roll back pending state
+                t.pill.classList.remove('db-pill--pending');
+                delete t.pill.dataset.pending;
+                showToast('Could not submit transfer request.');
             }
         })
-        .catch(function (err) { console.error('DnD request failed', err); })
-        .finally(function () {
-            confirmBtn.disabled = false;
-            pendingTransfer = null;
-            closeModal();
-        });
+        .catch(function () {
+            t.pill.classList.remove('db-pill--pending');
+            delete t.pill.dataset.pending;
+            showToast('Network error — transfer request not submitted.');
+        })
+        .finally(function () { confirmBtn.disabled = false; });
     });
 
     function updateY(e) { if (dragging) dragY = e.clientY; }
@@ -705,6 +726,34 @@ document.addEventListener('DOMContentLoaded', function () {
         rAfId = requestAnimationFrame(edgeScrollLoop);
     }
 
+    // ── Poll for resolved pending transfers ──────────────────────────
+    var PENDING_JSON_URL = '<?= base_url('requests/pending-json') ?>';
+
+    function pollPendingTransfers() {
+        var pendingPills = document.querySelectorAll('.db-pill--pending[data-req-id]');
+        if (!pendingPills.length) return;
+
+        var knownIds = new Set();
+        pendingPills.forEach(function (p) { if (p.dataset.reqId) knownIds.add(p.dataset.reqId); });
+        if (!knownIds.size) return;
+
+        fetch(PENDING_JSON_URL)
+            .then(function (r) { return r.json(); })
+            .then(function (reqs) {
+                var activeIds = new Set(reqs.map(function (r) { return r.id; }));
+                var resolved  = false;
+                knownIds.forEach(function (id) { if (!activeIds.has(id)) resolved = true; });
+                if (resolved) {
+                    showToast('A transfer request was resolved — refreshing…');
+                    setTimeout(function () { location.reload(); }, 2000);
+                }
+            })
+            .catch(function () {});
+    }
+
+    // Start polling every 30 s (only meaningful when pending pills exist)
+    setInterval(pollPendingTransfers, 30000);
+
     ['equipment', 'tools', 'manpower'].forEach(function (cat) {
         var zones = document.querySelectorAll('.db-res-drop-zone[data-cat="' + cat + '"]');
 
@@ -713,7 +762,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 group:           { name: 'res-' + cat, pull: true, put: ['res-' + cat] },
                 handle:          '.db-pill-icons',
                 draggable:       '.db-pill',
-                filter:          '.db-empty',
+                filter:          '.db-empty, .db-pill--pending',
                 animation:       150,
                 ghostClass:      'db-pill-ghost',
                 dragClass:       'db-pill-drag',

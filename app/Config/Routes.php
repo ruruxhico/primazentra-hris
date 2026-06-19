@@ -50,6 +50,7 @@ $routes->get('projects/(:segment)/resources/units/(:segment)',     'Projects::ge
 
 // Resource Requests & Transfers
 $routes->get('requests',                          'ResourceRequests::index');
+$routes->get('requests/pending-json',             'ResourceRequests::pendingJson');
 $routes->get('requests/(:segment)',               'ResourceRequests::show/$1');
 $routes->post('requests/store',                   'ResourceRequests::store');
 $routes->post('requests/approve/(:segment)',       'ResourceRequests::approve/$1');

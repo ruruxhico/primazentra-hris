@@ -17,7 +17,7 @@ class Import extends BaseController
     private const TEMPLATES = [
         'projects' => [
             'headers' => ['Project Name*', 'Site Address', 'Latitude', 'Longitude', 'Region', 'Client', 'Project Type*', 'Budget', 'Project Manager', 'Site Engineer', 'Status', 'Start Date (MM/DD/YYYY)', 'End Date (MM/DD/YYYY)'],
-            'notes'   => ['e.g. Tower A', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Luzon / Visayas / Mindanao (auto if blank)', 'e.g. DITO Telecommunity', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Numeric, e.g. 500000', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'PLANNED / ON-GOING / COMPLETED / HALTED (defaults to PLANNED)', 'e.g. 01/01/2025', 'e.g. 12/31/2025'],
+            'notes'   => ['e.g. Tower A', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Luzon / Visayas / Mindanao (auto if blank)', 'e.g. DITO Telecommunity', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Numeric, e.g. 500000', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'Planned / On-going / Completed / Past Deadline / Archived (defaults to Planned)', 'e.g. 01/01/2025', 'e.g. 12/31/2025'],
         ],
         'equipment' => [
             'headers' => ['Name*', 'Model/Code', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
@@ -29,7 +29,7 @@ class Import extends BaseController
         ],
         'manpower' => [
             'headers' => ['First Name*', 'Middle Name', 'Last Name*', 'Role*', 'Specialization', 'Skills (semicolon-separated)', 'Status*'],
-            'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'e.g. Carpenter / Electrician / Mason', 'e.g. Structural works', 'e.g. Welding; Masonry', 'Available / Deployed / On Leave'],
+            'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'FIELD WORKER / FOREMAN', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'e.g. Welding; Masonry', 'AVAILABLE / DEPLOYED / ON-LEAVE'],
         ],
     ];
 
@@ -197,7 +197,7 @@ class Import extends BaseController
             $lng     = is_numeric($row[3] ?? '') ? (float) $row[3] : null;
             $region  = trim((string) ($row[4] ?? ''));
             $client  = trim((string) ($row[5] ?? ''));
-            $status  = trim((string) ($row[10] ?? '')) ?: 'PLANNED';
+            $status  = trim((string) ($row[10] ?? '')) ?: 'Planned';
             $pmName  = strtolower(trim((string) ($row[8] ?? '')));
             $seName  = strtolower(trim((string) ($row[9] ?? '')));
 
@@ -337,7 +337,7 @@ class Import extends BaseController
                 'role'           => $role,
                 'specialization' => trim((string) ($row[4] ?? '')),
                 'skills'         => $skills,
-                'status'         => trim((string) ($row[6] ?? '')) ?: 'Available',
+                'status'         => trim((string) ($row[6] ?? '')) ?: 'AVAILABLE',
                 'category'       => 'Manpower',
                 'created_at'     => $now,
                 'updated_at'     => $now,

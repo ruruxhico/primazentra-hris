@@ -110,6 +110,8 @@ class Projects extends BaseController
                 'pageTitle'       => 'Projects',
                 'activePage'      => 'projects',
                 'projects'        => $pagedProjects,
+                'projectsTotal'   => $total,
+                'perPage'         => $perPage,
                 'pagerOffset'     => $offset,
                 'pmOptions'       => $pmOptions,
                 'seOptions'       => $seOptions,

@@ -142,6 +142,7 @@
 </div>
 
 <!-- Staff Table -->
+<div class="pager-section" id="staff-section">
 <div class="table-container">
     <table id="staffTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
@@ -206,8 +207,26 @@
 </div>
 
 <div class="pager-wrapper">
+    <?php
+        $staffTotal  = $staffTotal ?? count($staff ?? []);
+        $perPage     = $perPage ?? 20;
+        $pagerOffset = $pagerOffset ?? 0;
+        $showingFrom = $staffTotal > 0 ? $pagerOffset + 1 : 0;
+        $showingTo   = min($pagerOffset + $perPage, $staffTotal);
+    ?>
+    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $staffTotal ?> records</span>
     <?= service('pager')->links('staff', 'bootstrap_full') ?>
+    <?php $staffTotalPages = $staffTotal > 0 ? (int)ceil($staffTotal / $perPage) : 1; ?>
+    <?php if ($staffTotalPages > 1): ?>
+    <div class="pager-jump">
+        Go to page
+        <input type="number" class="pager-jump-input" min="1" max="<?= $staffTotalPages ?>"
+               data-total-pages="<?= $staffTotalPages ?>" data-page-param="page" placeholder="—">
+        <span>of <?= $staffTotalPages ?></span>
+    </div>
+    <?php endif; ?>
 </div>
+</div><!-- /.pager-section#staff-section -->
 
 <!-- Bulk Action Bar -->
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">

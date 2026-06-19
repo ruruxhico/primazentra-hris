@@ -153,6 +153,7 @@
     </div>
 
     <!-- Equipment Table -->
+    <div class="pager-section" id="eq-section">
     <div class="table-container">
         <table class="resource-table" id="equipmentTable">
             <thead>
@@ -171,12 +172,12 @@
                         <td colspan="6" class="text-center">No equipment found.</td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($equipment as $index => $item): ?>
+                    <?php $eqOffset = $eqOffset ?? 0; foreach ($equipment as $index => $item): ?>
                         <tr>
                             <td class="pz-col-check">
                                 <input type="checkbox" class="row-cb eq-cb" value="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? '')) ?>">
                             </td>
-                            <td><?= $index + 1 ?></td>
+                            <td><?= $eqOffset + $index + 1 ?></td>
                             <td>
                                 <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
                             </td>
@@ -193,6 +194,21 @@
             </tbody>
         </table>
     </div>
+    <div class="pager-wrapper">
+        <?php $eqTotal = $eqTotal ?? count($equipment); $perPage = $perPage ?? 20; $showingTo = min($eqOffset + $perPage, $eqTotal); ?>
+        <span class="pager-info">Showing <?= $eqTotal > 0 ? $eqOffset + 1 : 0 ?>–<?= $showingTo ?> of <?= $eqTotal ?> records</span>
+        <?= service('pager')->links('equipment', 'bootstrap_full') ?>
+        <?php $eqTotalPages = $eqTotal > 0 ? (int)ceil($eqTotal / $perPage) : 1; ?>
+        <?php if ($eqTotalPages > 1): ?>
+        <div class="pager-jump">
+            Go to page
+            <input type="number" class="pager-jump-input" min="1" max="<?= $eqTotalPages ?>"
+                   data-total-pages="<?= $eqTotalPages ?>" data-page-param="eq_page" placeholder="—">
+            <span>of <?= $eqTotalPages ?></span>
+        </div>
+        <?php endif; ?>
+    </div>
+    </div><!-- /.pager-section#eq-section -->
 
     <!-- Recently Deleted - Equipment -->
     <div class="recently-deleted-wrap" id="rdWrapEquipment">
@@ -272,6 +288,7 @@
     </div>
 
     <!-- Tools Table -->
+    <div class="pager-section" id="tools-section">
     <div class="table-container">
         <table class="resource-table" id="toolsTable">
             <thead>
@@ -291,12 +308,12 @@
                         <td colspan="6" class="text-center">No tools found.</td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($tools as $index => $item): ?>
+                    <?php $toolsOffset = $toolsOffset ?? 0; foreach ($tools as $index => $item): ?>
                         <tr>
                             <td class="pz-col-check">
                                 <input type="checkbox" class="row-cb tools-cb" value="<?= esc((string)$item['id']) ?>" data-name="<?= esc((string)($item['name'] ?? '')) ?>">
                             </td>
-                            <td><?= $index + 1 ?></td>
+                            <td><?= $toolsOffset + $index + 1 ?></td>
                             <td>
                                 <strong><?= esc((string)($item['name'] ?? 'N/A')) ?></strong>
                             </td>
@@ -313,6 +330,21 @@
             </tbody>
         </table>
     </div>
+    <div class="pager-wrapper">
+        <?php $toolsTotal = $toolsTotal ?? count($tools); $tShowingTo = min($toolsOffset + $perPage, $toolsTotal); ?>
+        <span class="pager-info">Showing <?= $toolsTotal > 0 ? $toolsOffset + 1 : 0 ?>–<?= $tShowingTo ?> of <?= $toolsTotal ?> records</span>
+        <?= service('pager')->links('tools', 'bootstrap_full') ?>
+        <?php $toolsTotalPages = $toolsTotal > 0 ? (int)ceil($toolsTotal / $perPage) : 1; ?>
+        <?php if ($toolsTotalPages > 1): ?>
+        <div class="pager-jump">
+            Go to page
+            <input type="number" class="pager-jump-input" min="1" max="<?= $toolsTotalPages ?>"
+                   data-total-pages="<?= $toolsTotalPages ?>" data-page-param="tools_page" placeholder="—">
+            <span>of <?= $toolsTotalPages ?></span>
+        </div>
+        <?php endif; ?>
+    </div>
+    </div><!-- /.pager-section#tools-section -->
 
     <!-- Recently Deleted - Tools -->
     <div class="recently-deleted-wrap" id="rdWrapTools">
@@ -380,8 +412,8 @@
                 <div class="filter-row">
                     <label>Role</label>
                     <div class="sort-chips">
-                        <?php foreach (['Field Worker','Foreman'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-role-chip <?= ($activeManpowerFilters['mp_role'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <?php foreach (['FIELD WORKER' => 'Field Worker', 'FOREMAN' => 'Foreman'] as $val => $label): ?>
+                        <button type="button" class="sort-chip mp-role-chip <?= strcasecmp(($activeManpowerFilters['mp_role'] ?? ''), $val) === 0 ? 'active' : '' ?>" data-val="<?= esc($val) ?>"><?= esc($label) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -390,8 +422,8 @@
                 <div class="filter-row">
                     <label>Specialization</label>
                     <div class="sort-chips">
-                        <?php foreach (['Residential','Towers'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-spec-chip <?= ($activeManpowerFilters['mp_spec'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <?php foreach (['BUILD-TO-SUIT' => 'Build-to-Suit', 'RETROFITTING' => 'Retrofitting', 'COLOCATION' => 'Colocation', 'CONVERSION' => 'Conversion'] as $val => $label): ?>
+                        <button type="button" class="sort-chip mp-spec-chip <?= strcasecmp(($activeManpowerFilters['mp_spec'] ?? ''), $val) === 0 ? 'active' : '' ?>" data-val="<?= esc($val) ?>"><?= esc($label) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -400,8 +432,8 @@
                 <div class="filter-row">
                     <label>Status</label>
                     <div class="sort-chips">
-                        <?php foreach (['Available','Deployed','On-Leave'] as $opt): ?>
-                        <button type="button" class="sort-chip mp-status-chip <?= ($activeManpowerFilters['mp_status'] ?? '') === $opt ? 'active' : '' ?>" data-val="<?= esc($opt) ?>"><?= esc($opt) ?></button>
+                        <?php foreach (['AVAILABLE' => 'Available', 'DEPLOYED' => 'Deployed', 'ON-LEAVE' => 'On-Leave'] as $val => $label): ?>
+                        <button type="button" class="sort-chip mp-status-chip <?= strcasecmp(($activeManpowerFilters['mp_status'] ?? ''), $val) === 0 ? 'active' : '' ?>" data-val="<?= esc($val) ?>"><?= esc($label) ?></button>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -414,6 +446,7 @@
     </div>
 
     <!-- Manpower Table -->
+    <div class="pager-section" id="mp-section">
     <div class="table-container">
         <table class="resource-table" id="manpowerTable">
             <thead>
@@ -435,12 +468,12 @@
                         <td colspan="9" class="text-center">No manpower records found.</td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($manpower as $index => $person): ?>
+                    <?php $mpOffset = $mpOffset ?? 0; foreach ($manpower as $index => $person): ?>
                         <tr>
                             <td class="pz-col-check">
                                 <input type="checkbox" class="row-cb mp-cb" value="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)($person['name'] ?? '')) ?>">
                             </td>
-                            <td><?= $index + 1 ?></td>
+                            <td><?= $mpOffset + $index + 1 ?></td>
                             <td><?= isset($person['name']) ? esc((string)$person['name']) : 'N/A' ?></td>
                             <td><?= isset($person['manpower_details']['role']) ? esc((string)$person['manpower_details']['role']) : 'N/A' ?></td>
                             <td><?= isset($person['next_availability']) ? esc((string)$person['next_availability']) : 'N/A' ?></td>
@@ -463,6 +496,21 @@
             </tbody>
         </table>
     </div>
+    <div class="pager-wrapper">
+        <?php $mpTotal = $mpTotal ?? count($manpower); $mShowingTo = min($mpOffset + $perPage, $mpTotal); ?>
+        <span class="pager-info">Showing <?= $mpTotal > 0 ? $mpOffset + 1 : 0 ?>–<?= $mShowingTo ?> of <?= $mpTotal ?> records</span>
+        <?= service('pager')->links('manpower', 'bootstrap_full') ?>
+        <?php $mpTotalPages = $mpTotal > 0 ? (int)ceil($mpTotal / $perPage) : 1; ?>
+        <?php if ($mpTotalPages > 1): ?>
+        <div class="pager-jump">
+            Go to page
+            <input type="number" class="pager-jump-input" min="1" max="<?= $mpTotalPages ?>"
+                   data-total-pages="<?= $mpTotalPages ?>" data-page-param="mp_page" placeholder="—">
+            <span>of <?= $mpTotalPages ?></span>
+        </div>
+        <?php endif; ?>
+    </div>
+    </div><!-- /.pager-section#mp-section -->
 
     <!-- Recently Deleted - Manpower -->
     <div class="recently-deleted-wrap" id="rdWrapManpower">
@@ -577,12 +625,14 @@
             let rowHtml;
 
             if (module === 'manpower') {
-                const role   = escHtml((d.manpower_details && d.manpower_details.role) || 'N/A');
+                // Schema: role, specialization are top-level fields on the manpower document
+                const role   = escHtml(d.role || (d.manpower_details && d.manpower_details.role) || 'N/A');
                 const nextAv = escHtml(d.next_availability || 'N/A');
-                const status = d.status || 'available';
+                const status = d.status || 'AVAILABLE';
                 const stCls  = 'status-' + status.toLowerCase().replace(/[^a-z]/g, '');
-                const site   = escHtml((d.manpower_details && d.manpower_details.current_site_deployment) || (d.location && d.location.address) || 'N/A');
-                const spec   = escHtml((d.manpower_details && d.manpower_details.specialization) || 'N/A');
+                // current_site_deployment is computed server-side; use location.address from raw doc
+                const site   = escHtml((d.location && d.location.address) || 'N/A');
+                const spec   = escHtml(d.specialization || (d.manpower_details && d.manpower_details.specialization) || 'N/A');
                 rowHtml =
                     '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + nameVal + '"></td>' +
                     '<td>0</td>' +

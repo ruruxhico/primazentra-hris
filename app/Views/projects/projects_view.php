@@ -120,7 +120,7 @@
                 <label>Status</label>
                 <select name="status">
                     <option value="">All Statuses</option>
-                    <?php foreach (['PLANNED' => 'Planned', 'ON-GOING' => 'On Going', 'COMPLETED' => 'Completed', 'HALTED' => 'Halted'] as $val => $label): ?>
+                    <?php foreach (['Planned' => 'Planned', 'On-going' => 'On-going', 'Completed' => 'Completed', 'Past Deadline' => 'Past Deadline', 'Archived' => 'Archived'] as $val => $label): ?>
                     <option value="<?= $val ?>" <?= ($af['status'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -140,7 +140,7 @@
                 <label>Type</label>
                 <select name="type">
                     <option value="">All Types</option>
-                    <?php foreach (['RESIDENTIAL' => 'Residential', 'TOWERS' => 'Towers', 'COMMERCIAL' => 'Commercial'] as $val => $label): ?>
+                    <?php foreach (['BUILD-TO-SUIT' => 'Build-to-Suit', 'RETROFITTING' => 'Retrofitting', 'COLOCATION' => 'Colocation', 'CONVERSION' => 'Conversion'] as $val => $label): ?>
                     <option value="<?= $val ?>" <?= ($af['type'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -183,6 +183,7 @@
 </div>
 
 <!-- Projects Table -->
+<div class="pager-section" id="projects-section">
 <div class="table-container">
     <table id="projectsTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
@@ -236,8 +237,26 @@
 </div>
 
 <div class="pager-wrapper">
+    <?php
+        $projectsTotal = $projectsTotal ?? count($projects ?? []);
+        $perPage       = $perPage ?? 20;
+        $pagerOffset   = $pagerOffset ?? 0;
+        $showingFrom   = $projectsTotal > 0 ? $pagerOffset + 1 : 0;
+        $showingTo     = min($pagerOffset + $perPage, $projectsTotal);
+    ?>
+    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $projectsTotal ?> records</span>
     <?= service('pager')->links('projects', 'bootstrap_full') ?>
+    <?php $projTotalPages = $projectsTotal > 0 ? (int)ceil($projectsTotal / $perPage) : 1; ?>
+    <?php if ($projTotalPages > 1): ?>
+    <div class="pager-jump">
+        Go to page
+        <input type="number" class="pager-jump-input" min="1" max="<?= $projTotalPages ?>"
+               data-total-pages="<?= $projTotalPages ?>" data-page-param="page" placeholder="—">
+        <span>of <?= $projTotalPages ?></span>
+    </div>
+    <?php endif; ?>
 </div>
+</div><!-- /.pager-section#projects-section -->
 
 <!-- Bulk Action Bar -->
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">
@@ -358,8 +377,8 @@ document.addEventListener('DOMContentLoaded', function () {
             '<td>' + type + '</td>' +
             '<td>' + location + '</td>' +
             '<td class="text-center"><span class="progress-badge">' + progress + '%</span></td>' +
-            '<td>—</td>' +
-            '<td>—</td>' +
+            '<td>' + escHtml(d.project_manager_name || '—') + '</td>' +
+            '<td>' + escHtml(d.site_engineer_name  || '—') + '</td>' +
             '<td class="text-center" style="white-space:nowrap">' +
                 '<a href="' + BASE_URL + 'projects/show/'   + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
                 '<a href="' + BASE_URL + 'projects/update/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +

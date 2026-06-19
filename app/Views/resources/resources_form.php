@@ -113,9 +113,9 @@
                     <label for="manpower_status">Status *</label>
                     <select id="manpower_status" name="manpower_status" class="form-control" required>
                         <option value="">-- Select Status --</option>
-                        <option value="Available" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'Available' ? 'selected' : '' ?>>Available</option>
-                        <option value="Deployed" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'Deployed' ? 'selected' : '' ?>>Deployed</option>
-                        <option value="On-Leave" <?= isset($resource['manpower_details']['status']) && $resource['manpower_details']['status'] === 'On-Leave' ? 'selected' : '' ?>>On-Leave</option>
+                        <?php foreach (['AVAILABLE' => 'Available', 'DEPLOYED' => 'Deployed', 'ON-LEAVE' => 'On-Leave'] as $val => $label): ?>
+                        <option value="<?= esc($val) ?>" <?= strcasecmp((string)($resource['manpower_details']['status'] ?? $resource['status'] ?? ''), $val) === 0 ? 'selected' : '' ?>><?= esc($label) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>
@@ -125,8 +125,8 @@
                     <label for="manpower_role">Role *</label>
                     <select id="manpower_role" name="manpower_role" class="form-control" required>
                         <option value="">-- Select Role --</option>
-                        <option value="Field Worker" <?= isset($resource['manpower_details']['role']) && $resource['manpower_details']['role'] === 'Field Worker' ? 'selected' : '' ?>>Field Worker</option>
-                        <option value="Foreman" <?= isset($resource['manpower_details']['role']) && $resource['manpower_details']['role'] === 'Foreman' ? 'selected' : '' ?>>Foreman</option>
+                        <option value="FIELD WORKER" <?= strcasecmp((string)($resource['manpower_details']['role'] ?? $resource['role'] ?? ''), 'FIELD WORKER') === 0 ? 'selected' : '' ?>>Field Worker</option>
+                        <option value="FOREMAN" <?= strcasecmp((string)($resource['manpower_details']['role'] ?? $resource['role'] ?? ''), 'FOREMAN') === 0 ? 'selected' : '' ?>>Foreman</option>
                     </select>
                 </div>
 
@@ -134,8 +134,9 @@
                     <label for="specialization">Specialization *</label>
                     <select id="specialization" name="specialization" class="form-control" required>
                         <option value="">-- Select Specialization --</option>
-                        <option value="Residential" <?= isset($resource['manpower_details']['specialization']) && $resource['manpower_details']['specialization'] === 'Residential' ? 'selected' : '' ?>>Residential</option>
-                        <option value="Towers" <?= isset($resource['manpower_details']['specialization']) && $resource['manpower_details']['specialization'] === 'Towers' ? 'selected' : '' ?>>Towers</option>
+                        <?php foreach (['BUILD-TO-SUIT' => 'Build-to-Suit', 'RETROFITTING' => 'Retrofitting', 'COLOCATION' => 'Colocation', 'CONVERSION' => 'Conversion'] as $val => $label): ?>
+                        <option value="<?= esc($val) ?>" <?= strcasecmp((string)($resource['manpower_details']['specialization'] ?? $resource['specialization'] ?? ''), $val) === 0 ? 'selected' : '' ?>><?= esc($label) ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>

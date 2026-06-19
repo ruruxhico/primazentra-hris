@@ -113,6 +113,8 @@ class Staff extends BaseController
                 'pageTitle'       => 'Staff',
                 'activePage'      => 'staff',
                 'staff'           => $pagedStaff,
+                'staffTotal'      => $total,
+                'perPage'         => $perPage,
                 'pagerOffset'     => $offset,
                 'roleOptions'     => $roleOptions,
                 'activeFilters'   => [

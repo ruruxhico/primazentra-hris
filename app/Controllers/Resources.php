@@ -89,6 +89,28 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
+            // ── Pagination (separate per table) ─────────────────────────────
+            $perPage = config('Pager')->perPage;
+            $pager   = service('pager');
+
+            $eqPage    = max(1, (int)($this->request->getGet('eq_page')    ?? 1));
+            $eqTotal   = count($equipment);
+            $pager->store('equipment', $eqPage, $perPage, $eqTotal, 'default_full', 0, 'eq_page');
+            $eqOffset  = ($eqPage - 1) * $perPage;
+            $equipment = array_slice($equipment, $eqOffset, $perPage);
+
+            $toolsPage    = max(1, (int)($this->request->getGet('tools_page') ?? 1));
+            $toolsTotal   = count($tools);
+            $pager->store('tools', $toolsPage, $perPage, $toolsTotal, 'default_full', 0, 'tools_page');
+            $toolsOffset  = ($toolsPage - 1) * $perPage;
+            $tools        = array_slice($tools, $toolsOffset, $perPage);
+
+            $mpPage    = max(1, (int)($this->request->getGet('mp_page')    ?? 1));
+            $mpTotal   = count($manpower);
+            $pager->store('manpower', $mpPage, $perPage, $mpTotal, 'default_full', 0, 'mp_page');
+            $mpOffset  = ($mpPage - 1) * $perPage;
+            $manpower  = array_slice($manpower, $mpOffset, $perPage);
+
             $trashService = new TrashService($this->firestore);
             $recentlyDeletedResources = $trashService->getTrashItems('resource');
             $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
@@ -96,8 +118,15 @@ class Resources extends BaseController
             return view('resources/resources_view', [
                 'pageTitle'                 => 'Resources',
                 'equipment'                 => $equipment,
+                'eqTotal'                   => $eqTotal,
+                'eqOffset'                  => $eqOffset,
                 'tools'                     => $tools,
+                'toolsTotal'                => $toolsTotal,
+                'toolsOffset'               => $toolsOffset,
                 'manpower'                  => $manpower,
+                'mpTotal'                   => $mpTotal,
+                'mpOffset'                  => $mpOffset,
+                'perPage'                   => $perPage,
                 'activeEquipFilters'        => ['eq_sort'    => $eqSort],
                 'activeToolFilters'         => ['tools_sort' => $toolsSort],
                 'activeManpowerFilters'     => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],

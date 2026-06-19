@@ -6,6 +6,7 @@ use App\Models\Model_Projects;
 use App\Models\Model_Resources;
 use App\Models\Model_Users;
 use App\Models\Model_Manpower;
+use App\Models\Model_ResourceRequests;
 
 class Dashboard extends BaseController
 {
@@ -13,6 +14,7 @@ class Dashboard extends BaseController
     protected $resourceModel;
     protected $userModel;
     protected $manpowerModel;
+    protected $requestModel;
 
     public function __construct()
     {
@@ -20,6 +22,7 @@ class Dashboard extends BaseController
         $this->resourceModel = new Model_Resources();
         $this->userModel     = new Model_Users();
         $this->manpowerModel = new Model_Manpower();
+        $this->requestModel  = new Model_ResourceRequests();
     }
 
     public function index()
@@ -34,9 +37,44 @@ class Dashboard extends BaseController
 
             // ── Projects ────────────────────────────────────────────
             $rawProjects = $this->projectModel->getActiveProjects();
+
+            // Build lookup of pending transfer requests so pills can be marked on load
+            $pendingMap     = []; // "pid::resId"        => reqId
+            $pendingNameMap = []; // "pid::lower(name)"  => reqId
+            try {
+                foreach ($this->requestModel->getAll([]) as $r) {
+                    if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary'])) continue;
+                    $srcPid = $r['source_project_id'] ?? '';
+                    if (!$srcPid) continue;
+                    $rid   = $r['resource_id'] ?? '';
+                    $rname = strtolower(trim($r['resource_name'] ?? ''));
+                    $reqId = $r['id'];
+                    if ($rid)   $pendingMap[$srcPid . '::' . $rid]         = $reqId;
+                    if ($rname) $pendingNameMap[$srcPid . '::' . $rname]   = $reqId;
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: pending requests - ' . $e->getMessage());
+            }
+
             $activeProjects = [];
             foreach ($rawProjects as $p) {
-                $activeProjects[] = $this->enrichProject($p);
+                $enriched = $this->enrichProject($p);
+                $pid = $enriched['id'] ?? '';
+                foreach (['_equipment', '_tools', '_manpower'] as $key) {
+                    $enriched[$key] = array_map(function (array $pill) use ($pid, $pendingMap, $pendingNameMap): array {
+                        $rid   = $pill['id'] ?? '';
+                        $rname = strtolower($pill['name'] ?? '');
+                        $reqId = ($rid   !== '' && isset($pendingMap[$pid . '::' . $rid]))
+                               ? $pendingMap[$pid . '::' . $rid]
+                               : (($rname !== '' && isset($pendingNameMap[$pid . '::' . $rname]))
+                                  ? $pendingNameMap[$pid . '::' . $rname]
+                                  : null);
+                        $pill['pending'] = $reqId !== null;
+                        $pill['req_id']  = $reqId ?? '';
+                        return $pill;
+                    }, $enriched[$key]);
+                }
+                $activeProjects[] = $enriched;
             }
 
             // ── Group projects by Philippine island group ────────────

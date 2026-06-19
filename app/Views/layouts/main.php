@@ -110,5 +110,67 @@
     document.addEventListener('mouseleave', stop);
   }());
   </script>
+
+  <!-- ── Interactive pagination ── -->
+  <script>
+  (function () {
+    // Show loading spinner + navigate when a pager link is clicked
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest('.pager-link');
+      if (!link || !link.href || link.href === '#') return;
+
+      var section = link.closest('.pager-section');
+      if (!section) return;
+
+      e.preventDefault();
+
+      var overlay = document.createElement('div');
+      overlay.className = 'pager-loading-overlay';
+      overlay.innerHTML = '<div class="pager-spinner"></div>';
+      section.appendChild(overlay);
+
+      // Navigate after a short delay so the spinner is visible
+      var dest = link.href;
+      setTimeout(function () { window.location.href = dest; }, 80);
+    });
+
+    // Auto-scroll to the paginated section when a page param is present in the URL
+    document.addEventListener('DOMContentLoaded', function () {
+      var p = new URLSearchParams(window.location.search);
+      var target = null;
+
+      if (p.has('eq_page'))    target = document.getElementById('eq-section');
+      if (p.has('tools_page')) target = document.getElementById('tools-section');
+      if (p.has('mp_page'))    target = document.getElementById('mp-section');
+      // Staff and Projects both use 'page' — pick the one present on the page
+      if (!target && p.has('page')) {
+        target = document.getElementById('staff-section') ||
+                 document.getElementById('projects-section');
+      }
+
+      if (target) {
+        setTimeout(function () {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 120);
+      }
+
+      // "Go to page" — jump on Enter
+      document.querySelectorAll('.pager-jump-input').forEach(function (inp) {
+        var maxPage   = parseInt(inp.dataset.totalPages, 10) || 1;
+        var pageParam = inp.dataset.pageParam || 'page';
+
+        inp.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          var n = parseInt(inp.value, 10);
+          if (isNaN(n) || n < 1 || n > maxPage) return;
+          var url = new URL(window.location.href);
+          url.searchParams.set(pageParam, n);
+          window.location.href = url.toString();
+        });
+      });
+    });
+  }());
+  </script>
 </body>
 </html>
