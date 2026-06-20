@@ -474,12 +474,63 @@ class Resources extends BaseController
 
             $resource = $this->normalizeResourceForView($resource);
 
+            // For equipment/tools: auto-heal any items whose assigned_project_id
+            // references a project that no longer exists (deleted projects).
+            $items = [];
+            if (!$isManpower) {
+                $db                 = $this->firestore->getDb();
+                $deleteField        = \Google\Cloud\Firestore\FieldValue::deleteField();
+                $projectExistsCache = [];
+
+                foreach ($this->model->getResourceItems($id) as $item) {
+                    $apid = $item['assigned_project_id'] ?? null;
+                    $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $apid->id()
+                        : (string)($apid ?? '');
+
+                    if ($pid !== '') {
+                        if (!array_key_exists($pid, $projectExistsCache)) {
+                            try {
+                                $projectExistsCache[$pid] = $db
+                                    ->collection('project')->document($pid)
+                                    ->snapshot()->exists();
+                            } catch (\Throwable) {
+                                $projectExistsCache[$pid] = true; // assume exists on error
+                            }
+                        }
+
+                        if (!$projectExistsCache[$pid]) {
+                            // Auto-heal Firestore — clear orphaned reference and reset status
+                            $unitId = $item['__id'] ?? $item['id'] ?? '';
+                            if ($unitId !== '') {
+                                try {
+                                    $db->collection('resource')->document($id)
+                                       ->collection('items')->document($unitId)
+                                       ->update([
+                                           ['path' => 'assigned_project_id', 'value' => $deleteField],
+                                           ['path' => 'status',              'value' => 'In-Storage'],
+                                       ]);
+                                } catch (\Throwable $e) {
+                                    log_message('warning', 'Resources::show auto-heal - ' . $e->getMessage());
+                                }
+                            }
+                            // Fix display data immediately so the page shows correct values
+                            unset($item['assigned_project_id']);
+                            $item['status']      = 'In-Storage';
+                            $item['assigned_to'] = '';
+                        }
+                    }
+
+                    $items[] = $item;
+                }
+            }
+
             return view('resources/resources_show', [
                 'pageTitle' => 'Resource Detail',
-                'resource' => $resource,
-                'items' => $isManpower ? [] : $this->model->getResourceItems($id),
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'User'
+                'resource'  => $resource,
+                'items'     => $items,
+                'userName'  => session()->get('userName') ?? 'User',
+                'role'      => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->to('resources')->with('error', 'Error loading resource: ' . $e->getMessage());
@@ -582,6 +633,73 @@ class Resources extends BaseController
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Item added successfully!');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error adding item: ' . $e->getMessage());
+        }
+    }
+
+    public function updateItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
+        try {
+            if (!$resourceId || !$itemId) {
+                return redirect()->back()->with('error', 'Missing resource or item id');
+            }
+
+            $serial   = trim((string)($this->request->getPost('serial_number') ?? ''));
+            $brand    = trim((string)($this->request->getPost('brand')         ?? ''));
+            $modelNo  = trim((string)($this->request->getPost('model_number')  ?? ''));
+            $cond     = trim((string)($this->request->getPost('condition')     ?? ''));
+            $status   = trim((string)($this->request->getPost('status')        ?? ''));
+            $locType  = trim((string)($this->request->getPost('location_type') ?? ''));
+            $locAddr  = trim((string)($this->request->getPost('location_address') ?? ''));
+
+            if ($serial === '' || $cond === '' || $status === '') {
+                return redirect()->back()->with('error', 'Serial number, condition, and status are required.');
+            }
+
+            $data = [
+                'serial_number' => $serial,
+                'condition'     => $cond,
+                'status'        => $status,
+            ];
+            if ($brand   !== '') $data['brand']        = $brand;
+            if ($modelNo !== '') $data['model_number'] = $modelNo;
+            if ($locType !== '' || $locAddr !== '') {
+                $data['location'] = ['type' => $locType, 'address' => $locAddr];
+            }
+
+            $this->firestore->getDb()
+                ->collection('resource')->document($resourceId)
+                ->collection('items')->document($itemId)
+                ->set($data, ['merge' => true]);
+
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit updated successfully!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error updating unit: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
+        try {
+            if (!$resourceId || !$itemId) {
+                return redirect()->back()->with('error', 'Missing resource or item id');
+            }
+
+            $this->firestore->getDb()
+                ->collection('resource')->document($resourceId)
+                ->collection('items')->document($itemId)
+                ->delete();
+
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit deleted successfully.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error deleting unit: ' . $e->getMessage());
         }
     }
 

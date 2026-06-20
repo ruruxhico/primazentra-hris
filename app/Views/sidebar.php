@@ -8,6 +8,7 @@
     $isResources = $currentPath === 'resources' || $currentPath === 'requests' || str_starts_with($currentPath, 'resources/') || str_starts_with($currentPath, 'requests/');
     $isStaff     = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
     $isProfile   = $currentPath === 'profile' || str_starts_with($currentPath, 'profile/');
+    $isMessages  = $currentPath === 'messages' || str_starts_with($currentPath, 'messages/');
 ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -81,7 +82,6 @@
                 </a>
             </li>
             <?php endif; ?>
-
         </ul>
 
         <div class="logout-section">

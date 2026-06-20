@@ -3,6 +3,8 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Models\Model_Users;
+use App\Services\NotificationService;
 use Google\Cloud\Core\Timestamp;
 
 class Reports extends BaseController
@@ -125,19 +127,34 @@ class Reports extends BaseController
         $dateTs      = new Timestamp(new \DateTime($date));
         $now         = new Timestamp(new \DateTime());
 
+        $filerName = (string)(session()->get('userName') ?? 'Someone');
+
         try {
-            $this->firestore->getDb()
+            $ref = $this->firestore->getDb()
                 ->collection('project')->document($projectId)
                 ->collection('emergency_reports')->add([
                     'date'            => $dateTs,
                     'causes'          => $causesList,
                     'other_cause'     => $otherCause,
                     'notes'           => $notes,
-                    'created_by_name' => (string)(session()->get('userName') ?? ''),
-                    'created_by_uid'  => (string)(session()->get('userId')   ?? ''),
+                    'created_by_name' => $filerName,
+                    'created_by_uid'  => (string)(session()->get('userId') ?? ''),
                     'created_at'      => $now,
                     'updated_at'      => $now,
                 ]);
+
+            $reportId = $ref->id();
+
+            // Resolve project name for the notification body
+            $projectName = $projectId;
+            try {
+                $snap = $this->firestore->getDb()->collection('project')->document($projectId)->snapshot();
+                if ($snap->exists()) {
+                    $projectName = (string)($snap->data()['project_name'] ?? $projectId);
+                }
+            } catch (\Throwable $e) { /* keep fallback */ }
+
+            $this->notifyEmergency($projectId, $reportId, $projectName, $filerName);
 
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
@@ -196,14 +213,39 @@ class Reports extends BaseController
                       ?? $d['completion_percent']
                       ?? null;
 
+            // Normalize manpower array: [{name, external?}]
+            $manpowerArr = [];
+            foreach ((array)($d['manpower'] ?? []) as $mp) {
+                if (!is_array($mp)) continue;
+                $manpowerArr[] = [
+                    'name'     => (string)($mp['name'] ?? ''),
+                    'external' => !empty($mp['external']),
+                ];
+            }
+
+            // Normalize milestone_progress array
+            $milestoneProgress = [];
+            foreach ((array)($d['milestone_progress'] ?? []) as $ms) {
+                if (!is_array($ms)) continue;
+                $milestoneProgress[] = [
+                    'name'       => (string)($ms['milestone_name'] ?? ''),
+                    'unit'       => (string)($ms['unit'] ?? ''),
+                    'today'      => (float)($ms['amount_done_today']        ?? 0),
+                    'total'      => (float)($ms['completed_quantity_after'] ?? 0),
+                    'percent'    => (float)($ms['completion_percent_after'] ?? 0),
+                ];
+            }
+
             return $this->response->setJSON([
-                'date'             => $doc->id(),
-                'progress_percent' => $progress !== null ? (float)$progress : null,
-                'weather'          => (string)($d['weather']           ?? ''),
-                'manpower_display' => (string)($d['manpower_display']  ?? ''),
-                'description'      => (string)($d['description']       ?? $d['notes'] ?? ''),
-                'filed_by'         => (string)($d['created_by_name']   ?? $d['filed_by'] ?? ''),
-                'photos'           => (array)($d['photos']             ?? []),
+                'date'               => $doc->id(),
+                'progress_percent'   => $progress !== null ? (float)$progress : null,
+                'weather'            => (string)($d['weather']          ?? ''),
+                'manpower'           => $manpowerArr,
+                'manpower_display'   => (string)($d['manpower_display'] ?? ''),
+                'milestone_progress' => $milestoneProgress,
+                'description'        => (string)($d['description']      ?? $d['notes'] ?? ''),
+                'filed_by'           => (string)($d['created_by_name']  ?? $d['filed_by'] ?? ''),
+                'photos'             => (array)($d['photos']            ?? []),
             ]);
         } catch (\Throwable $e) {
             log_message('error', 'Reports::dailyShow - ' . $e->getMessage());
@@ -230,20 +272,44 @@ class Reports extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Invalid date format']);
         }
 
-        $now = new Timestamp(new \DateTime());
+        $now      = new Timestamp(new \DateTime());
+        $filerName = (string)(session()->get('userName') ?? 'Someone');
+        $filerUid  = (string)(session()->get('userId')   ?? '');
 
         try {
-            $this->firestore->getDb()
+            $reportRef = $this->firestore->getDb()
                 ->collection('project')->document($projectId)
-                ->collection('daily_progress_reports')->document($date)->set([
-                    'report_date'             => new Timestamp(new \DateTime($date)),
-                    'total_completion_percent' => $progress !== null ? (float)$progress : null,
-                    'description'              => $description,
-                    'created_by_name'          => (string)(session()->get('userName') ?? ''),
-                    'created_by_uid'           => (string)(session()->get('userId')   ?? ''),
-                    'created_at'               => $now,
-                    'updated_at'               => $now,
-                ], ['merge' => true]);
+                ->collection('daily_progress_reports')->document($date);
+
+            // Detect create vs update before writing
+            $isUpdate = $reportRef->snapshot()->exists();
+
+            $reportRef->set([
+                'report_date'             => new Timestamp(new \DateTime($date)),
+                'total_completion_percent' => $progress !== null ? (float)$progress : null,
+                'description'              => $description,
+                'created_by_name'          => $filerName,
+                'created_by_uid'           => $filerUid,
+                'created_at'               => $now,
+                'updated_at'               => $now,
+            ], ['merge' => true]);
+
+            // Resolve project name and PM for the notification
+            $projectName = $projectId;
+            $pmUid       = '';
+            try {
+                $pSnap = $this->firestore->getDb()->collection('project')->document($projectId)->snapshot();
+                if ($pSnap->exists()) {
+                    $pd          = $pSnap->data();
+                    $projectName = (string)($pd['project_name'] ?? $projectId);
+                    $rawPm       = $pd['personnel']['project_manager_id']
+                                   ?? $pd['project_manager_id']
+                                   ?? null;
+                    $pmUid = $this->extractUid($rawPm);
+                }
+            } catch (\Throwable $e) { /* keep fallbacks */ }
+
+            $this->notifyProgress($projectId, $projectName, $filerName, $filerUid, $pmUid, $isUpdate);
 
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
@@ -277,5 +343,76 @@ class Reports extends BaseController
         }
 
         return null;
+    }
+
+    private function notifyProgress(
+        string $projectId,
+        string $projectName,
+        string $filerName,
+        string $filerUid,
+        string $pmUid,
+        bool   $isUpdate
+    ): void {
+        try {
+            $verb  = $isUpdate ? 'updated' : 'submitted';
+            $title = $isUpdate ? 'Progress Report Updated' : 'Progress Report Submitted';
+            $body  = "{$filerName} {$verb} a progress report for {$projectName}";
+            $meta  = ['project_id' => $projectId];
+
+            $svc   = new NotificationService();
+            $sent  = [];
+
+            // Role-based recipients: Administrators and Operations Managers
+            $users = (new Model_Users())->getUsersByRole(['Administrator', 'Operations Manager']);
+            foreach ($users as $user) {
+                $uid = (string)($user['id'] ?? '');
+                if (!$uid || $uid === $filerUid || in_array($uid, $sent, true)) continue;
+                $svc->send($uid, 'progressReported', $title, $body, $meta);
+                $sent[] = $uid;
+            }
+
+            // Also notify the project's assigned PM individually
+            if ($pmUid && $pmUid !== $filerUid && !in_array($pmUid, $sent, true)) {
+                $svc->send($pmUid, 'progressReported', $title, $body, $meta);
+                $sent[] = $pmUid;
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Reports::notifyProgress - ' . $e->getMessage());
+        }
+    }
+
+    /** Extract a plain user ID from a value that may be a DocumentReference, a path string, or a bare ID. */
+    private function extractUid(mixed $value): string
+    {
+        if ($value === null) return '';
+        if ($value instanceof \Google\Cloud\Firestore\DocumentReference) {
+            return $value->id();
+        }
+        if (is_string($value)) {
+            // Strip leading path segments (e.g. "users/abc123" → "abc123")
+            return ltrim(strrchr($value, '/'), '/') ?: $value;
+        }
+        return '';
+    }
+
+    private function notifyEmergency(string $projectId, string $reportId, string $projectName, string $filerName): void
+    {
+        try {
+            $users = (new Model_Users())->getUsersByRole(['Administrator', 'Operations Manager']);
+            $svc   = new NotificationService();
+            foreach ($users as $user) {
+                $uid = (string)($user['id'] ?? '');
+                if (!$uid) continue;
+                $svc->send(
+                    $uid,
+                    'emergencyCreated',
+                    'Emergency Report Filed',
+                    "{$filerName} filed an emergency report on {$projectName}",
+                    ['project_id' => $projectId, 'report_id' => $reportId]
+                );
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Reports::notifyEmergency - ' . $e->getMessage());
+        }
     }
 }

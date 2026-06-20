@@ -138,8 +138,22 @@
                     </td>
                     <td class="pz-row-muted"><?= esc(trim((string)($item['location']['type'] ?? '') . (($item['location']['address'] ?? '') !== '' ? ' — ' . ($item['location']['address'] ?? '') : ''))) ?: '—' ?></td>
                     <td class="actions">
-                        <button class="pz-btn-icon" title="Edit" onclick="alert('Edit coming soon')"><span class="material-symbols-outlined">edit</span></button>
-                        <button class="pz-btn-icon danger" title="Delete" onclick="return confirm('Delete this unit?')"><span class="material-symbols-outlined">delete</span></button>
+                        <button class="pz-btn-icon edit-unit-btn" title="Edit"
+                            data-id="<?= esc($item['id'] ?? '') ?>"
+                            data-serial="<?= esc($item['serial_number'] ?? '') ?>"
+                            data-brand="<?= esc($item['brand'] ?? '') ?>"
+                            data-model="<?= esc($item['model_number'] ?? '') ?>"
+                            data-condition="<?= esc($item['condition'] ?? '') ?>"
+                            data-status="<?= esc($item['status'] ?? '') ?>"
+                            data-loc-type="<?= esc($item['location']['type'] ?? '') ?>"
+                            data-loc-addr="<?= esc($item['location']['address'] ?? '') ?>">
+                            <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button class="pz-btn-icon danger delete-unit-btn" title="Delete"
+                            data-id="<?= esc($item['id'] ?? '') ?>"
+                            data-serial="<?= esc($item['serial_number'] ?? $item['id'] ?? 'this unit') ?>">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -151,6 +165,87 @@
     <?= service('pager')->links('items', 'bootstrap_full') ?>
 </div>
 </div><!-- /.page-module -->
+
+<!-- Delete Unit Confirmation Modal -->
+<div id="deleteItemModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:14px;padding:1.6rem 1.5rem 1.3rem;width:100%;max-width:360px;position:relative;border:1.5px solid #f5c6c6;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem">
+            <span class="material-symbols-outlined" style="font-size:1.4rem;color:#c0392b">delete_forever</span>
+            <p style="font-weight:700;font-size:.95rem;color:#3b2a0e;margin:0">Delete Unit</p>
+        </div>
+        <p style="font-size:.87rem;color:#555;margin:0 0 1.2rem;line-height:1.5">
+            Are you sure you want to delete unit <strong id="deleteUnitLabel"></strong>? This cannot be undone.
+        </p>
+        <form id="deleteItemForm" method="POST" action="">
+            <?= csrf_field() ?>
+            <div style="display:flex;gap:.55rem">
+                <button type="submit" class="pz-btn" style="flex:1;background:#c0392b;color:#fff;border-color:#c0392b;font-weight:700">Delete</button>
+                <button type="button" class="pz-btn pz-btn-outline" style="flex:1" onclick="document.getElementById('deleteItemModal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Unit Modal -->
+<div id="editItemModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fdf8ee;border-radius:14px;padding:1.5rem;width:100%;max-width:420px;position:relative;border:1.5px solid #e8dfc7;box-shadow:0 8px 40px rgba(0,0,0,.18)">
+        <button type="button" onclick="document.getElementById('editItemModal').style.display='none'" style="position:absolute;top:.75rem;right:1rem;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#7a5c1e;line-height:1">✕</button>
+        <p style="font-weight:700;font-size:.95rem;color:#3b2a0e;margin:0 0 1.1rem">Edit Unit</p>
+
+        <form id="editItemForm" method="POST" action="">
+            <?= csrf_field() ?>
+            <div style="display:flex;flex-direction:column;gap:.65rem">
+                <div class="pz-form-group">
+                    <label>Serial Number *</label>
+                    <input type="text" id="editSerial" name="serial_number" placeholder="SN-12345" required>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem">
+                    <div class="pz-form-group">
+                        <label>Brand</label>
+                        <input type="text" id="editBrand" name="brand" placeholder="e.g. Makita">
+                    </div>
+                    <div class="pz-form-group">
+                        <label>Model No.</label>
+                        <input type="text" id="editModelNo" name="model_number" placeholder="e.g. DP4011">
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem">
+                    <div class="pz-form-group">
+                        <label>Condition *</label>
+                        <select id="editCondition" name="condition" required>
+                            <option value="">— Select —</option>
+                            <option>New</option><option>Functional</option><option>Worn</option><option>Broken</option>
+                        </select>
+                    </div>
+                    <div class="pz-form-group">
+                        <label>Status *</label>
+                        <select id="editStatus" name="status" required>
+                            <option value="">— Select —</option>
+                            <option>In-Storage</option><option>In-Use</option><option>Repair</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem">
+                    <div class="pz-form-group">
+                        <label>Location Type</label>
+                        <select id="editLocType" name="location_type">
+                            <option value="">— Select —</option>
+                            <option>Warehouse</option><option>Project Site</option>
+                        </select>
+                    </div>
+                    <div class="pz-form-group">
+                        <label>Location Address</label>
+                        <input type="text" id="editLocAddr" name="location_address" placeholder="Address">
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex;gap:.55rem;margin-top:1.1rem;padding-top:.9rem;border-top:1px solid #e8dfc7">
+                <button type="submit" class="pz-btn pz-btn-primary" style="flex:1">Save Changes</button>
+                <button type="button" class="pz-btn pz-btn-outline" style="flex:1" onclick="document.getElementById('editItemModal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Add Unit Modal -->
 <div id="addItemModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center;">
@@ -190,6 +285,51 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // ── Edit Unit Modal ──────────────────────────────────────────────────────
+    const editModal = document.getElementById('editItemModal');
+    const editForm  = document.getElementById('editItemForm');
+    const baseUpdateUrl = '<?= base_url('resources/updateItem/' . $resourceId) ?>/';
+
+    document.querySelectorAll('.edit-unit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const d = this.dataset;
+            editForm.action = baseUpdateUrl + encodeURIComponent(d.id);
+            document.getElementById('editSerial').value    = d.serial;
+            document.getElementById('editBrand').value     = d.brand;
+            document.getElementById('editModelNo').value   = d.model;
+            document.getElementById('editCondition').value = d.condition;
+            document.getElementById('editStatus').value    = d.status;
+            document.getElementById('editLocType').value   = d.locType || '';
+            document.getElementById('editLocAddr').value   = d.locAddr || '';
+            editModal.style.display = 'flex';
+        });
+    });
+
+    // Close edit modal when clicking the backdrop
+    editModal.addEventListener('click', function (e) {
+        if (e.target === editModal) editModal.style.display = 'none';
+    });
+
+    // ── Delete Unit Modal ────────────────────────────────────────────────────
+    const deleteModal     = document.getElementById('deleteItemModal');
+    const deleteForm      = document.getElementById('deleteItemForm');
+    const deleteUnitLabel = document.getElementById('deleteUnitLabel');
+    const baseDeleteUrl   = '<?= base_url('resources/deleteItem/' . $resourceId) ?>/';
+
+    document.querySelectorAll('.delete-unit-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const id     = this.dataset.id;
+            const serial = this.dataset.serial || id;
+            deleteForm.action      = baseDeleteUrl + encodeURIComponent(id);
+            deleteUnitLabel.textContent = serial;
+            deleteModal.style.display = 'flex';
+        });
+    });
+
+    deleteModal.addEventListener('click', function (e) {
+        if (e.target === deleteModal) deleteModal.style.display = 'none';
+    });
+
     const filterToggleBtn = document.getElementById('filterToggleBtn');
     const filterPanel     = document.getElementById('filterPanel');
     const filterForm      = document.getElementById('filterForm');

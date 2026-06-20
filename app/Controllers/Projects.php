@@ -7,6 +7,7 @@ use App\Libraries\MilestoneProgressService;
 use App\Libraries\StorageService;
 use App\Libraries\TrashService;
 use App\Models\Model_Users;
+use App\Services\NotificationService;
 use Config\GoogleMaps;
 
 class Projects extends BaseController
@@ -205,6 +206,13 @@ class Projects extends BaseController
                     ->document($projectId)
                     ->set($projectData);
 
+                $this->notifyAssigned(
+                    $projectId,
+                    (string)($projectData['project_name'] ?? ''),
+                    (string)($projectData['project_manager_id'] ?? ''),
+                    (string)($projectData['site_engineer_id']   ?? '')
+                );
+
                 // verify write
                 try {
                     $snapshot = $this->firestore->getDb()->collection('project')->document($projectId)->snapshot();
@@ -298,6 +306,18 @@ class Projects extends BaseController
 
                 log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
+                // Notify only if PM or SE assignment changed
+                $newPmId = (string)($projectData['project_manager_id'] ?? '');
+                $newSeId = (string)($projectData['site_engineer_id']   ?? '');
+                $oldPmId = (string)($existing['pm_id_normalized'] ?? '');
+                $oldSeId = (string)($existing['se_id_normalized'] ?? '');
+                $this->notifyAssigned(
+                    $id,
+                    (string)($projectData['project_name'] ?? ''),
+                    $newPmId !== $oldPmId ? $newPmId : '',
+                    $newSeId !== $oldSeId ? $newSeId : ''
+                );
+
                 if ($addTasksNow) {
                     $rawPhases   = $this->request->getPost('phases') ?? [];
                     $weightError = $this->validateMilestoneWeights($rawPhases);
@@ -379,6 +399,7 @@ class Projects extends BaseController
                     session()->get('userName')
                 );
 
+                $this->releaseProjectResources($id);
                 $this->deleteProjectTasks($id);
                 $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
@@ -411,6 +432,7 @@ class Projects extends BaseController
                     session()->get('userName')
                 );
 
+                $this->releaseProjectResources($id);
                 $this->deleteProjectTasks($id);
                 $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
@@ -508,6 +530,91 @@ class Projects extends BaseController
             log_message('error', 'Projects::show - ' . $e->getMessage());
             return redirect()->to('projects')->with('error', 'Unable to fetch project');
         }
+    }
+
+    // ── Progress Summary JSON (for modal Weekly / Overall buttons) ────────
+
+    public function progressSummaryJson(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        try {
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('project')->document($id)->snapshot();
+            if (!$snap->exists()) {
+                return $this->response->setStatusCode(404)->setJSON(['error' => 'Not found']);
+            }
+
+            $p = $snap->data();
+
+            $baselineType    = (string)($p['baselineType']    ?? 'weekly');
+            $overallProgress = (float)($p['overall_progress'] ?? 0);
+            $startDate       = $this->psTsToDate($p['start_date'] ?? null);
+            $endDate         = $this->psTsToDate($p['end_date']   ?? null);
+
+            // weekly_targets array (only present when schedule has been saved on mobile)
+            $weeklyTargets = [];
+            foreach ((array)($p['weekly_targets'] ?? []) as $wt) {
+                if (!is_array($wt)) continue;
+                $weeklyTargets[] = [
+                    'week'           => isset($wt['week']) ? (int)$wt['week'] : null,
+                    'week_start'     => $this->psTsToDate($wt['week_start'] ?? null),
+                    'target_percent' => (float)($wt['target_percent'] ?? 0),
+                    'actual_percent' => isset($wt['actual_percent']) ? (float)$wt['actual_percent'] : null,
+                ];
+            }
+
+            // milestones subcollection — use canonical schema field names
+            $milestones = [];
+            foreach ($db->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                if (!$mDoc->exists()) continue;
+                $m = $mDoc->data();
+                $milestones[] = [
+                    'id'                 => $mDoc->id(),
+                    'milestone_name'     => (string)($m['milestone_name']    ?? ''),
+                    'order'              => (int)($m['order']                ?? 0),
+                    'weight_percent'     => (float)($m['weight_percent']     ?? 0),
+                    'target_quantity'    => (float)($m['target_quantity']    ?? 0),
+                    'completed_quantity' => (float)($m['completed_quantity'] ?? 0),
+                    'completion_percent' => (float)($m['completion_percent'] ?? 0),
+                    'status'             => (string)($m['status']            ?? 'Not Started'),
+                    'target_date'        => $this->psTsToDate($m['target_date'] ?? null),
+                    'unit'               => (string)($m['unit']              ?? ''),
+                ];
+            }
+            usort($milestones, static fn($a, $b) => $a['order'] <=> $b['order']);
+
+            return $this->response->setJSON([
+                'baselineType'    => $baselineType,
+                'overallProgress' => $overallProgress,
+                'startDate'       => $startDate,
+                'endDate'         => $endDate,
+                'weeklyTargets'   => $weeklyTargets,
+                'milestones'      => $milestones,
+                'reportDate'      => date('Y-m-d'),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::progressSummaryJson - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
+        }
+    }
+
+    private function psTsToDate(mixed $value): ?string
+    {
+        if ($value === null) return null;
+        if ($value instanceof \Google\Cloud\Core\Timestamp) {
+            try {
+                return \DateTimeImmutable::createFromInterface($value->get())
+                    ->setTimezone(new \DateTimeZone('Asia/Manila'))
+                    ->format('Y-m-d');
+            } catch (\Throwable) { return null; }
+        }
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value, $m)) {
+            return $m[0];
+        }
+        return null;
     }
 
     // ── Project Resources ─────────────────────────────────────────────────
@@ -631,11 +738,38 @@ class Projects extends BaseController
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
                 ], ['merge' => true]);
+
+                // Sync to project.resources so mobile sees the assignment
+                $mpData = $db->collection('manpower')->document($refId)->snapshot()->data() ?? [];
+                $fn = strtoupper(trim((string)($mpData['first_name'] ?? '')));
+                $ln = strtoupper(trim((string)($mpData['last_name']  ?? '')));
+                $mpName = $fn . ($fn && $ln ? ' ' : '') . $ln ?: strtoupper($mpData['name'] ?? '');
+                if ($mpName !== '') {
+                    $db->collection('project')->document($id)->update([[
+                        'path'  => 'resources',
+                        'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
+                            'name' => $mpName, 'ref_id' => $refId, 'unit_id' => '', 'category' => 'manpower',
+                        ]]),
+                    ]]);
+                }
             } else {
                 $db->collection('resource')->document($refId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => $db->collection('project')->document($id),
                     'status'              => 'In-Use',
                 ], ['merge' => true]);
+
+                // Sync to project.resources so mobile sees the assignment
+                $resData = $db->collection('resource')->document($refId)->snapshot()->data() ?? [];
+                $resName  = strtoupper(trim((string)($resData['name'] ?? '')));
+                $category = strtolower(trim((string)($resData['category'] ?? 'equipment')));
+                if ($resName !== '') {
+                    $db->collection('project')->document($id)->update([[
+                        'path'  => 'resources',
+                        'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
+                            'name' => $resName, 'ref_id' => $refId, 'unit_id' => $unitId, 'category' => $category,
+                        ]]),
+                    ]]);
+                }
             }
 
             return $this->response->setJSON(['success' => true]);
@@ -662,12 +796,14 @@ class Projects extends BaseController
                     'assigned_project_id' => null,
                     'status'              => 'Available',
                 ], ['merge' => true]);
+                $this->removeFromProjectResources($db, $id, $mpId, '');
             } elseif (str_starts_with($assignmentId, 'unit:')) {
                 [, $resId, $unitId] = explode(':', $assignmentId, 3);
                 $db->collection('resource')->document($resId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => null,
                     'status'              => 'In-Storage',
                 ], ['merge' => true]);
+                $this->removeFromProjectResources($db, $id, $resId, $unitId);
             } else {
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid assignment ID']);
             }
@@ -686,22 +822,46 @@ class Projects extends BaseController
         }
 
         try {
+            $db            = $this->firestore->getDb();
             $resourceModel = new \App\Models\Model_Resources();
-            $items = $resourceModel->getResourceItems($resourceId);
+            $items         = $resourceModel->getResourceItems($resourceId);
+
+            // Cache project-existence checks so we only hit Firestore once per
+            // unique foreign project ID (handles orphaned refs from deleted projects).
+            $projectExistsCache = [];
 
             $out = [];
             foreach ($items as $item) {
-                $unitId = $item['__id'] ?? $item['id'] ?? '';
-                $apid   = $item['assigned_project_id'] ?? null;
+                $unitId  = $item['__id'] ?? $item['id'] ?? '';
+                $apid    = $item['assigned_project_id'] ?? null;
                 $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
                     ? $apid->id()
                     : (string)($apid ?? '');
-                $isHere  = ($itemPid === $id);
+
+                // If this item points to a project that is not the current one,
+                // verify that project still exists. If it was deleted, treat the
+                // item as unassigned so it can be reassigned immediately.
+                if ($itemPid !== '' && $itemPid !== $id) {
+                    if (!array_key_exists($itemPid, $projectExistsCache)) {
+                        try {
+                            $projectExistsCache[$itemPid] = $db
+                                ->collection('project')->document($itemPid)
+                                ->snapshot()->exists();
+                        } catch (\Throwable) {
+                            $projectExistsCache[$itemPid] = true; // assume exists on error
+                        }
+                    }
+                    if (!$projectExistsCache[$itemPid]) {
+                        $itemPid = ''; // orphaned reference — project is gone
+                    }
+                }
+
+                $isHere = ($itemPid === $id);
 
                 $out[] = [
-                    'id'                      => $unitId,
-                    'serial_number'           => $item['serial_number'] ?? ($item['unit_name'] ?? $unitId),
-                    'status'                  => $item['status'] ?? 'Unknown',
+                    'id'                       => $unitId,
+                    'serial_number'            => $item['serial_number'] ?? ($item['unit_name'] ?? $unitId),
+                    'status'                   => $item['status'] ?? 'Unknown',
                     'assigned_to_this_project' => $isHere,
                     'assignment_id'            => $isHere ? 'unit:' . $resourceId . ':' . $unitId : null,
                 ];
@@ -754,7 +914,10 @@ class Projects extends BaseController
                     if (!$found) continue;
                 }
 
-                $candidates[] = $m['id'];
+                $fn = strtoupper(trim((string)($m['first_name'] ?? '')));
+                $ln = strtoupper(trim((string)($m['last_name']  ?? '')));
+                $mpName = $fn . ($fn && $ln ? ' ' : '') . $ln ?: strtoupper($m['name'] ?? '');
+                $candidates[] = ['id' => $m['id'], 'name' => $mpName];
             }
 
             if (empty($candidates)) {
@@ -764,11 +927,23 @@ class Projects extends BaseController
             shuffle($candidates);
             $toAssign = array_slice($candidates, 0, $qty);
 
-            foreach ($toAssign as $mpId) {
-                $db->collection('manpower')->document($mpId)->set([
+            $resourceEntries = [];
+            foreach ($toAssign as $cand) {
+                $db->collection('manpower')->document($cand['id'])->set([
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
                 ], ['merge' => true]);
+                if ($cand['name'] !== '') {
+                    $resourceEntries[] = [
+                        'name' => $cand['name'], 'ref_id' => $cand['id'], 'unit_id' => '', 'category' => 'manpower',
+                    ];
+                }
+            }
+            if (!empty($resourceEntries)) {
+                $db->collection('project')->document($id)->update([[
+                    'path'  => 'resources',
+                    'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries),
+                ]]);
             }
 
             return $this->response->setJSON(['success' => true, 'assigned' => count($toAssign)]);
@@ -798,16 +973,40 @@ class Projects extends BaseController
             $items         = $resourceModel->getResourceItems($resourceId);
             $assigned      = 0;
 
+            // Fetch resource name/category once for the project.resources sync
+            $resData  = $db->collection('resource')->document($resourceId)->snapshot()->data() ?? [];
+            $resName  = strtoupper(trim((string)($resData['name'] ?? '')));
+            $category = strtolower(trim((string)($resData['category'] ?? 'equipment')));
+
+            $projectExistsCache = [];
+            $resourceEntries = [];
             foreach ($items as $item) {
                 if ($assigned >= $quantity) break;
 
                 $status = $item['status'] ?? 'Available';
                 if (!in_array($status, ['Available', 'In-Storage'], true)) continue;
 
-                $apid = $item['assigned_project_id'] ?? null;
+                $apid    = $item['assigned_project_id'] ?? null;
                 $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
                     ? $apid->id()
                     : (string)($apid ?? '');
+
+                // Orphaned reference guard: if the assigned project no longer
+                // exists treat this item as available.
+                if ($itemPid !== '') {
+                    if (!array_key_exists($itemPid, $projectExistsCache)) {
+                        try {
+                            $projectExistsCache[$itemPid] = $db
+                                ->collection('project')->document($itemPid)
+                                ->snapshot()->exists();
+                        } catch (\Throwable) {
+                            $projectExistsCache[$itemPid] = true;
+                        }
+                    }
+                    if (!$projectExistsCache[$itemPid]) {
+                        $itemPid = '';
+                    }
+                }
                 if ($itemPid !== '') continue;
 
                 if ($brand !== '') {
@@ -823,16 +1022,129 @@ class Projects extends BaseController
                     'status'              => 'In-Use',
                 ], ['merge' => true]);
                 $assigned++;
+
+                if ($resName !== '') {
+                    $resourceEntries[] = [
+                        'name' => $resName, 'ref_id' => $resourceId, 'unit_id' => $unitId, 'category' => $category,
+                    ];
+                }
             }
 
             if ($assigned === 0) {
                 return $this->response->setJSON(['success' => false, 'message' => 'No units available at warehouse for this model.']);
             }
 
+            if (!empty($resourceEntries)) {
+                $db->collection('project')->document($id)->update([[
+                    'path'  => 'resources',
+                    'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries),
+                ]]);
+            }
+
             return $this->response->setJSON(['success' => true, 'assigned' => $assigned]);
         } catch (\Throwable $e) {
             log_message('error', 'Projects::bulkAssignEquipment - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign equipment']);
+        }
+    }
+
+    private function releaseProjectResources(string $projectId): void
+    {
+        $db         = $this->firestore->getDb();
+        $projectRef = $db->collection('project')->document($projectId);
+        $deleteField = \Google\Cloud\Firestore\FieldValue::deleteField();
+
+        // ── Manpower ─────────────────────────────────────────────────────────
+        try {
+            $mpDocs = $db->collection('manpower')
+                ->where('assigned_project_id', '=', $projectId)
+                ->documents();
+            foreach ($mpDocs as $doc) {
+                if (!$doc->exists()) continue;
+                $doc->reference()->update([
+                    ['path' => 'assigned_project_id', 'value' => $deleteField],
+                    ['path' => 'status',              'value' => 'Available'],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::releaseProjectResources manpower - ' . $e->getMessage());
+        }
+
+        // ── Equipment / Tools ─────────────────────────────────────────────────
+        // Primary: collectionGroup query by DocumentReference (fast, needs index)
+        $releasedPaths = [];
+        try {
+            $itemDocs = $db->collectionGroup('items')
+                ->where('assigned_project_id', '=', $projectRef)
+                ->documents();
+            foreach ($itemDocs as $doc) {
+                if (!$doc->exists()) continue;
+                $doc->reference()->update([
+                    ['path' => 'assigned_project_id', 'value' => $deleteField],
+                    ['path' => 'status',              'value' => 'In-Storage'],
+                ]);
+                $releasedPaths[$doc->name()] = true;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::releaseProjectResources equipment (ref) - ' . $e->getMessage());
+        }
+
+        // Secondary: collectionGroup query by plain string ID (legacy storage format)
+        try {
+            $itemDocs2 = $db->collectionGroup('items')
+                ->where('assigned_project_id', '=', $projectId)
+                ->documents();
+            foreach ($itemDocs2 as $doc) {
+                if (!$doc->exists() || isset($releasedPaths[$doc->name()])) continue;
+                $doc->reference()->update([
+                    ['path' => 'assigned_project_id', 'value' => $deleteField],
+                    ['path' => 'status',              'value' => 'In-Storage'],
+                ]);
+                $releasedPaths[$doc->name()] = true;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::releaseProjectResources equipment (str) - ' . $e->getMessage());
+        }
+
+        // Fallback: full scan across all resource subcollections.
+        // Catches items that slipped past failed index queries or were stored in
+        // any other format. Also fixes items already stuck from past deletes.
+        try {
+            foreach ($db->collection('resource')->documents() as $resDoc) {
+                if (!$resDoc->exists()) continue;
+                foreach ($resDoc->reference()->collection('items')->documents() as $itemDoc) {
+                    if (!$itemDoc->exists() || isset($releasedPaths[$itemDoc->name()])) continue;
+                    $apid = $itemDoc->data()['assigned_project_id'] ?? null;
+                    $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $apid->id()
+                        : (string)($apid ?? '');
+                    if ($pid !== $projectId) continue;
+                    $itemDoc->reference()->update([
+                        ['path' => 'assigned_project_id', 'value' => $deleteField],
+                        ['path' => 'status',              'value' => 'In-Storage'],
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::releaseProjectResources equipment (scan) - ' . $e->getMessage());
+        }
+    }
+
+    private function removeFromProjectResources($db, string $projectId, string $refId, string $unitId): void
+    {
+        try {
+            $snap    = $db->collection('project')->document($projectId)->snapshot();
+            $current = (array)($snap->data()['resources'] ?? []);
+            $filtered = array_values(array_filter($current, function ($r) use ($refId, $unitId) {
+                return !((string)($r['ref_id'] ?? '') === $refId && (string)($r['unit_id'] ?? '') === $unitId);
+            }));
+            if (count($filtered) !== count($current)) {
+                $db->collection('project')->document($projectId)->update([
+                    ['path' => 'resources', 'value' => $filtered],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::removeFromProjectResources - ' . $e->getMessage());
         }
     }
 
@@ -1438,5 +1750,22 @@ class Projects extends BaseController
         foreach ($mindanao as $kw) { if (str_contains($addr, $kw)) return 'MINDANAO'; }
 
         return '';
+    }
+
+    private function notifyAssigned(string $projectId, string $projectName, string $pmUid, string $seUid): void
+    {
+        try {
+            $svc  = new NotificationService();
+            $sent = [];
+            foreach (array_filter([$pmUid, $seUid]) as $uid) {
+                if (in_array($uid, $sent, true)) continue;
+                $svc->send($uid, 'projectAssigned', 'Assigned to Project',
+                    "You have been assigned to {$projectName}",
+                    ['project_id' => $projectId]);
+                $sent[] = $uid;
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::notifyAssigned - ' . $e->getMessage());
+        }
     }
 }

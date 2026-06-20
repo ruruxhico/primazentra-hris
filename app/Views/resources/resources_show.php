@@ -88,12 +88,11 @@
     <div class="pz-table-wrap" style="margin:0; border-radius:8px">
         <table class="pz-table" style="min-width:0">
             <thead><tr>
-                <th>Unit ID</th><th>Serial No</th><th>Condition</th><th>Status</th><th>Assigned To</th>
+                <th>Serial No</th><th>Condition</th><th>Status</th><th>Assigned To</th>
             </tr></thead>
             <tbody>
                 <?php foreach ($items as $item): ?>
                 <tr>
-                    <td class="pz-row-muted"><?= esc((string)($item['unit_id'] ?? '')) ?></td>
                     <td><?= esc((string)($item['serial_number'] ?? '')) ?></td>
                     <td><?= esc((string)($item['condition'] ?? '')) ?></td>
                     <td><?= esc((string)($item['status'] ?? '')) ?></td>

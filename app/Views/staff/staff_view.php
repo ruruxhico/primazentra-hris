@@ -32,6 +32,21 @@
 <?php endif; ?>
 
 <style>
+/* ── Controls bar ── */
+.rv-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:0.9rem; }
+.rv-search { flex:1; min-width:160px; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:0.87rem; font-family:inherit; outline:none; }
+.rv-search:focus { border-color:#C47A0F; box-shadow:0 0 0 2px rgba(196,122,15,.12); }
+.rv-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:8px; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; cursor:pointer; border:1.5px solid transparent; font-family:inherit; white-space:nowrap; font-variation-settings:'FILL' 0,'wght' 400; text-decoration:none; }
+.rv-btn .material-symbols-outlined { font-size:16px; }
+.rv-btn-filter { background:#fff; border-color:#ddd; color:#555; }
+.rv-btn-filter:hover { border-color:#C47A0F; color:#8C701C; }
+.rv-btn-add { background:#8C701C; color:#fff; border-color:#8C701C; }
+.rv-btn-add:hover { background:#6e570f; color:#fff; }
+.rv-btn-import { background:#fff; border-color:#adb5bd; color:#495057; }
+.rv-btn-import:hover { border-color:#8C701C; color:#8C701C; }
+.rv-btn-export { background:#fff; border-color:#adb5bd; color:#495057; }
+.rv-btn-export:hover { border-color:#8C701C; color:#8C701C; }
+
 .filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
 .filter-rows  { display:flex; flex-direction:column; gap:12px; }
 .filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -94,21 +109,26 @@
 ?>
 
 <div class="page-module">
-<div class="resource-controls">
-    <input type="text" id="searchStaff" placeholder="🔍 Search staff..." class="search-input">
+<div class="rv-controls">
+    <input type="text" id="searchStaff" placeholder="Search staff…" class="rv-search">
 
-    <button type="button" class="btn btn-filter" id="filterToggleBtn">
-        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
+    <button type="button" class="rv-btn rv-btn-filter" id="filterToggleBtn">
+        <span class="material-symbols-outlined">tune</span>
+        Filter<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
     <?php if (pz_can('create_staff')): ?>
-    <a href="<?= base_url('staff/create') ?>" class="btn btn-success">
-        + ADD
+    <a href="<?= base_url('staff/create') ?>" class="rv-btn rv-btn-add">
+        <span class="material-symbols-outlined">add</span> Add
     </a>
     <?php endif; ?>
 
-    <button class="btn btn-export" data-module="staff" onclick="openStaffExportModal()">
-        ⬆ EXPORT
+    <button class="rv-btn rv-btn-import" id="staffImportBtn">
+        <span class="material-symbols-outlined">download</span> Import
+    </button>
+
+    <button class="rv-btn rv-btn-export" data-module="staff" onclick="openStaffExportModal()">
+        <span class="material-symbols-outlined">upload</span> Export
     </button>
 </div>
 
@@ -666,6 +686,79 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 });
+</script>
+
+<!-- Import Modal -->
+<div id="importModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
+  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
+    <h3 style="margin:0 0 6px;color:#2c1f07;font-size:17px;">Import Staff</h3>
+    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx or .csv file. <a id="importTplLink" href="<?= base_url('import/template?module=staff') ?>" style="color:#8C701C;font-weight:600;">Download template</a></p>
+    <div id="importDropZone" style="border:2px dashed #d4c185;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#888;font-size:13px;">
+      <div style="font-size:28px;margin-bottom:6px;">📂</div>
+      Click or drag &amp; drop your .xlsx or .csv file here
+      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+    </div>
+    <div id="importFileName" style="margin-top:8px;font-size:12px;color:#555;"></div>
+    <div id="importResult"   style="margin-top:10px;font-size:13px;"></div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
+      <button onclick="closeImportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Cancel</button>
+      <button id="importSubmitBtn" onclick="submitImport()" style="padding:8px 18px;background:#8C701C;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const baseUrl   = '<?= base_url() ?>';
+  const csrfName  = document.querySelector('meta[name="csrf-name"]')?.content;
+  const csrfHash  = document.querySelector('meta[name="csrf-hash"]')?.content;
+
+  document.getElementById('staffImportBtn')?.addEventListener('click', function () {
+    const m = document.getElementById('importModal');
+    document.getElementById('importFileName').textContent = '';
+    document.getElementById('importResult').textContent   = '';
+    document.getElementById('importFileInput').value      = '';
+    m.hidden = false; m.style.display = 'flex';
+  });
+
+  window.closeImportModal = function () {
+    const m = document.getElementById('importModal');
+    m.hidden = true; m.style.display = 'none';
+  };
+
+  window.submitImport = function () {
+    const fi  = document.getElementById('importFileInput');
+    const re  = document.getElementById('importResult');
+    if (!fi.files.length) { re.style.color='#c0392b'; re.textContent='Please select a file first.'; return; }
+    const btn = document.getElementById('importSubmitBtn');
+    btn.disabled = true; btn.textContent = 'Importing…';
+    re.style.color = '#555'; re.textContent = 'Processing…';
+    const fd = new FormData();
+    fd.append('module', 'staff');
+    fd.append('import_file', fi.files[0]);
+    if (csrfName) fd.append(csrfName, csrfHash);
+    fetch(baseUrl + 'import/process', { method:'POST', body:fd })
+      .then(r => r.json())
+      .then(d => {
+        btn.disabled = false; btn.textContent = 'Import';
+        if (d.success) { re.style.color='#27ae60'; re.textContent='✓ '+d.message; setTimeout(() => { closeImportModal(); location.reload(); }, 1800); }
+        else { re.style.color='#c0392b'; re.textContent='✗ '+(d.message||'Import failed.'); }
+      })
+      .catch(() => { btn.disabled=false; btn.textContent='Import'; re.style.color='#c0392b'; re.textContent='Network error.'; });
+  };
+
+  const dz = document.getElementById('importDropZone');
+  const fi = document.getElementById('importFileInput');
+  const fn = document.getElementById('importFileName');
+  if (dz) {
+    dz.addEventListener('click', () => fi.click());
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='#C47A0F'; });
+    dz.addEventListener('dragleave', () => { dz.style.borderColor='#d4c185'; });
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.style.borderColor='#d4c185'; if(e.dataTransfer.files.length){ fi.files=e.dataTransfer.files; fn.textContent='📎 '+fi.files[0].name; } });
+    fi.addEventListener('change', () => { if(fi.files.length) fn.textContent='📎 '+fi.files[0].name; });
+  }
+  document.getElementById('importModal')?.addEventListener('click', function(e){ if(e.target===this){this.hidden=true;this.style.display='none';} });
+}());
 </script>
 
 <!-- Export Modal -->

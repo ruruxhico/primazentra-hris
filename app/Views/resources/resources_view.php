@@ -20,9 +20,6 @@
 </div>
 
 <style>
-/* ── Page shell ─────────────────────────────────────────────── */
-.rv-shell { max-width: 860px; }
-
 /* ── Tabs ───────────────────────────────────────────────────── */
 .rv-tabs {
     display: flex; border-bottom: 2px solid #e5e0d0; margin-bottom: 1.2rem;
@@ -41,7 +38,7 @@
 /* ── Controls bar ───────────────────────────────────────────── */
 .rv-controls {
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-    margin-bottom: 0.9rem;
+    margin: 0 2rem 0.9rem;
 }
 .rv-search {
     flex: 1; min-width: 160px; padding: 8px 12px;
@@ -69,7 +66,7 @@
 /* ── Filter panel ───────────────────────────────────────────── */
 .rv-filter-panel {
     background: #fdf8ee; border: 1px solid #e8d9a8; border-radius: 8px;
-    padding: 14px 16px 10px; margin-bottom: 0.9rem;
+    padding: 14px 16px 10px; margin: 0 2rem 0.9rem;
 }
 .rv-filter-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .rv-filter-row:last-child { margin-bottom: 0; }
@@ -91,100 +88,23 @@
 .rv-filter-reset {
     background: none; border: 1px solid #d4c185; color: #8C701C;
     border-radius: 6px; padding: 5px 12px; font-size: 0.78rem; font-weight: 600;
-    cursor: pointer; font-family: inherit; text-decoration: none;
-    display: inline-block;
+    cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block;
 }
 .rv-filter-reset:hover { background: #8C701C; color: #fff; text-decoration: none; }
 
-/* ── Resource cards ─────────────────────────────────────────── */
-.rv-cards { display: flex; flex-direction: column; gap: 8px; }
-.rv-card {
-    background: #fff; border: 1px solid #e5e0d0; border-radius: 10px;
-    padding: 12px 14px; display: flex; align-items: center; gap: 12px;
-    transition: border-color .15s, box-shadow .15s;
+/* ── Manpower status badge ──────────────────────────────────── */
+.mp-status-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    border: 1px solid;
 }
-.rv-card:hover { border-color: #d4c185; box-shadow: 0 2px 8px rgba(140,112,28,.08); }
-
-/* checkbox column */
-.rv-card-check { flex-shrink: 0; }
-.rv-card-check input[type="checkbox"] {
-    width: 15px; height: 15px; cursor: pointer; accent-color: #C47A0F;
-}
-
-/* icon column */
-.rv-card-icon {
-    flex-shrink: 0; width: 40px; height: 40px; border-radius: 10px;
-    background: #fdf8ee; display: flex; align-items: center; justify-content: center;
-    font-variation-settings: 'FILL' 1, 'wght' 600;
-}
-.rv-card-icon .material-symbols-outlined { font-size: 20px; color: #C47A0F; }
-
-/* info column */
-.rv-card-info { flex: 1; min-width: 0; }
-.rv-card-name {
-    font-size: 0.92rem; font-weight: 800; color: #2c1f07;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.rv-card-sub  { font-size: 0.75rem; color: #999; margin-top: 1px; }
-.rv-card-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 5px; }
-.rv-stat {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 0.75rem; color: #666;
-}
-.rv-stat-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-}
-.rv-stat-dot.green  { background: #2e7d32; }
-.rv-stat-dot.orange { background: #e65100; }
-.rv-stat-dot.grey   { background: #bbb; }
-
-/* status badge */
-.rv-status {
-    display: inline-block; padding: 3px 10px; border-radius: 20px;
-    font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-    margin-top: 4px;
-}
-.rv-status-available { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
-.rv-status-deployed  { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
-.rv-status-onleave   { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0; }
-.rv-status-other     { background: #f5f5f5; color: #757575; border: 1px solid #e0e0e0; }
-
-/* secondary info */
-.rv-card-meta { font-size: 0.73rem; color: #aaa; margin-top: 2px; }
-
-/* actions column */
-.rv-card-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-.rv-action {
-    background: none; border: none; cursor: pointer; padding: 6px;
-    border-radius: 6px; color: #aaa; text-decoration: none;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-variation-settings: 'FILL' 0, 'wght' 400;
-}
-.rv-action .material-symbols-outlined { font-size: 18px; }
-.rv-action:hover { background: #fdf8ee; color: #8C701C; text-decoration: none; }
-.rv-action.rv-action-delete:hover { background: #fff0f0; color: #c62828; }
-
-/* select-all row */
-.rv-select-all-row {
-    display: flex; align-items: center; gap: 8px;
-    padding: 6px 14px; font-size: 0.78rem; color: #888;
-    margin-bottom: 4px;
-}
-.rv-select-all-row input[type="checkbox"] { width: 15px; height: 15px; accent-color: #C47A0F; cursor: pointer; }
-
-/* empty state */
-.rv-empty {
-    text-align: center; padding: 2.5rem 1rem; color: #ccc; font-size: 0.9rem;
-}
-.rv-empty .material-symbols-outlined {
-    font-size: 2.5rem; display: block; margin-bottom: 0.5rem; color: #e5e0d0;
-}
-
-/* pager */
-.rv-pager-wrap { margin-top: 1rem; }
+.mp-status-available { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+.mp-status-deployed  { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
+.mp-status-onleave   { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
+.mp-status-other     { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
 
 /* ── Recently Deleted ───────────────────────────────────────── */
-.rv-rd-wrap { margin-top: 1.5rem; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
+.rv-rd-wrap { margin: 1.5rem 2rem 0; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
 .rv-rd-toggle {
     width: 100%; display: flex; align-items: center; gap: 0.5rem;
     background: #fdf8ee; border: none; padding: 0.7rem 1rem;
@@ -224,6 +144,10 @@
 }
 .rv-bulk-del-btn:hover { background: #c53030; }
 .rv-bulk-del-btn .material-symbols-outlined { font-size: 16px; }
+
+/* ── checkbox col ───────────────────────────────────────────── */
+.pz-col-check { width: 36px; text-align: center; }
+.pz-col-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #C47A0F; }
 </style>
 
 <?php
@@ -253,8 +177,7 @@
 </div>
 
 <!-- Tabs -->
-<div class="rv-shell">
-<div class="rv-tabs">
+<div class="rv-tabs" style="margin: 0 2rem 1.2rem;">
     <button class="rv-tab <?= $activeTab === 'equipment' ? 'active' : '' ?>" data-panel="equipment">EQUIPMENT</button>
     <button class="rv-tab <?= $activeTab === 'tools'     ? 'active' : '' ?>" data-panel="tools">TOOLS</button>
     <button class="rv-tab <?= $activeTab === 'manpower'  ? 'active' : '' ?>" data-panel="manpower">MANPOWER</button>
@@ -300,70 +223,61 @@
     </div>
 
     <div class="pager-section" id="eq-section">
-        <!-- Select-all row -->
-        <div class="rv-select-all-row">
-            <input type="checkbox" class="select-all-cb" data-tab="equipment" title="Select all">
-            <span>Select all</span>
+        <div class="table-container">
+            <table class="resource-table" id="equipmentTable">
+                <thead>
+                    <tr>
+                        <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="equipment" title="Select all"></th>
+                        <th>NO.</th>
+                        <th>NAME</th>
+                        <th class="text-center">TOTAL</th>
+                        <th class="text-center">AVAILABLE</th>
+                        <th class="text-center">IN-USE</th>
+                        <th class="text-center">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($equipment)): ?>
+                    <tr><td colspan="7" class="empty-state">No equipment found.</td></tr>
+                <?php else: ?>
+                <?php foreach ($equipment as $idx => $item):
+                    $total = (int)($item['total_quantity_display']    ?? $item['asset_details']['total_quantity']    ?? 0);
+                    $avail = (int)($item['available_units_display']   ?? $item['asset_details']['available_quantity'] ?? 0);
+                    $inuse = $total - $avail;
+                ?>
+                <tr>
+                    <td class="pz-col-check">
+                        <input type="checkbox" class="row-cb eq-cb"
+                               value="<?= esc((string)$item['id']) ?>"
+                               data-name="<?= esc((string)($item['name'] ?? '')) ?>">
+                    </td>
+                    <td><?= $eqOffset + $idx + 1 ?></td>
+                    <td><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
+                    <td class="text-center"><?= $total ?></td>
+                    <td class="text-center"><?= $avail ?></td>
+                    <td class="text-center"><?= $inuse > 0 ? $inuse : '—' ?></td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </a>
+                        <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
+                            <span class="material-symbols-outlined">edit</span>
+                        </a>
+                        <button type="button" class="action-btn action-delete"
+                                data-id="<?= esc((string)$item['id']) ?>"
+                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
+                                title="Delete">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
         </div>
 
-        <div class="rv-cards" id="equipmentCards">
-            <?php if (empty($equipment)): ?>
-            <div class="rv-empty">
-                <span class="material-symbols-outlined">build</span>
-                No equipment found.
-            </div>
-            <?php else: ?>
-            <?php foreach ($equipment as $item):
-                $total = (int)($item['total_quantity_display']    ?? $item['asset_details']['total_quantity']    ?? 0);
-                $avail = (int)($item['available_units_display']   ?? $item['asset_details']['available_quantity'] ?? 0);
-                $inuse = $total - $avail;
-            ?>
-            <div class="rv-card">
-                <div class="rv-card-check">
-                    <input type="checkbox" class="row-cb eq-cb"
-                           value="<?= esc((string)$item['id']) ?>"
-                           data-name="<?= esc((string)($item['name'] ?? '')) ?>">
-                </div>
-                <div class="rv-card-icon">
-                    <span class="material-symbols-outlined">build</span>
-                </div>
-                <div class="rv-card-info">
-                    <div class="rv-card-name"><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></div>
-                    <div class="rv-card-sub">Equipment model</div>
-                    <div class="rv-card-stats">
-                        <span class="rv-stat">
-                            <span class="rv-stat-dot grey"></span> Total: <?= $total ?>
-                        </span>
-                        <span class="rv-stat">
-                            <span class="rv-stat-dot green"></span> Available: <?= $avail ?>
-                        </span>
-                        <?php if ($inuse > 0): ?>
-                        <span class="rv-stat">
-                            <span class="rv-stat-dot orange"></span> In-Use: <?= $inuse ?>
-                        </span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="rv-card-actions">
-                    <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="rv-action" title="View">
-                        <span class="material-symbols-outlined">visibility</span>
-                    </a>
-                    <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="rv-action" title="Edit">
-                        <span class="material-symbols-outlined">edit</span>
-                    </a>
-                    <button type="button" class="rv-action rv-action-delete action-delete"
-                            data-id="<?= esc((string)$item['id']) ?>"
-                            data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
-                            title="Delete">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                </div>
-            </div>
-            <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <div class="rv-pager-wrap pager-wrapper">
+        <div class="pager-wrapper">
             <?php $eqTotal = $eqTotal ?? count($equipment); $showTo = min($eqOffset + $perPage, $eqTotal); ?>
             <span class="pager-info">Showing <?= $eqTotal > 0 ? $eqOffset + 1 : 0 ?>–<?= $showTo ?> of <?= $eqTotal ?> records</span>
             <?= service('pager')->links('equipment', 'bootstrap_full') ?>
@@ -380,7 +294,6 @@
     </div>
 
     <!-- Recently Deleted – Equipment -->
-    <?= $this->renderSection('_rd_equipment') ?>
     <div class="rv-rd-wrap">
         <button type="button" class="rv-rd-toggle" id="rdToggleBtnEquipment">
             <span class="material-symbols-outlined">restore_from_trash</span>
@@ -401,8 +314,8 @@
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td style="white-space:nowrap">
-                        <button type="button" class="rv-action rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="rv-action rv-action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -453,63 +366,61 @@
     </div>
 
     <div class="pager-section" id="tools-section">
-        <div class="rv-select-all-row">
-            <input type="checkbox" class="select-all-cb" data-tab="tools" title="Select all">
-            <span>Select all</span>
+        <div class="table-container">
+            <table class="resource-table" id="toolsTable">
+                <thead>
+                    <tr>
+                        <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="tools" title="Select all"></th>
+                        <th>NO.</th>
+                        <th>NAME</th>
+                        <th class="text-center">TOTAL</th>
+                        <th class="text-center">AVAILABLE</th>
+                        <th class="text-center">IN-USE</th>
+                        <th class="text-center">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($tools)): ?>
+                    <tr><td colspan="7" class="empty-state">No tools found.</td></tr>
+                <?php else: ?>
+                <?php foreach ($tools as $idx => $item):
+                    $total = (int)($item['total_quantity_display']  ?? $item['asset_details']['total_quantity']    ?? 0);
+                    $avail = (int)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? 0);
+                    $inuse = $total - $avail;
+                ?>
+                <tr>
+                    <td class="pz-col-check">
+                        <input type="checkbox" class="row-cb tools-cb"
+                               value="<?= esc((string)$item['id']) ?>"
+                               data-name="<?= esc((string)($item['name'] ?? '')) ?>">
+                    </td>
+                    <td><?= $toolsOffset + $idx + 1 ?></td>
+                    <td><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
+                    <td class="text-center"><?= $total ?></td>
+                    <td class="text-center"><?= $avail ?></td>
+                    <td class="text-center"><?= $inuse > 0 ? $inuse : '—' ?></td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </a>
+                        <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
+                            <span class="material-symbols-outlined">edit</span>
+                        </a>
+                        <button type="button" class="action-btn action-delete"
+                                data-id="<?= esc((string)$item['id']) ?>"
+                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
+                                title="Delete">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
         </div>
 
-        <div class="rv-cards" id="toolsCards">
-            <?php if (empty($tools)): ?>
-            <div class="rv-empty">
-                <span class="material-symbols-outlined">construction</span>
-                No tools found.
-            </div>
-            <?php else: ?>
-            <?php foreach ($tools as $item):
-                $total = (int)($item['total_quantity_display']  ?? $item['asset_details']['total_quantity']    ?? 0);
-                $avail = (int)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? 0);
-                $inuse = $total - $avail;
-            ?>
-            <div class="rv-card">
-                <div class="rv-card-check">
-                    <input type="checkbox" class="row-cb tools-cb"
-                           value="<?= esc((string)$item['id']) ?>"
-                           data-name="<?= esc((string)($item['name'] ?? '')) ?>">
-                </div>
-                <div class="rv-card-icon">
-                    <span class="material-symbols-outlined">construction</span>
-                </div>
-                <div class="rv-card-info">
-                    <div class="rv-card-name"><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></div>
-                    <div class="rv-card-sub">Tool</div>
-                    <div class="rv-card-stats">
-                        <span class="rv-stat"><span class="rv-stat-dot grey"></span> Total: <?= $total ?></span>
-                        <span class="rv-stat"><span class="rv-stat-dot green"></span> Available: <?= $avail ?></span>
-                        <?php if ($inuse > 0): ?>
-                        <span class="rv-stat"><span class="rv-stat-dot orange"></span> In-Use: <?= $inuse ?></span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <div class="rv-card-actions">
-                    <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="rv-action" title="View">
-                        <span class="material-symbols-outlined">visibility</span>
-                    </a>
-                    <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="rv-action" title="Edit">
-                        <span class="material-symbols-outlined">edit</span>
-                    </a>
-                    <button type="button" class="rv-action rv-action-delete action-delete"
-                            data-id="<?= esc((string)$item['id']) ?>"
-                            data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
-                            title="Delete">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                </div>
-            </div>
-            <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <div class="rv-pager-wrap pager-wrapper">
+        <div class="pager-wrapper">
             <?php $toolsTotal = $toolsTotal ?? count($tools); $tShowTo = min($toolsOffset + $perPage, $toolsTotal); ?>
             <span class="pager-info">Showing <?= $toolsTotal > 0 ? $toolsOffset + 1 : 0 ?>–<?= $tShowTo ?> of <?= $toolsTotal ?> records</span>
             <?= service('pager')->links('tools', 'bootstrap_full') ?>
@@ -545,8 +456,8 @@
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td style="white-space:nowrap">
-                        <button type="button" class="rv-action rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="rv-action rv-action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -587,7 +498,6 @@
             <input type="hidden" id="mpRoleInput"   name="mp_role"   value="<?= esc($activeManpowerFilters['mp_role']   ?? '') ?>">
             <input type="hidden" id="mpSpecInput"   name="mp_spec"   value="<?= esc($activeManpowerFilters['mp_spec']   ?? '') ?>">
             <input type="hidden" id="mpStatusInput" name="mp_status" value="<?= esc($activeManpowerFilters['mp_status'] ?? '') ?>">
-
             <div class="rv-filter-row">
                 <span class="rv-filter-label">Role</span>
                 <div class="rv-chip-row">
@@ -617,78 +527,70 @@
     </div>
 
     <div class="pager-section" id="mp-section">
-        <div class="rv-select-all-row">
-            <input type="checkbox" class="select-all-cb" data-tab="manpower" title="Select all">
-            <span>Select all</span>
+        <div class="table-container">
+            <table class="resource-table" id="manpowerTable">
+                <thead>
+                    <tr>
+                        <th class="pz-col-check"><input type="checkbox" class="select-all-cb" data-tab="manpower" title="Select all"></th>
+                        <th>NO.</th>
+                        <th>NAME</th>
+                        <th>ROLE</th>
+                        <th>SPECIALIZATION</th>
+                        <th class="text-center">STATUS</th>
+                        <th class="text-center">ACTIONS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php if (empty($manpower)): ?>
+                    <tr><td colspan="7" class="empty-state">No manpower records found.</td></tr>
+                <?php else: ?>
+                <?php foreach ($manpower as $idx => $person):
+                    $mpStatusRaw = (string)($person['status'] ?? 'Available');
+                    $mpStatusKey = strtolower(str_replace(['-', ' '], '', $mpStatusRaw));
+                    $stClass = match($mpStatusKey) {
+                        'available' => 'mp-status-available',
+                        'deployed'  => 'mp-status-deployed',
+                        'onleave'   => 'mp-status-onleave',
+                        default     => 'mp-status-other',
+                    };
+                    $role = (string)($person['manpower_details']['role']           ?? $person['role']           ?? '');
+                    $spec = (string)($person['manpower_details']['specialization'] ?? $person['specialization'] ?? '');
+                ?>
+                <tr>
+                    <td class="pz-col-check">
+                        <input type="checkbox" class="row-cb mp-cb"
+                               value="<?= esc((string)$person['id']) ?>"
+                               data-name="<?= esc((string)($person['name'] ?? '')) ?>">
+                    </td>
+                    <td><?= $mpOffset + $idx + 1 ?></td>
+                    <td><strong><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></strong></td>
+                    <td><?= esc($role) ?></td>
+                    <td><?= esc($spec) ?></td>
+                    <td class="text-center">
+                        <span class="mp-status-badge <?= $stClass ?>"><?= esc($mpStatusRaw) ?></span>
+                    </td>
+                    <td class="text-center" style="white-space:nowrap">
+                        <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </a>
+                        <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit">
+                            <span class="material-symbols-outlined">edit</span>
+                        </a>
+                        <button type="button" class="action-btn action-delete"
+                                data-id="<?= esc((string)$person['id']) ?>"
+                                data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>"
+                                title="Delete">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
         </div>
 
-        <div class="rv-cards" id="manpowerCards">
-            <?php if (empty($manpower)): ?>
-            <div class="rv-empty">
-                <span class="material-symbols-outlined">groups</span>
-                No manpower records found.
-            </div>
-            <?php else: ?>
-            <?php foreach ($manpower as $person):
-                $mpStatus = strtolower(str_replace(['-', ' '], '', (string)($person['status'] ?? 'available')));
-                $statusClass = match($mpStatus) {
-                    'available' => 'rv-status-available',
-                    'deployed'  => 'rv-status-deployed',
-                    'onleave'   => 'rv-status-onleave',
-                    default     => 'rv-status-other',
-                };
-                $role    = (string)($person['manpower_details']['role']           ?? $person['role']           ?? '');
-                $spec    = (string)($person['manpower_details']['specialization'] ?? $person['specialization'] ?? '');
-                $site    = (string)($person['manpower_details']['current_site_deployment'] ?? $person['location']['address'] ?? '');
-                $nextAv  = (string)($person['next_availability'] ?? '');
-            ?>
-            <div class="rv-card">
-                <div class="rv-card-check">
-                    <input type="checkbox" class="row-cb mp-cb"
-                           value="<?= esc((string)$person['id']) ?>"
-                           data-name="<?= esc((string)($person['name'] ?? '')) ?>">
-                </div>
-                <div class="rv-card-icon">
-                    <span class="material-symbols-outlined">person</span>
-                </div>
-                <div class="rv-card-info">
-                    <div class="rv-card-name"><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></div>
-                    <div class="rv-card-sub">
-                        <?= esc($role) ?><?= ($role && $spec) ? ' &bull; ' : '' ?><?= esc($spec) ?>
-                    </div>
-                    <?php if ($site): ?>
-                    <div class="rv-card-meta">
-                        <span class="material-symbols-outlined" style="font-size:13px;vertical-align:-2px;color:#bbb">location_on</span>
-                        <?= esc($site) ?>
-                    </div>
-                    <?php endif; ?>
-                    <?php if ($nextAv && $nextAv !== 'N/A'): ?>
-                    <div class="rv-card-meta">Next available: <?= esc($nextAv) ?></div>
-                    <?php endif; ?>
-                    <span class="rv-status <?= $statusClass ?>">
-                        <?= esc((string)($person['status'] ?? 'Available')) ?>
-                    </span>
-                </div>
-                <div class="rv-card-actions">
-                    <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="rv-action" title="View">
-                        <span class="material-symbols-outlined">visibility</span>
-                    </a>
-                    <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="rv-action" title="Edit">
-                        <span class="material-symbols-outlined">edit</span>
-                    </a>
-                    <button type="button" class="rv-action rv-action-delete action-delete"
-                            data-id="<?= esc((string)$person['id']) ?>"
-                            data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>"
-                            title="Delete">
-                        <span class="material-symbols-outlined">delete</span>
-                    </button>
-                </div>
-            </div>
-            <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <div class="rv-pager-wrap pager-wrapper">
+        <div class="pager-wrapper">
             <?php $mpTotal = $mpTotal ?? count($manpower); $mShowTo = min($mpOffset + $perPage, $mpTotal); ?>
             <span class="pager-info">Showing <?= $mpTotal > 0 ? $mpOffset + 1 : 0 ?>–<?= $mShowTo ?> of <?= $mpTotal ?> records</span>
             <?= service('pager')->links('manpower', 'bootstrap_full') ?>
@@ -724,8 +626,8 @@
                     <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
                     <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
                     <td style="white-space:nowrap">
-                        <button type="button" class="rv-action rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="rv-action rv-action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
+                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
+                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -735,7 +637,6 @@
         </div>
     </div>
 </div><!-- /panel-manpower -->
-</div><!-- /.rv-shell -->
 
 <!-- Bulk action bar -->
 <div class="rv-bulk-bar" id="bulkActionBar" style="display:none">
@@ -828,93 +729,85 @@ document.addEventListener('DOMContentLoaded', function () {
         return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    /* ── Animate card out ── */
-    function animateCardOut(card) {
-        if (!card) return;
-        const h = card.offsetHeight;
-        card.style.height  = h + 'px';
-        card.style.overflow = 'hidden';
-        requestAnimationFrame(() => {
-            card.style.transition = 'height 260ms ease, opacity 260ms ease, transform 260ms ease';
-            card.style.height     = '0';
-            card.style.padding    = '0';
-            card.style.opacity    = '0';
-            card.style.transform  = 'translateX(-8px)';
-        });
-        setTimeout(() => card.remove(), 280);
+    /* ── Fade row out ── */
+    function animateRowOut(row) {
+        if (!row) return;
+        row.style.transition = 'opacity 260ms ease';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 280);
     }
 
-    /* ── Add restored resource as card ── */
-    function addRestoredCard(module, id, d) {
-        let containerId, cbClass;
+    /* ── Add restored resource as table row ── */
+    function addRestoredRow(module, id, d) {
+        let tbodyId, cbClass, colCount;
         if (module === 'manpower') {
-            containerId = 'manpowerCards'; cbClass = 'mp-cb';
+            tbodyId = 'manpowerTable'; cbClass = 'mp-cb'; colCount = 7;
         } else {
             const cat = (d.category || '').toLowerCase();
-            containerId = cat === 'tools' ? 'toolsCards' : 'equipmentCards';
-            cbClass     = cat === 'tools' ? 'tools-cb' : 'eq-cb';
+            tbodyId   = cat === 'tools' ? 'toolsTable' : 'equipmentTable';
+            cbClass   = cat === 'tools' ? 'tools-cb'   : 'eq-cb';
+            colCount  = 7;
         }
-        const container = document.getElementById(containerId);
-        if (!container) return;
+        const table = document.getElementById(tbodyId);
+        if (!table) return;
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
 
-        // Remove empty-state placeholder if present
-        container.querySelector('.rv-empty')?.remove();
+        // Remove empty-state row if present
+        const emptyRow = tbody.querySelector('.empty-state');
+        if (emptyRow) emptyRow.closest('tr')?.remove();
 
         const nameVal = escHtml((d.name || 'N/A').toUpperCase());
-        let infoHtml, iconName;
+        let cellsHtml;
 
         if (module === 'manpower') {
-            iconName = 'person';
-            const role   = escHtml(d.role || (d.manpower_details && d.manpower_details.role) || '');
-            const spec   = escHtml(d.specialization || (d.manpower_details && d.manpower_details.specialization) || '');
+            const role   = escHtml((d.manpower_details && d.manpower_details.role)           || d.role           || '');
+            const spec   = escHtml((d.manpower_details && d.manpower_details.specialization) || d.specialization || '');
             const status = d.status || 'Available';
-            const stLow  = status.toLowerCase().replace(/[^a-z]/g,'');
-            const stClass = {available:'rv-status-available', deployed:'rv-status-deployed', onleave:'rv-status-onleave'}[stLow] || 'rv-status-other';
-            infoHtml = '<div class="rv-card-name">' + nameVal + '</div>' +
-                '<div class="rv-card-sub">' + (role + (role && spec ? ' &bull; ' : '') + spec || '&nbsp;') + '</div>' +
-                '<span class="rv-status ' + stClass + '">' + escHtml(status) + '</span>';
+            const stKey  = status.toLowerCase().replace(/[^a-z]/g,'');
+            const stCls  = {available:'mp-status-available',deployed:'mp-status-deployed',onleave:'mp-status-onleave'}[stKey] || 'mp-status-other';
+            cellsHtml =
+                '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '"></td>' +
+                '<td>—</td>' +
+                '<td><strong>' + nameVal + '</strong></td>' +
+                '<td>' + role + '</td>' +
+                '<td>' + spec + '</td>' +
+                '<td class="text-center"><span class="mp-status-badge ' + stCls + '">' + escHtml(status) + '</span></td>';
         } else {
-            iconName = d.category === 'Tools' ? 'construction' : 'build';
             const total = (d.asset_details && d.asset_details.total_quantity)     || 0;
             const avail = (d.asset_details && d.asset_details.available_quantity) || 0;
             const inuse = total - avail;
-            infoHtml = '<div class="rv-card-name">' + nameVal + '</div>' +
-                '<div class="rv-card-sub">' + (d.category === 'Tools' ? 'Tool' : 'Equipment model') + '</div>' +
-                '<div class="rv-card-stats">' +
-                '<span class="rv-stat"><span class="rv-stat-dot grey"></span> Total: ' + total + '</span>' +
-                '<span class="rv-stat"><span class="rv-stat-dot green"></span> Available: ' + avail + '</span>' +
-                (inuse > 0 ? '<span class="rv-stat"><span class="rv-stat-dot orange"></span> In-Use: ' + inuse + '</span>' : '') +
-                '</div>';
+            cellsHtml =
+                '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '"></td>' +
+                '<td>—</td>' +
+                '<td><strong>' + nameVal + '</strong></td>' +
+                '<td class="text-center">' + total + '</td>' +
+                '<td class="text-center">' + avail + '</td>' +
+                '<td class="text-center">' + (inuse > 0 ? inuse : '—') + '</td>';
         }
+        cellsHtml +=
+            '<td class="text-center" style="white-space:nowrap">' +
+              '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
+              '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+              '<button type="button" class="action-btn action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
+            '</td>';
 
-        const card = document.createElement('div');
-        card.className = 'rv-card';
-        card.innerHTML =
-            '<div class="rv-card-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + escHtml(d.name || '') + '"></div>' +
-            '<div class="rv-card-icon"><span class="material-symbols-outlined">' + iconName + '</span></div>' +
-            '<div class="rv-card-info">' + infoHtml + '</div>' +
-            '<div class="rv-card-actions">' +
-              '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="rv-action" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
-              '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="rv-action" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
-              '<button type="button" class="rv-action rv-action-delete action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name || '') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
-            '</div>';
-
-        // Wire delete
-        card.querySelector('.action-delete').addEventListener('click', function () {
+        const row = document.createElement('tr');
+        row.innerHTML = cellsHtml;
+        row.querySelector('.action-delete').addEventListener('click', function () {
             pendingDeleteId = this.dataset.id;
-            pendingCard     = card;
+            pendingRow      = row;
             confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
             confirmDialog.classList.add('open');
         });
-        // Wire checkbox
-        card.querySelector('.row-cb').addEventListener('change', updateBulkBar);
+        row.querySelector('.row-cb').addEventListener('change', updateBulkBar);
 
-        card.style.opacity = '0'; card.style.background = '#edf7e6';
-        container.appendChild(card);
+        row.style.opacity = '0'; row.style.background = '#edf7e6';
+        tbody.appendChild(row);
         requestAnimationFrame(() => {
-            card.style.transition = 'opacity 300ms ease, background 1.2s ease';
-            card.style.opacity = '1';
-            setTimeout(() => { card.style.background = ''; }, 1000);
+            row.style.transition = 'opacity 300ms ease, background 1.2s ease';
+            row.style.opacity = '1';
+            setTimeout(() => { row.style.background = ''; }, 1000);
         });
     }
 
@@ -964,30 +857,28 @@ document.addEventListener('DOMContentLoaded', function () {
         wireMpChips('.mp-status-chip', 'mpStatusInput');
     }
 
-    /* ── Search (client-side filter on visible panel) ── */
-    function wireSearch(inputId, cardsId) {
+    /* ── Search (client-side filter on visible table) ── */
+    function wireSearch(inputId, tableId) {
         const inp   = document.getElementById(inputId);
-        const cards = document.getElementById(cardsId);
-        if (!inp || !cards) return;
+        const table = document.getElementById(tableId);
+        if (!inp || !table) return;
         inp.addEventListener('input', function () {
             const q = this.value.trim().toLowerCase();
-            cards.querySelectorAll('.rv-card').forEach(card => {
-                card.style.display = !q || card.innerText.toLowerCase().includes(q) ? '' : 'none';
+            table.querySelectorAll('tbody tr').forEach(row => {
+                row.style.display = !q || row.innerText.toLowerCase().includes(q) ? '' : 'none';
             });
         });
     }
-    wireSearch('searchEquipment', 'equipmentCards');
-    wireSearch('searchTools',     'toolsCards');
-    wireSearch('searchManpower',  'manpowerCards');
+    wireSearch('searchEquipment', 'equipmentTable');
+    wireSearch('searchTools',     'toolsTable');
+    wireSearch('searchManpower',  'manpowerTable');
 
     /* ── Bulk select ── */
     const bulkBar     = document.getElementById('bulkActionBar');
     const bulkCountEl = document.getElementById('bulkCount');
     const bulkDelBtn  = document.getElementById('bulkDeleteBtn');
 
-    function getActivePanel() {
-        return document.querySelector('.rv-panel.active');
-    }
+    function getActivePanel() { return document.querySelector('.rv-panel.active'); }
     function getCheckedInPanel(panel) {
         return panel ? Array.from(panel.querySelectorAll('.row-cb:checked')) : [];
     }
@@ -998,7 +889,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (bulkCountEl) bulkCountEl.textContent = checked.length + ' selected';
     };
 
-    // Wire select-all for each panel
     document.querySelectorAll('.select-all-cb').forEach(sa => {
         sa.addEventListener('change', function () {
             const panel = this.closest('.rv-panel');
@@ -1018,27 +908,27 @@ document.addEventListener('DOMContentLoaded', function () {
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
         confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
         pendingDeleteId   = '__bulk__';
-        pendingBulkItems  = checked.map(c => ({ id: c.value, card: c.closest('.rv-card') }));
+        pendingBulkItems  = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
         confirmDialog.classList.add('open');
     });
 
     /* ── Single delete ── */
     let pendingDeleteId  = null;
-    let pendingCard      = null;
+    let pendingRow       = null;
     let pendingBulkItems = [];
 
     document.querySelectorAll('.action-delete').forEach(btn => {
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             pendingDeleteId = this.dataset.id;
-            pendingCard     = this.closest('.rv-card');
+            pendingRow      = this.closest('tr');
             confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
             confirmDialog.classList.add('open');
         });
     });
 
     confirmCancel?.addEventListener('click', function () {
-        pendingDeleteId = null; pendingCard = null; pendingBulkItems = [];
+        pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
         confirmDialog.classList.remove('open');
     });
 
@@ -1056,7 +946,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 body.append('id', item.id);
                 fetch(DELETE_URL, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body })
                     .then(r => r.json())
-                    .then(d => { if (d && d.success) animateCardOut(item.card); })
+                    .then(d => { if (d && d.success) animateRowOut(item.row); })
                     .finally(() => { done++; if (done === items.length) { showToast(items.length + ' item(s) deleted', 'success'); updateBulkBar(); } });
             });
             return;
@@ -1070,14 +960,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(d => {
                 if (d && d.success) {
                     showToast('Resource deleted', 'success');
-                    animateCardOut(pendingCard);
+                    animateRowOut(pendingRow);
                     updateBulkBar();
                 } else {
                     showToast(d.message || 'Delete failed', 'error');
                 }
             })
             .catch(() => showToast('Error deleting resource', 'error'))
-            .finally(() => { pendingDeleteId = null; pendingCard = null; confirmDialog.classList.remove('open'); });
+            .finally(() => { pendingDeleteId = null; pendingRow = null; confirmDialog.classList.remove('open'); });
     });
 
     /* ── Recently Deleted panels ── */
@@ -1108,8 +998,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(d => {
                     if (d.success) {
                         showToast((d.name || 'Item') + ' restored', 'success');
-                        animateCardOut(row);
-                        if (d.id && d.data) addRestoredCard(d.module, d.id, d.data);
+                        animateRowOut(row);
+                        if (d.id && d.data) addRestoredRow(d.module, d.id, d.data);
                     } else { showToast(d.message || 'Restore failed', 'error'); }
                 })
                 .catch(() => showToast('Restore failed', 'error'));
@@ -1127,7 +1017,7 @@ document.addEventListener('DOMContentLoaded', function () {
             fetch('<?= base_url('trash/permanent-delete') ?>', { method:'POST', body:fd })
                 .then(r => r.json())
                 .then(d => {
-                    if (d.success) { showToast('Permanently deleted', 'success'); animateCardOut(row); }
+                    if (d.success) { showToast('Permanently deleted', 'success'); animateRowOut(row); }
                     else { showToast(d.message || 'Failed', 'error'); }
                 })
                 .catch(() => showToast('Failed', 'error'));

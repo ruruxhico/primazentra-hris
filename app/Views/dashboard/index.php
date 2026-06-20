@@ -19,7 +19,10 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     background:#fff; border-radius:14px; width:min(420px,95vw);
     max-height:90vh; display:flex; flex-direction:column;
     box-shadow:0 8px 32px rgba(0,0,0,.28); overflow:hidden;
+    transition: width .2s ease;
 }
+.rpt-modal.wide { width:min(720px,96vw); }
+.rpt-sum-row-label { font-weight:600; font-size:.82rem; white-space:nowrap; }
 .rpt-modal-hdr {
     display:flex; align-items:center; gap:.6rem;
     background:#c0392b; color:#fff; padding:.85rem 1rem;
@@ -108,6 +111,54 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
 .rpt-detail-section ul { margin:.3rem 0 0 1.2rem; padding:0; font-size:.88rem; }
 .rpt-detail-section p { font-size:.88rem; margin:0; }
 .rpt-detail-meta { font-size:.78rem; color:#888; margin-top:.6rem; }
+.rpt-daily-date { font-size:1.15rem; font-weight:800; color:#2c1f07; margin-bottom:.5rem; }
+.rpt-daily-row  { font-size:.88rem; color:#555; margin-bottom:.6rem; }
+.rpt-daily-section-title { font-weight:700; font-size:.88rem; color:#2c1f07; margin:.7rem 0 .3rem; }
+.rpt-daily-crew { margin:.2rem 0 .5rem 1.1rem; padding:0; font-size:.88rem; color:#333; }
+.rpt-daily-crew li { margin-bottom:.2rem; }
+.rpt-daily-ext  { font-style:italic; color:#999; font-size:.82rem; }
+.rpt-daily-completion { font-size:.9rem; color:#2c1f07; font-weight:600; margin:.6rem 0; }
+.rpt-daily-divider { border:none; border-top:1px solid #e0e0e0; margin:.8rem 0; }
+.rpt-daily-milestone { margin-bottom:.65rem; }
+.rpt-daily-ms-name { font-size:.9rem; color:#2c1f07; font-weight:500; }
+.rpt-daily-ms-meta { font-size:.82rem; color:#777; margin-top:.1rem; }
+/* ── Summary buttons ───────────────────────────────────────── */
+.rpt-summary-btn {
+    width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
+    padding:.7rem 1rem; border:1.5px solid #c8a951; border-radius:50px;
+    background:#fff; color:#5c3d11; font-size:.9rem; font-weight:700;
+    cursor:pointer; font-family:inherit; letter-spacing:.01em;
+}
+.rpt-summary-btn:hover { background:#fdf8ee; border-color:#8C701C; }
+.rpt-summary-btn .material-symbols-outlined { font-size:18px; }
+/* ── Summary tables ────────────────────────────────────────── */
+.rpt-sum-title { font-size:.95rem; font-weight:700; color:#3a2a0a; margin-bottom:.8rem; display:flex; align-items:center; gap:.4rem; }
+.rpt-sum-title .material-symbols-outlined { font-size:1.1rem; }
+.rpt-sum-metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:.6rem; margin-bottom:1rem; }
+.rpt-sum-metric { background:#fdf8ee; border-radius:8px; padding:.6rem .8rem; text-align:center; }
+.rpt-sum-metric-label { font-size:.68rem; font-weight:700; text-transform:uppercase; color:#8c701c; letter-spacing:.04em; margin-bottom:.2rem; }
+.rpt-sum-metric-value { font-size:1.2rem; font-weight:800; color:#3a2a0a; }
+.rpt-sum-metric-value.pos { color:#2e7d32; }
+.rpt-sum-metric-value.neg { color:#c62828; }
+.rpt-sum-table { width:100%; border-collapse:collapse; font-size:.82rem; }
+.rpt-sum-table th { background:#fdf8ee; color:#8c701c; font-weight:700; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; padding:.5rem .6rem; border-bottom:2px solid #e8d9a8; text-align:left; }
+.rpt-sum-table td { padding:.5rem .6rem; border-bottom:1px solid #f0e6c8; color:#3a2a0a; }
+.rpt-sum-table tr:last-child td { border-bottom:none; }
+.rpt-sum-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.rpt-sum-table .pos { color:#2e7d32; font-weight:600; }
+.rpt-sum-table .neg { color:#c62828; font-weight:600; }
+.rpt-sum-table .muted { color:#aaa; }
+.rpt-sum-ms-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#c8a951; margin-right:3px; vertical-align:middle; }
+.rpt-sum-status { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.72rem; font-weight:600; }
+.rpt-sum-status-pending    { background:#f5f5f5; color:#666; }
+.rpt-sum-status-inprogress { background:#e3f2fd; color:#1565c0; }
+.rpt-sum-status-done       { background:#e8f5e9; color:#2e7d32; }
+.rpt-sum-empty { text-align:center; color:#aaa; padding:1.5rem; font-size:.88rem; }
+.rpt-sum-overall-hdr { background:#8C701C; color:#fff; border-radius:8px 8px 0 0; padding:.9rem 1rem; text-align:center; margin-bottom:0; }
+.rpt-sum-overall-title { font-size:1rem; font-weight:700; }
+.rpt-sum-overall-sub { font-size:.82rem; opacity:.85; margin-top:.2rem; }
+.rpt-sum-overall-badge { display:inline-block; background:rgba(255,255,255,.2); border-radius:50px; font-size:.78rem; padding:.25rem .75rem; margin-top:.4rem; }
+.rpt-sum-ms-heading { font-size:.82rem; font-weight:800; color:#8C701C; text-transform:uppercase; letter-spacing:.06em; margin:.9rem 0 .4rem; }
 
 /* Progress detail badge is golden */
 .rpt-overlay[data-type="daily"] .rpt-detail-badge { background:#fffbee; color:#8C701C; border-color:#d4c185; }
@@ -437,6 +488,14 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                     <span class="rpt-legend-item"><span class="rpt-dot filled"></span>Has report</span>
                     <span class="rpt-legend-item"><span class="rpt-dot outline"></span>Today</span>
                 </div>
+                <div id="rptSummaryBtns" style="display:none;margin-top:1rem;display:flex;flex-direction:column;gap:.5rem;">
+                    <button class="rpt-summary-btn" onclick="showProgressSummary('weekly')">
+                        <span class="material-symbols-outlined">bar_chart</span> Weekly Summary
+                    </button>
+                    <button class="rpt-summary-btn" onclick="showProgressSummary('overall')">
+                        <span class="material-symbols-outlined">table_chart</span> Overall Progress Summary
+                    </button>
+                </div>
             </div>
             <!-- Detail state -->
             <div id="rptViewDetail" style="display:none">
@@ -445,6 +504,10 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <!-- New report form state -->
             <div id="rptViewForm" style="display:none">
                 <div id="rptFormEl"></div>
+            </div>
+            <!-- Summary state -->
+            <div id="rptViewSummary" style="display:none">
+                <div id="rptSummaryEl"></div>
             </div>
         </div>
         <div class="rpt-modal-footer" id="rptFooter"></div>
@@ -572,7 +635,10 @@ function db_render_card(array $p, string $context = 'summary'): string
 
         <!-- Footer actions -->
         <div class="db-card-footer">
-            <span class="material-symbols-outlined db-icon-chat" title="Messages">chat_bubble</span>
+            <a href="<?= base_url('messages/project/' . esc($p['id'] ?? '')) ?>"
+               class="db-icon-btn" title="Messages" style="text-decoration:none">
+                <span class="material-symbols-outlined db-icon-chat">chat_bubble</span>
+            </a>
             <?php if ($context === 'monitor'): ?>
             <button class="db-icon-btn db-icon-emergency"
                     data-pid="<?= esc($p['id'] ?? '') ?>"
@@ -714,12 +780,15 @@ document.addEventListener('DOMContentLoaded', function () {
     var _idMap = {};  // date → docId (emergency reports only; auto-generated IDs)
     var _calMo = new Date(); // currently displayed calendar month
 
-    var _state = 'cal'; // 'cal' | 'detail' | 'form'
+    var _state = 'cal'; // 'cal' | 'detail' | 'form' | 'summary'
+    var _summaryType = ''; // 'weekly' | 'overall'
+    var _summaryData = null; // cached per modal-open
 
     window.openReportModal = function (type, pid, pname) {
         _type  = type;
         _pid   = pid;
         _pname = pname;
+        _summaryData = null;
 
         var overlay = document.getElementById('reportModal');
         overlay.setAttribute('data-type', type);
@@ -739,14 +808,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     window.rptNavBack = function () {
         if (_state === 'cal') { closeReportModal(); }
-        else { setState('cal'); }
+        else {
+            document.getElementById('rptModalTitle').textContent =
+                (_type === 'emergency' ? 'Emergency Reports' : 'Progress Reports') + ' — ' + _pname;
+            setState('cal');
+        }
     };
 
     function setState(s) {
         _state = s;
-        document.getElementById('rptViewCal').style.display    = (s === 'cal')    ? '' : 'none';
-        document.getElementById('rptViewDetail').style.display = (s === 'detail') ? '' : 'none';
-        document.getElementById('rptViewForm').style.display   = (s === 'form')   ? '' : 'none';
+        document.getElementById('rptViewCal').style.display     = (s === 'cal')     ? '' : 'none';
+        document.getElementById('rptViewDetail').style.display  = (s === 'detail')  ? '' : 'none';
+        document.getElementById('rptViewForm').style.display    = (s === 'form')    ? '' : 'none';
+        document.getElementById('rptViewSummary').style.display = (s === 'summary') ? '' : 'none';
+        var modal = document.querySelector('#reportModal .rpt-modal');
+        if (modal) modal.classList.toggle('wide', s === 'summary');
+        var sb = document.getElementById('rptSummaryBtns');
+        if (sb) sb.style.display = (s === 'cal' && _type === 'daily') ? 'flex' : 'none';
         renderFooter();
     }
 
@@ -857,14 +935,58 @@ document.addEventListener('DOMContentLoaded', function () {
             if (d.notes) html += '<div class="rpt-detail-section"><strong>Notes</strong><p>' + h(d.notes) + '</p></div>';
             if (d.filed_by) html += '<div class="rpt-detail-meta">Filed by: ' + h(d.filed_by) + '</div>';
         } else {
-            html += '<div class="rpt-detail-date"><span class="material-symbols-outlined">calendar_today</span>Date: ' + fmtDate + '</div>';
-            if (d.progress_percent !== null && d.progress_percent !== undefined) {
-                html += '<div class="rpt-detail-section"><strong>Progress</strong><p>' + d.progress_percent + '%</p></div>';
+            // Date header
+            html += '<div class="rpt-daily-date">' + fmtDate + '</div>';
+
+            // Weather
+            if (d.weather) {
+                html += '<div class="rpt-daily-row">Weather: ' + h(d.weather) + '</div>';
             }
-            if (d.weather) html += '<div class="rpt-detail-section"><strong>Weather</strong><p>' + h(d.weather) + '</p></div>';
-            if (d.manpower_display) html += '<div class="rpt-detail-section"><strong>Crew</strong><p>' + h(d.manpower_display) + '</p></div>';
-            if (d.description) html += '<div class="rpt-detail-section"><strong>Notes</strong><p>' + h(d.description) + '</p></div>';
-            if (d.filed_by) html += '<div class="rpt-detail-meta">Filed by: ' + h(d.filed_by) + '</div>';
+
+            // Manpower
+            var crew = d.manpower || [];
+            if (crew.length) {
+                html += '<div class="rpt-daily-section-title">Manpower</div><ul class="rpt-daily-crew">';
+                crew.forEach(function (m) {
+                    html += '<li>' + h(m.name);
+                    if (m.external) html += ' <span class="rpt-daily-ext">(not part of assignment)</span>';
+                    html += '</li>';
+                });
+                html += '</ul>';
+            } else if (d.manpower_display) {
+                html += '<div class="rpt-daily-section-title">Manpower</div>';
+                html += '<div class="rpt-daily-row">' + h(d.manpower_display) + '</div>';
+            }
+
+            // Total Completion
+            if (d.progress_percent !== null && d.progress_percent !== undefined) {
+                html += '<div class="rpt-daily-completion">Total Completion: ' + d.progress_percent + '%</div>';
+            }
+
+            // Milestone Progress
+            var ms = d.milestone_progress || [];
+            if (ms.length) {
+                html += '<hr class="rpt-daily-divider">';
+                html += '<div class="rpt-daily-section-title">Milestone Progress</div>';
+                ms.forEach(function (m) {
+                    var label = h(m.name) + (m.unit ? ' (' + h(m.unit) + ')' : '');
+                    var todayVal = (m.today >= 0 ? '+' : '') + m.today;
+                    html += '<div class="rpt-daily-milestone">';
+                    html += '<div class="rpt-daily-ms-name">' + label + '</div>';
+                    html += '<div class="rpt-daily-ms-meta">Today: ' + todayVal +
+                            ' &bull; Total: ' + m.total +
+                            ' &bull; ' + m.percent + '%</div>';
+                    html += '</div>';
+                });
+            }
+
+            // Notes
+            if (d.description) {
+                html += '<div class="rpt-daily-section-title" style="margin-top:.8rem">Notes</div>';
+                html += '<div class="rpt-daily-row">' + h(d.description) + '</div>';
+            }
+
+            if (d.filed_by) html += '<div class="rpt-detail-meta" style="margin-top:.6rem">Filed by: ' + h(d.filed_by) + '</div>';
         }
         document.getElementById('rptDetailEl').innerHTML = html;
     }
@@ -930,6 +1052,163 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function pad(n) { return String(n).padStart(2, '0'); }
+
+    // ── Summary (Weekly / Overall) ────────────────────────────────────────
+    window.showProgressSummary = function (type) {
+        _summaryType = type;
+        if (_summaryData) { _renderSummary(); return; }
+        fetch(_base + '/projects/' + _pid + '/progress-summary', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { _summaryData = d; _renderSummary(); })
+            .catch(function () {
+                document.getElementById('rptSummaryEl').innerHTML =
+                    '<div class="rpt-sum-empty">Unable to load summary data.</div>';
+                setState('summary');
+            });
+    };
+
+    function _dateDiffDays(a, b) {
+        return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+    }
+    function _computePlannedPct(milestones, startDate, endDate, reportDate) {
+        var points = [{ date: startDate, pct: 0 }];
+        var cumW = 0;
+        milestones.forEach(function(m) {
+            cumW += m.weight_percent;
+            if (m.target_date) points.push({ date: m.target_date, pct: Math.min(100, cumW) });
+        });
+        if (points[points.length-1].pct < 100 && endDate) points.push({ date: endDate, pct: 100 });
+        if (!reportDate || reportDate <= points[0].date) return 0;
+        if (reportDate >= points[points.length-1].date) return points[points.length-1].pct;
+        for (var i = 0; i < points.length - 1; i++) {
+            if (points[i].date <= reportDate && reportDate < points[i+1].date) {
+                var span = _dateDiffDays(points[i].date, points[i+1].date);
+                var t    = span > 0 ? _dateDiffDays(points[i].date, reportDate) / span : 0;
+                return points[i].pct + t * (points[i+1].pct - points[i].pct);
+            }
+        }
+        return 0;
+    }
+    function _pct(v, dec)  { return typeof v === 'number' ? v.toFixed(dec !== undefined ? dec : 2) + ' %' : '—'; }
+    function _vari(v, dec) {
+        if (typeof v !== 'number') return '<span class="muted">—</span>';
+        var cls = v < -0.005 ? 'neg' : (v > 0.005 ? 'pos' : '');
+        return '<span class="' + cls + '">' + (v >= 0 ? '+' : '') + v.toFixed(dec !== undefined ? dec : 2) + ' %</span>';
+    }
+    function _fmtDate(ds) {
+        if (!ds) return '—';
+        return new Date(ds + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    }
+    function _fmtWeekDate(ds) {
+        if (!ds) return '';
+        var dt = new Date(ds + 'T00:00:00');
+        var day = String(dt.getDate()).padStart(2, '0');
+        var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
+        var yr  = String(dt.getFullYear()).slice(2);
+        return day + '-' + mon + '-' + yr;
+    }
+
+    function _renderSummary() {
+        var d = _summaryData || {};
+        var html = '';
+        var reportDate      = d.reportDate      || new Date().toISOString().slice(0,10);
+        var overallProgress = typeof d.overallProgress === 'number' ? d.overallProgress : 0;
+        var todayFmt = new Date().toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' });
+
+        if (_summaryType === 'weekly') {
+            var targets = d.weeklyTargets || [];
+            if (!targets.length) {
+                html += '<div class="rpt-sum-empty">No weekly schedule data available. Open this project\'s Schedule screen on mobile and save to enable this view.</div>';
+            } else {
+                html += '<div class="rpt-sum-title">Cumulative Weekly Progress Target Summary</div>';
+                html += '<table class="rpt-sum-table">';
+                html += '<thead><tr>' +
+                        '<th>Week No.</th>' +
+                        '<th class="num">Running Cumulative %</th>' +
+                        '<th class="num">Cumulative Target %</th>' +
+                        '<th class="num">Variance (+/–)</th>' +
+                        '</tr></thead><tbody>';
+
+                targets.forEach(function(wt, i) {
+                    var weekNum   = (wt.week !== undefined && wt.week !== null) ? wt.week : (i + 1);
+                    var weekDate  = wt.week_start ? _fmtWeekDate(wt.week_start) : '';
+                    var weekLabel = 'Week ' + weekNum + (weekDate ? ' (' + weekDate + ')' : '');
+
+                    var hasActual = wt.actual_percent !== null && wt.actual_percent !== undefined;
+                    var actualPct = hasActual ? Number(wt.actual_percent) : null;
+                    var targetPct = Number(wt.target_percent || 0);
+                    var variance  = hasActual ? (actualPct - targetPct) : null;
+
+                    html += '<tr>';
+                    html += '<td>' + h(weekLabel) + '</td>';
+                    html += '<td class="num">' + (actualPct !== null ? _pct(actualPct, 2) : '') + '</td>';
+                    html += '<td class="num">' + _pct(targetPct, 2) + '</td>';
+                    html += '<td class="num">' + (variance !== null ? _vari(variance, 2) : '') + '</td>';
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+            }
+
+        } else {
+            var milestones  = d.milestones || [];
+            var totalMs     = milestones.length;
+            var scheduledMs = milestones.filter(function(m){ return m.target_date; }).length;
+            var plannedPct  = d.startDate ? _computePlannedPct(milestones, d.startDate, d.endDate, reportDate) : null;
+            var variance    = plannedPct !== null ? overallProgress - plannedPct : null;
+
+            html += '<div class="rpt-sum-overall-hdr">';
+            html += '<div class="rpt-sum-overall-title">General Progress Accomplishment %</div>';
+            html += '<div class="rpt-sum-overall-sub">As of ' + todayFmt + '</div>';
+            if (totalMs > 0) html += '<div class="rpt-sum-overall-badge">' + scheduledMs + ' of ' + totalMs + ' milestone' + (totalMs !== 1 ? 's' : '') + ' scheduled</div>';
+            html += '</div>';
+
+            html += '<table class="rpt-sum-table" style="margin-bottom:.8rem"><thead><tr style="background:#b8d4e8">' +
+                    '<th>ITEM</th>' +
+                    '<th class="num">PLANNED %<br><small style="font-weight:400;text-transform:none">(scheduled scope)</small></th>' +
+                    '<th class="num">ACTUAL %</th><th class="num">VARIANCE (+/–)</th>' +
+                    '</tr></thead><tbody><tr>' +
+                    '<td style="font-weight:700">PROGRESS TO DATE</td>' +
+                    '<td class="num">' + (plannedPct !== null ? _pct(plannedPct, 1) : '—') + '</td>' +
+                    '<td class="num">' + _pct(overallProgress, 2) + '</td>' +
+                    '<td class="num">' + (variance !== null ? _vari(variance, 2) : '—') + '</td>' +
+                    '</tr></tbody></table>';
+
+            html += '<div class="rpt-sum-ms-heading">MILESTONE SUMMARY</div>';
+            if (!milestones.length) {
+                html += '<div class="rpt-sum-empty">No milestones defined.</div>';
+            } else {
+                html += '<table class="rpt-sum-table"><thead><tr style="background:#b8d4e8">' +
+                        '<th>MILESTONE</th><th>TARGET DATE</th>' +
+                        '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>' +
+                        '<th class="num">VARIANCE</th><th>STATUS</th>' +
+                        '</tr></thead><tbody>';
+                milestones.forEach(function(m) {
+                    var stLow  = (m.status || '').toLowerCase();
+                    var isDone = stLow === 'completed';
+                    var isIP   = stLow === 'in progress';
+                    var stLbl  = isDone ? 'Completed' : (isIP ? 'In Progress' : 'Not Started');
+                    var stCls  = isDone ? 'rpt-sum-status-done' : (isIP ? 'rpt-sum-status-inprogress' : 'rpt-sum-status-pending');
+                    var hasTD     = !!m.target_date;
+                    var tdPassed  = hasTD && m.target_date <= reportDate;
+                    var actualPct = m.completion_percent * m.weight_percent / 100;
+                    var plannedR  = hasTD ? m.weight_percent : null;
+                    var varRow    = (tdPassed && plannedR !== null) ? actualPct - plannedR : null;
+                    html += '<tr><td>' + h(m.milestone_name) + '</td><td>' + _fmtDate(m.target_date) + '</td>' +
+                            '<td class="num">' + (plannedR !== null ? _pct(plannedR, 1) : '—') + '</td>' +
+                            '<td class="num">' + _pct(actualPct, 1) + '</td>' +
+                            '<td class="num">' + (varRow !== null ? _vari(varRow, 2) : '<span class="muted">—</span>') + '</td>' +
+                            '<td><span class="rpt-sum-status ' + stCls + '">' + stLbl + '</span></td></tr>';
+                });
+                html += '</tbody></table>';
+            }
+        }
+
+        document.getElementById('rptSummaryEl').innerHTML = html;
+        setState('summary');
+        document.getElementById('rptModalTitle').textContent =
+            (_summaryType === 'weekly' ? 'Weekly Summary' : 'Overall Progress') + ' — ' + _pname;
+    }
 
     // Close on overlay click
     document.addEventListener('DOMContentLoaded', function () {

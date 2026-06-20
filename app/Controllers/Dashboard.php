@@ -145,9 +145,17 @@ class Dashboard extends BaseController
                 $activeProjects[] = $enriched;
             }
 
+            // ── For Project Manager: monitor only shows their assigned projects ──
+            $uid = (string)(session()->get('userId') ?? '');
+            $monitorProjects = pz_is('Project Manager')
+                ? array_values(array_filter($activeProjects, function ($p) use ($uid) {
+                    return ($p['_pm_uid'] ?? '') === $uid || ($p['_se_uid'] ?? '') === $uid;
+                }))
+                : $activeProjects;
+
             // ── Group projects by Philippine island group ────────────
             $projectsByRegion = [];
-            foreach ($activeProjects as $p) {
+            foreach ($monitorProjects as $p) {
                 $projectsByRegion[$p['_region']][] = $p;
             }
             $regionOrder = ['LUZON' => 0, 'VISAYAS' => 1, 'MINDANAO' => 2];
@@ -165,7 +173,7 @@ class Dashboard extends BaseController
 
             // Build a flat list of project locations for the monitor map JS
             $projectLocations = [];
-            foreach ($activeProjects as $p) {
+            foreach ($monitorProjects as $p) {
                 if ($p['_lat'] !== null && $p['_lng'] !== null) {
                     $projectLocations[] = [
                         'id'   => $p['id'] ?? '',
@@ -288,7 +296,24 @@ class Dashboard extends BaseController
         $rawStatus          = strtoupper(trim((string)($p['status'] ?? '')));
         $p['_status']       = in_array($rawStatus, ['COMPLETED', 'DONE']) ? 'DONE' : 'ONGOING';
 
+        // Normalize PM/SE UIDs for role-based monitor filtering
+        $pmRaw = $p['personnel']['project_manager_id'] ?? $p['project_manager_id'] ?? null;
+        $seRaw = $p['personnel']['site_engineer_id']   ?? $p['site_engineer_id']   ?? null;
+        $p['_pm_uid'] = $this->extractPersonnelUid($pmRaw);
+        $p['_se_uid'] = $this->extractPersonnelUid($seRaw);
+
         return $p;
+    }
+
+    private function extractPersonnelUid(mixed $value): string
+    {
+        if ($value === null) return '';
+        if (is_object($value) && method_exists($value, 'id')) {
+            try { return (string)$value->id(); } catch (\Throwable $e) {}
+        }
+        $str = is_string($value) ? $value : '';
+        // strip "users/" path prefix if present
+        return preg_replace('#^.+/#', '', trim($str)) ?: trim($str);
     }
 
     // ── Normalise a raw Firestore location value into a plain PHP array ──

@@ -42,6 +42,9 @@ $routes->post('projects/delete', 'Projects::delete');
 // Backwards-compatible GET delete
 $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 
+// Project Progress Summary JSON (for modal Weekly / Overall buttons)
+$routes->get('projects/(:segment)/progress-summary', 'Projects::progressSummaryJson/$1');
+
 // Project Resource Assignment
 $routes->get('projects/(:segment)/resources',                      'Projects::resources/$1');
 $routes->post('projects/(:segment)/resources/assign',              'Projects::assignResource/$1');
@@ -86,6 +89,8 @@ $routes->post('resources/delete', 'Resources::delete');
 $routes->get('resources/delete/(:segment)', 'Resources::delete/$1');
 $routes->get('resources/viewItems/(:segment)', 'Resources::viewItems/$1');
 $routes->post('resources/addItem/(:segment)', 'Resources::addItem/$1');
+$routes->post('resources/updateItem/(:segment)/(:segment)', 'Resources::updateItem/$1/$2');
+$routes->post('resources/deleteItem/(:segment)/(:segment)', 'Resources::deleteItem/$1/$2');
 $routes->post('resources/warehouse-default', 'Resources::saveWarehouseDefault');
 $routes->post('resources/warehouse-saved-location', 'Resources::saveWarehouseLocation');
 $routes->post('resources/warehouse-saved-location-delete', 'Resources::deleteWarehouseLocation');
@@ -126,6 +131,20 @@ $routes->get('verification-success',       'VerifyAccount::verificationSuccess')
 // Trash (soft-delete restore/permanent-delete)
 $routes->post('trash/restore', 'Trash::restore');
 $routes->post('trash/permanent-delete', 'Trash::permanentDelete');
+
+// Notifications
+$routes->get('notifications',               'Notifications::index');
+$routes->get('notifications/json',          'Notifications::json');
+$routes->post('notifications/mark-read',    'Notifications::markRead');
+$routes->post('notifications/mark-all-read','Notifications::markAllRead');
+
+// Messages
+$routes->get('messages',                          'Messages::index');
+$routes->get('messages/json',                     'Messages::chatsJson');
+$routes->get('messages/project/(:segment)',       'Messages::projectChat/$1');
+$routes->get('messages/(:segment)',               'Messages::show/$1');
+$routes->get('messages/(:segment)/json',          'Messages::messagesJson/$1');
+$routes->post('messages/(:segment)/send',         'Messages::sendMessage/$1');
 
 // Export (XLSX, PDF, Print)
 $routes->get('export', 'Export::index');

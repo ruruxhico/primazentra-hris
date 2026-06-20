@@ -105,6 +105,7 @@
 .pres-res-info { flex: 1; min-width: 0; }
 .pres-res-name { font-size: 0.95rem; font-weight: 800; color: #2c1f07; }
 .pres-res-sub  { font-size: 0.78rem; color: #999; margin-top: 3px; }
+.pres-res-avail { color: #5a8a3c; }
 .pres-res-site { font-size: 0.75rem; color: #bbb; margin-top: 3px; }
 .pres-res-site-here { color: #8C701C; font-weight: 600; }
 .pres-res-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -353,6 +354,7 @@
                 <div class="pres-res-name"><?= esc($eqName) ?></div>
                 <div class="pres-res-sub">Equipment model</div>
                 <div class="pres-res-sub">&bull; <?= (int)$eqStats['assigned'] ?> assigned unit(s)</div>
+                <div class="pres-res-sub pres-res-avail">&bull; <?= (int)$eqStats['available'] ?> available unit(s)</div>
             </div>
             <div class="pres-res-actions">
                 <button class="pres-btn-bulk"
@@ -387,6 +389,7 @@
                 <div class="pres-res-name"><?= esc($toolName) ?></div>
                 <div class="pres-res-sub">Tool</div>
                 <div class="pres-res-sub">&bull; <?= (int)$toolStats['assigned'] ?> assigned unit(s)</div>
+                <div class="pres-res-sub pres-res-avail">&bull; <?= (int)$toolStats['available'] ?> available unit(s)</div>
             </div>
             <div class="pres-res-actions">
                 <button class="pres-btn-bulk"

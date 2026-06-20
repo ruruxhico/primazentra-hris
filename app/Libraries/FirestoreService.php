@@ -30,11 +30,6 @@ class FirestoreService {
         }
     }
 
-    public function getDb(): FirestoreClient {
-        return $this->db;
-    }
-
-    public function getAuth(): Auth {
-        return $this->auth;
-    }
+    public function getDb(): FirestoreClient { return $this->db; }
+    public function getAuth(): Auth { return $this->auth; }
 }

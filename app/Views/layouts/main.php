@@ -27,8 +27,27 @@
                   aria-label="Toggle sidebar">☰</button>
           <img src="<?= asset_url('assets/PrimaSolution.png') ?>" alt="PrimaSolutions" class="header-logo">
           <div class="header-right">
-            <span class="notification-icon">💬</span>
-            <span class="notification-icon">🔔</span>
+            <!-- Notification bell -->
+            <div class="pz-notif-wrap" id="pzNotifWrap">
+              <button class="pz-notif-btn" id="pzNotifBtn" aria-label="Notifications" title="Notifications">
+                <span class="material-symbols-outlined">notifications</span>
+                <span class="pz-notif-badge" id="pzNotifBadge" style="display:none"></span>
+              </button>
+              <div class="pz-notif-panel" id="pzNotifPanel">
+                <div class="pz-notif-hdr">
+                  <span>Notifications</span>
+                  <button class="pz-notif-mark-all" id="pzMarkAll" title="Mark all as read">Mark all read</button>
+                </div>
+                <div class="pz-notif-list" id="pzNotifList">
+                  <div class="pz-notif-empty">Loading…</div>
+                </div>
+                <a href="<?= base_url('notifications') ?>" class="pz-notif-view-all">View all notifications</a>
+              </div>
+            </div>
+            <!-- Messages shortcut -->
+            <a href="<?= base_url('messages') ?>" class="pz-msg-btn" title="Messages" aria-label="Messages">
+              <span class="material-symbols-outlined">chat</span>
+            </a>
             <?php
               $hdrPic = (string)(session()->get('profilePicture') ?? '');
               $hdrPicValid = $hdrPic !== '' && file_exists(FCPATH . $hdrPic);
@@ -58,6 +77,225 @@
   </div>
   <?= $this->renderSection('scripts') ?>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+
+  <!-- ── Notification bell ── -->
+  <style>
+  .pz-notif-wrap { position:relative; }
+  .pz-notif-btn {
+    background:none; border:none; cursor:pointer; padding:6px;
+    display:flex; align-items:center; justify-content:center;
+    position:relative; color:#fff; border-radius:8px;
+    transition:background .15s;
+  }
+  .pz-notif-btn:hover { background:rgba(255,255,255,.15); }
+  .pz-notif-btn .material-symbols-outlined { font-size:22px; color:#ffd740; }
+  .pz-notif-badge {
+    position:absolute; top:3px; right:3px;
+    background:#e53935; color:#fff; font-size:10px; font-weight:700;
+    min-width:16px; height:16px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    padding:0 3px; pointer-events:none; line-height:1;
+  }
+  .pz-notif-panel {
+    display:none; position:absolute; right:0; top:calc(100% + 6px);
+    width:340px; background:#fff; border-radius:10px;
+    box-shadow:0 4px 24px rgba(0,0,0,.18); z-index:9999;
+    overflow:hidden;
+  }
+  .pz-notif-panel.open { display:block; }
+  .pz-notif-hdr {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px; border-bottom:1px solid #eee;
+    font-weight:700; font-size:.92rem; color:#333;
+  }
+  .pz-notif-mark-all {
+    background:none; border:none; cursor:pointer; font-size:.78rem;
+    color:#b8960c; font-weight:600; padding:0;
+  }
+  .pz-notif-mark-all:hover { text-decoration:underline; }
+  .pz-notif-list { max-height:380px; overflow-y:auto; }
+  .pz-notif-empty { padding:32px 16px; text-align:center; color:#999; font-size:.88rem; }
+  .pz-notif-item {
+    display:flex; align-items:flex-start; gap:10px;
+    padding:12px 16px; border-bottom:1px solid #f5f5f5;
+    cursor:pointer; transition:background .12s;
+    text-decoration:none; color:inherit;
+  }
+  .pz-notif-item:hover { background:#fdf8e1; }
+  .pz-notif-item.unread { background:#fffbea; }
+  .pz-notif-item.unread:hover { background:#fdf3c0; }
+  .pz-notif-icon {
+    width:34px; height:34px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:#f0e9c5; color:#b8960c;
+  }
+  .pz-notif-icon .material-symbols-outlined { font-size:18px; }
+  .pz-notif-content { flex:1; min-width:0; }
+  .pz-notif-title { font-weight:600; font-size:.85rem; color:#222; line-height:1.3; }
+  .pz-notif-body  { font-size:.8rem; color:#555; margin-top:2px; line-height:1.35; }
+  .pz-notif-time  { font-size:.72rem; color:#aaa; margin-top:4px; }
+  .pz-notif-dot   { width:8px; height:8px; border-radius:50%; background:#b8960c; flex-shrink:0; margin-top:5px; }
+  .pz-notif-view-all {
+    display:block; text-align:center; padding:10px;
+    font-size:.8rem; color:#b8960c; font-weight:600;
+    border-top:1px solid #eee; text-decoration:none;
+    transition:background .12s;
+  }
+  .pz-notif-view-all:hover { background:#fdf8e1; }
+  .pz-msg-btn {
+    background:none; border:none; cursor:pointer; padding:6px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius:50%; transition:background .15s; text-decoration:none;
+  }
+  .pz-msg-btn:hover { background:rgba(255,255,255,.15); }
+  .pz-msg-btn .material-symbols-outlined { font-size:22px; color:#90caf9; }
+  </style>
+  <script>
+  (function () {
+    var _base    = '<?= base_url() ?>';
+    var _csrf    = '<?= csrf_token() ?>';
+    var _open    = false;
+    var _data    = [];
+
+    var btn    = document.getElementById('pzNotifBtn');
+    var panel  = document.getElementById('pzNotifPanel');
+    var badge  = document.getElementById('pzNotifBadge');
+    var list   = document.getElementById('pzNotifList');
+    var markAll= document.getElementById('pzMarkAll');
+
+    var TYPE_ICON = {
+      messageSent:       'chat_bubble',
+      toolRequested:     'build',
+      secondaryApproval: 'approval',
+      requestApproved:   'check_circle',
+      projectAssigned:   'folder_special',
+      emergencyCreated:  'warning',
+      progressReported:  'assignment_turned_in',
+    };
+
+    function h(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(s || '')));
+      return d.innerHTML;
+    }
+
+    function relTime(iso) {
+      if (!iso) return '';
+      var diff = Math.floor((Date.now() - new Date(iso.replace(' ', 'T') + '+08:00')) / 1000);
+      if (diff <  60)  return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400)return Math.floor(diff / 3600) + 'h ago';
+      return Math.floor(diff / 86400) + 'd ago';
+    }
+
+    function render(items) {
+      if (!items.length) {
+        list.innerHTML = '<div class="pz-notif-empty">No notifications yet</div>';
+        return;
+      }
+      list.innerHTML = items.map(function (n) {
+        var icon = TYPE_ICON[n.type] || 'notifications';
+        return '<div class="pz-notif-item' + (n.isRead ? '' : ' unread') + '" data-id="' + h(n.id) + '" data-url="' + h(navUrl(n)) + '">' +
+          '<div class="pz-notif-icon"><span class="material-symbols-outlined">' + icon + '</span></div>' +
+          '<div class="pz-notif-content">' +
+            '<div class="pz-notif-title">' + h(n.title) + '</div>' +
+            '<div class="pz-notif-body">'  + h(n.body)  + '</div>' +
+            '<div class="pz-notif-time">'  + relTime(n.createdAt) + '</div>' +
+          '</div>' +
+          (n.isRead ? '' : '<div class="pz-notif-dot"></div>') +
+        '</div>';
+      }).join('');
+
+      list.querySelectorAll('.pz-notif-item').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var id  = el.dataset.id;
+          var url = el.dataset.url;
+          if (!el.classList.contains('unread')) {
+            if (url) window.location.href = url;
+            return;
+          }
+          el.classList.remove('unread');
+          el.querySelector('.pz-notif-dot') && el.querySelector('.pz-notif-dot').remove();
+          var fd = new FormData();
+          fd.append(_csrf, document.querySelector('input[name="' + _csrf + '"]')?.value || '');
+          fetch(_base + 'notifications/mark-read', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json',
+                       'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ id: id }),
+          }).catch(function(){});
+          updateBadge(_data.filter(function(x){ return !x.isRead && x.id !== id; }).length);
+          if (url) window.location.href = url;
+        });
+      });
+    }
+
+    function navUrl(n) {
+      var m = n.metadata || {};
+      switch (n.type) {
+        case 'projectAssigned':
+        case 'emergencyCreated':
+        case 'progressReported':  return (m.project_id||m.projectId) ? _base + 'projects/show/' + (m.project_id||m.projectId) : '';
+        case 'toolRequested':
+        case 'secondaryApproval':
+        case 'requestApproved':   return (m.request_id||m.requestId) ? _base + 'requests/' + (m.request_id||m.requestId) : _base + 'requests';
+        case 'messageSent':       return (m.chat_id||m.chatId) ? _base+'messages/'+(m.chat_id||m.chatId) : _base+'messages';
+        default:                  return '';
+      }
+    }
+
+    function updateBadge(count) {
+      if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : count;
+        badge.style.display = 'flex';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    function load() {
+      fetch(_base + 'notifications/json', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          _data = d.notifications || [];
+          updateBadge(d.unreadCount || 0);
+          if (_open) render(_data);
+        })
+        .catch(function () {});
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      _open = !_open;
+      panel.classList.toggle('open', _open);
+      if (_open) render(_data);
+    });
+
+    document.addEventListener('click', function (e) {
+      if (_open && !document.getElementById('pzNotifWrap').contains(e.target)) {
+        _open = false;
+        panel.classList.remove('open');
+      }
+    });
+
+    markAll.addEventListener('click', function (e) {
+      e.stopPropagation();
+      _data.forEach(function (n) { n.isRead = true; });
+      updateBadge(0);
+      render(_data);
+      fetch(_base + 'notifications/mark-all-read', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json',
+                   'X-Requested-With': 'XMLHttpRequest' },
+        body: '{}',
+      }).catch(function(){});
+    });
+
+    // initial load + poll every 30 s
+    load();
+    setInterval(load, 30000);
+  }());
+  </script>
 
   <!-- Long-press drag-to-scroll (hold left button 300 ms on any non-interactive area) -->
   <style>

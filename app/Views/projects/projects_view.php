@@ -43,6 +43,21 @@
 <?php endif; ?>
 
 <style>
+/* ── Controls bar ── */
+.rv-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:0.9rem; }
+.rv-search { flex:1; min-width:160px; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:0.87rem; font-family:inherit; outline:none; }
+.rv-search:focus { border-color:#C47A0F; box-shadow:0 0 0 2px rgba(196,122,15,.12); }
+.rv-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:8px; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; cursor:pointer; border:1.5px solid transparent; font-family:inherit; white-space:nowrap; font-variation-settings:'FILL' 0,'wght' 400; text-decoration:none; }
+.rv-btn .material-symbols-outlined { font-size:16px; }
+.rv-btn-filter { background:#fff; border-color:#ddd; color:#555; }
+.rv-btn-filter:hover { border-color:#C47A0F; color:#8C701C; }
+.rv-btn-add { background:#8C701C; color:#fff; border-color:#8C701C; }
+.rv-btn-add:hover { background:#6e570f; color:#fff; }
+.rv-btn-import { background:#fff; border-color:#adb5bd; color:#495057; }
+.rv-btn-import:hover { border-color:#8C701C; color:#8C701C; }
+.rv-btn-export { background:#fff; border-color:#adb5bd; color:#495057; }
+.rv-btn-export:hover { border-color:#8C701C; color:#8C701C; }
+
 .filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
 .filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px 16px; }
 .filter-group { display:flex; flex-direction:column; gap:4px; }
@@ -103,25 +118,26 @@
 ?>
 
 <div class="page-module">
-<div class="resource-controls">
-    <input type="text" id="searchProjects" placeholder="🔍 Search projects..." class="search-input">
+<div class="rv-controls">
+    <input type="text" id="searchProjects" placeholder="Search projects…" class="rv-search">
 
-    <button type="button" class="btn btn-filter" id="filterToggleBtn">
-        ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
+    <button type="button" class="rv-btn rv-btn-filter" id="filterToggleBtn">
+        <span class="material-symbols-outlined">tune</span>
+        Filter<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
     <?php if (pz_can('create_project')): ?>
-    <a href="<?= base_url('projects/create') ?>" class="btn btn-success">
-        + ADD
+    <a href="<?= base_url('projects/create') ?>" class="rv-btn rv-btn-add">
+        <span class="material-symbols-outlined">add</span> Add
     </a>
     <?php endif; ?>
 
-    <button class="btn btn-import" id="importBtn" data-module="projects">
-        ⬇ IMPORT
+    <button class="rv-btn rv-btn-import" id="importBtn" data-module="projects">
+        <span class="material-symbols-outlined">download</span> Import
     </button>
 
-    <button class="btn btn-export" id="exportBtn" data-module="projects">
-        ⬆ EXPORT
+    <button class="rv-btn rv-btn-export" id="exportBtn" data-module="projects">
+        <span class="material-symbols-outlined">upload</span> Export
     </button>
 </div>
 

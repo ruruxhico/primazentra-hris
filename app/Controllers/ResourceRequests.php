@@ -6,6 +6,8 @@ use App\Models\Model_ResourceRequests;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
+use App\Models\Model_Users;
+use App\Services\NotificationService;
 use Google\Cloud\Core\Timestamp;
 
 class ResourceRequests extends BaseController
@@ -166,6 +168,16 @@ class ResourceRequests extends BaseController
 
         try {
             $id = $this->requestModel->create($data);
+
+            $this->notifyUsersWithRoles(
+                ['Administrator', 'Operations Manager', 'Project Manager'],
+                'toolRequested',
+                'New Resource Request',
+                "{$user} requested {$qty}x {$resName} for {$destName}",
+                ['request_id' => $id],
+                excludeUserId: $uid
+            );
+
             return $this->response->setJSON(['success' => true, 'id' => $id]);
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::store - ' . $e->getMessage());
@@ -180,7 +192,7 @@ class ResourceRequests extends BaseController
         if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
 
         $role = session()->get('role') ?? '';
-        $allowed = ['Admin', 'Operations Manager', 'Project Manager'];
+        $allowed = ['Administrator', 'Operations Manager', 'Project Manager'];
         if (!in_array($role, $allowed)) {
             return redirect()->to('requests/' . $id)->with('error', 'You do not have permission to approve requests.');
         }
@@ -226,6 +238,48 @@ class ResourceRequests extends BaseController
 
         try {
             $this->requestModel->update($id, $updates);
+
+            $resName     = (string)($req['resource_name'] ?? 'resource');
+            $requesterUid = (string)($req['requested_by'] ?? '');
+            $requesterName = (string)($req['requested_by_name'] ?? 'Someone');
+
+            $svc = new NotificationService();
+
+            if ($bypassSecond) {
+                // Admin bypass — fully approved in one step
+                if ($requesterUid) {
+                    $svc->send(
+                        $requesterUid,
+                        'requestApproved',
+                        'Request Approved',
+                        'Your request has been fully approved.',
+                        ['request_id' => $id]
+                    );
+                }
+            } else {
+                // Primary approved, secondary still needed — notify requester (1/2)
+                if ($requesterUid) {
+                    $svc->send(
+                        $requesterUid,
+                        'requestApproved',
+                        'Request Approved',
+                        'Your request has been approved (1/2) — awaiting secondary.',
+                        ['request_id' => $id]
+                    );
+                }
+
+                // Notify secondary approvers (all roles except the primary approver's role)
+                $this->notifyUsersWithRoles(
+                    ['Administrator', 'Operations Manager', 'Project Manager'],
+                    'secondaryApproval',
+                    'Secondary Approval Needed',
+                    "A resource request from {$requesterName} is awaiting your approval.",
+                    ['request_id' => $id],
+                    excludeUserId: $uid,
+                    excludeRole: $role
+                );
+            }
+
             $msg = $bypassSecond ? 'Request approved.' : 'Request approved — awaiting secondary approval.';
             return redirect()->to('requests/' . $id)->with('success', $msg);
         } catch (\Throwable $e) {
@@ -241,7 +295,7 @@ class ResourceRequests extends BaseController
         if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
 
         $role    = session()->get('role') ?? '';
-        $allowed = ['Admin', 'Operations Manager', 'Project Manager'];
+        $allowed = ['Administrator', 'Operations Manager', 'Project Manager'];
         if (!in_array($role, $allowed)) {
             return redirect()->to('requests/' . $id)->with('error', 'Not permitted.');
         }
@@ -283,6 +337,18 @@ class ResourceRequests extends BaseController
                 'secondary_approved_by_name'=> session()->get('userName') ?? '',
                 'secondary_approved_at'     => new Timestamp(new \DateTime()),
             ]);
+
+            $requesterUid = (string)($req['requested_by'] ?? '');
+            if ($requesterUid) {
+                (new NotificationService())->send(
+                    $requesterUid,
+                    'requestApproved',
+                    'Request Approved',
+                    'Your request has been fully approved.',
+                    ['request_id' => $id]
+                );
+            }
+
             return redirect()->to('requests/' . $id)->with('success', 'Request fully approved.');
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::approveSecondary - ' . $e->getMessage());
@@ -327,5 +393,30 @@ class ResourceRequests extends BaseController
     private function jsonError(string $msg, int $code = 400)
     {
         return $this->response->setStatusCode($code)->setJSON(['success' => false, 'error' => $msg]);
+    }
+
+    private function notifyUsersWithRoles(
+        array  $roles,
+        string $type,
+        string $title,
+        string $body,
+        array  $metadata = [],
+        string $excludeUserId = '',
+        string $excludeRole   = ''
+    ): void {
+        try {
+            $users = (new Model_Users())->getUsersByRole($roles);
+            $svc   = new NotificationService();
+            foreach ($users as $user) {
+                $uid      = (string)($user['id']   ?? '');
+                $userRole = (string)($user['role'] ?? '');
+                if (!$uid) continue;
+                if ($uid === $excludeUserId) continue;
+                if ($excludeRole !== '' && $userRole === $excludeRole) continue;
+                $svc->send($uid, $type, $title, $body, $metadata);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::notifyUsersWithRoles - ' . $e->getMessage());
+        }
     }
 }
