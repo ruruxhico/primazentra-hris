@@ -60,8 +60,23 @@
 
             <div class="form-group">
                 <label for="client_name">Client Name</label>
+                <?php
+                $predefinedClients = ['ATC', 'COMMTREND', 'EDGEPOINT', 'FTAP', 'ITP', 'LDIC', 'SMSGT', 'SMART'];
+                $allClientSuggestions = array_unique(array_merge(
+                    $predefinedClients,
+                    array_map('strtoupper', $existingClients ?? [])
+                ));
+                sort($allClientSuggestions);
+                ?>
                 <input type="text" id="client_name" name="client_name"
-                       value="<?= esc($project['client_name'] ?? '') ?>">
+                       value="<?= esc($project['client_name'] ?? '') ?>"
+                       list="clientSuggestions" autocomplete="off"
+                       placeholder="e.g. SMART">
+                <datalist id="clientSuggestions">
+                    <?php foreach ($allClientSuggestions as $c): ?>
+                    <option value="<?= esc($c) ?>">
+                    <?php endforeach; ?>
+                </datalist>
             </div>
 
             <div class="form-row">
@@ -78,18 +93,6 @@
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label for="status">Status *</label>
-                    <select id="status" name="status" required>
-                        <option value="">SELECT STATUS</option>
-                        <?php foreach (['Planned' => 'Planned', 'On-going' => 'On-going', 'Completed' => 'Completed', 'Past Deadline' => 'Past Deadline', 'Archived' => 'Archived'] as $val => $label): ?>
-                            <option value="<?= esc($val) ?>"
-                                <?= strcasecmp((string)($project['status'] ?? ''), $val) === 0 ? 'selected' : '' ?>>
-                                <?= esc($label) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
             </div>
 
             <!-- ── Location field with Maps integration ──────── -->

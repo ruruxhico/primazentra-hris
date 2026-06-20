@@ -93,21 +93,21 @@ class Resources extends BaseController
             $perPage = config('Pager')->perPage;
             $pager   = service('pager');
 
-            $eqPage    = max(1, (int)($this->request->getGet('eq_page')    ?? 1));
+            $eqPage    = max(1, (int)($this->request->getGet('page_equipment') ?? 1));
             $eqTotal   = count($equipment);
-            $pager->store('equipment', $eqPage, $perPage, $eqTotal, 'default_full', 0, 'eq_page');
+            $pager->store('equipment', $eqPage, $perPage, $eqTotal);
             $eqOffset  = ($eqPage - 1) * $perPage;
             $equipment = array_slice($equipment, $eqOffset, $perPage);
 
-            $toolsPage    = max(1, (int)($this->request->getGet('tools_page') ?? 1));
+            $toolsPage    = max(1, (int)($this->request->getGet('page_tools') ?? 1));
             $toolsTotal   = count($tools);
-            $pager->store('tools', $toolsPage, $perPage, $toolsTotal, 'default_full', 0, 'tools_page');
+            $pager->store('tools', $toolsPage, $perPage, $toolsTotal);
             $toolsOffset  = ($toolsPage - 1) * $perPage;
             $tools        = array_slice($tools, $toolsOffset, $perPage);
 
-            $mpPage    = max(1, (int)($this->request->getGet('mp_page')    ?? 1));
+            $mpPage    = max(1, (int)($this->request->getGet('page_manpower') ?? 1));
             $mpTotal   = count($manpower);
-            $pager->store('manpower', $mpPage, $perPage, $mpTotal, 'default_full', 0, 'mp_page');
+            $pager->store('manpower', $mpPage, $perPage, $mpTotal);
             $mpOffset  = ($mpPage - 1) * $perPage;
             $manpower  = array_slice($manpower, $mpOffset, $perPage);
 
@@ -146,6 +146,10 @@ class Resources extends BaseController
      */
     public function create()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         $category = $this->request->getGet('category') ?? '';
         $mapsKey = (new GoogleMaps())->browserKey;
 
@@ -169,6 +173,7 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
                 'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
                 'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
@@ -192,6 +197,7 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
                 'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
                 'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
@@ -220,6 +226,10 @@ class Resources extends BaseController
      */
     public function store()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             $data = $this->buildResourcePayload();
 
@@ -276,6 +286,7 @@ class Resources extends BaseController
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
                 'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
                 'mapsKey' => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
@@ -291,6 +302,10 @@ class Resources extends BaseController
      */
     public function update($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             // Try resource collection first, then manpower
             $existing = $this->model->getResourceById($id);
@@ -342,6 +357,15 @@ class Resources extends BaseController
      */
     public function delete($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+            }
+            return redirect()->to('resources')->with('error', 'Access denied.');
+        }
+
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
                 $id = $this->request->getPost('id') ?? $id;
@@ -536,6 +560,10 @@ class Resources extends BaseController
      */
     public function addItem($resourceId = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             if (!$resourceId) {
                 return redirect()->back()->with('error', 'Missing resource id');
@@ -1051,6 +1079,69 @@ class Resources extends BaseController
             log_message('warning', 'Resources::getDefaultWarehouseAddress - ' . $e->getMessage());
         }
         return '';
+    }
+
+    private function getSavedWarehouseLocations(): array
+    {
+        try {
+            $doc = $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->snapshot();
+            if ($doc->exists()) {
+                $locs = $doc->data()['saved_locations'] ?? [];
+                return is_array($locs) ? array_values($locs) : [];
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::getSavedWarehouseLocations - ' . $e->getMessage());
+        }
+        return [];
+    }
+
+    public function saveWarehouseLocation()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON([]);
+        }
+        $name    = trim((string)($this->request->getPost('name') ?? ''));
+        $address = trim((string)($this->request->getPost('address') ?? ''));
+        if ($address === '') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Address is required']);
+        }
+        try {
+            $docRef = $this->firestore->getDb()->collection('app_settings')->document('warehouse');
+            $snap   = $docRef->snapshot();
+            $existing = $snap->exists() ? ($snap->data()['saved_locations'] ?? []) : [];
+            if (!is_array($existing)) $existing = [];
+            // Remove any existing entry with same address (upsert)
+            $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
+            $existing[] = ['name' => $name !== '' ? $name : $address, 'address' => $address];
+            $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::saveWarehouseLocation - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to save']);
+        }
+    }
+
+    public function deleteWarehouseLocation()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON([]);
+        }
+        $address = trim((string)($this->request->getPost('address') ?? ''));
+        try {
+            $docRef = $this->firestore->getDb()->collection('app_settings')->document('warehouse');
+            $snap   = $docRef->snapshot();
+            $existing = $snap->exists() ? ($snap->data()['saved_locations'] ?? []) : [];
+            if (!is_array($existing)) $existing = [];
+            $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
+            $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::deleteWarehouseLocation - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to delete']);
+        }
     }
 
     public function saveWarehouseDefault()

@@ -22,6 +22,17 @@
 
 <div class="resource-header">
     <h1>Projects</h1>
+    <?php if (($isPm ?? false)): ?>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;">
+        <?php if (!($isViewAll ?? false)): ?>
+            <span style="font-size:.82rem;color:#666;">Showing your assigned projects.</span>
+            <a href="<?= base_url('projects?view_all=1') ?>" class="btn-toolbar" style="font-size:.82rem;padding:5px 12px;">View All Ongoing</a>
+        <?php else: ?>
+            <span style="font-size:.82rem;color:#666;">Showing all projects.</span>
+            <a href="<?= base_url('projects') ?>" class="btn-toolbar" style="font-size:.82rem;padding:5px 12px;">My Projects Only</a>
+        <?php endif; ?>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?php if (session()->getFlashdata('success')): ?>
@@ -87,6 +98,7 @@
     $activeCount    = count(array_filter($activeFilters));
     $pmOptions      = $pmOptions      ?? [];
     $seOptions      = $seOptions      ?? [];
+    $clientOptions  = $clientOptions  ?? [];
     $af             = $activeFilters;
 ?>
 
@@ -98,9 +110,11 @@
         ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
+    <?php if (pz_can('create_project')): ?>
     <a href="<?= base_url('projects/create') ?>" class="btn btn-success">
         + ADD
     </a>
+    <?php endif; ?>
 
     <button class="btn btn-import" id="importBtn" data-module="projects">
         ⬇ IMPORT
@@ -145,6 +159,18 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <?php if (!empty($clientOptions)): ?>
+            <div class="filter-group">
+                <label>Client</label>
+                <select name="client">
+                    <option value="">All Clients</option>
+                    <?php foreach ($clientOptions as $val => $label): ?>
+                    <option value="<?= esc($val) ?>" <?= ($af['client'] ?? '') === $val ? 'selected' : '' ?>><?= esc($label) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
 
             <div class="filter-group">
                 <label>Project Manager</label>
@@ -226,8 +252,10 @@
                         <td><?= esc(view_text($project['site_engineer_name'] ?? 'N/A', 'N/A')) ?></td>
                         <td class="text-center" style="white-space: nowrap;">
                             <a href="<?= base_url('projects/show/' . $project['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                            <?php if (pz_can('edit_project')): ?>
                             <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
                             <a href="#" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>

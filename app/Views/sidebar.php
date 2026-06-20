@@ -4,9 +4,10 @@
     $isDashboard = $currentPath === '' || $currentPath === 'dashboard' || str_starts_with($currentPath, 'dashboard/') || $currentPath === 'summary' || $currentPath === 'monitor';
     $isSummary   = $currentPath === 'summary'  || $currentPath === 'dashboard' || $currentPath === '';
     $isMonitor   = $currentPath === 'monitor';
-    $isProjects = $currentPath === 'projects' || str_starts_with($currentPath, 'projects/');
+    $isProjects  = $currentPath === 'projects' || str_starts_with($currentPath, 'projects/');
     $isResources = $currentPath === 'resources' || $currentPath === 'requests' || str_starts_with($currentPath, 'resources/') || str_starts_with($currentPath, 'requests/');
-    $isStaff = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
+    $isStaff     = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
+    $isProfile   = $currentPath === 'profile' || str_starts_with($currentPath, 'profile/');
 ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -22,21 +23,65 @@
     </div>
     <nav>
         <ul class="sidebar-menu top-menu">
+
+            <!-- Dashboard — all roles -->
             <li>
-          <a href="<?= base_url('dashboard') ?>" class="<?= $isDashboard ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">grid_view</span><span class="label">Dashboard</span></a>
+                <a href="<?= base_url('dashboard') ?>" class="<?= $isDashboard ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">grid_view</span>
+                    <span class="label">Dashboard</span>
+                </a>
+                <?php if (pz_can('view_summary_metrics')): ?>
                 <ul class="submenu">
-            <li><a href="<?= base_url('dashboard') ?>#summary" class="<?= $isSummary ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">stacked_line_chart</span><span class="label">Summary</span></a></li>
-            <li><a href="<?= base_url('dashboard') ?>#monitor" class="<?= $isMonitor ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">videocam</span><span class="label">Monitor</span></a></li>
+                    <li><a href="<?= base_url('dashboard') ?>#summary" class="<?= $isSummary ? 'active' : '' ?>">
+                        <span class="icon material-symbols-outlined" aria-hidden="true">stacked_line_chart</span>
+                        <span class="label">Summary</span>
+                    </a></li>
+                    <li><a href="<?= base_url('dashboard') ?>#monitor" class="<?= $isMonitor ? 'active' : '' ?>">
+                        <span class="icon material-symbols-outlined" aria-hidden="true">videocam</span>
+                        <span class="label">Monitor</span>
+                    </a></li>
                 </ul>
+                <?php endif; ?>
             </li>
-        <li><a href="<?= base_url('projects') ?>" class="<?= $isProjects ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">edit_calendar</span><span class="label">Projects</span></a></li>
+
+            <!-- Projects — Admin / OpsMgr / PM -->
+            <?php if (pz_can('view_projects')): ?>
             <li>
-          <a href="<?= base_url('resources') ?>" class="<?= $isResources ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">inventory_2</span><span class="label">Resources</span></a>
-                <ul class="submenu">
-            <li><a href="<?= base_url('requests') ?>"><span class="icon material-symbols-outlined" aria-hidden="true">contact_support</span><span class="label">Resource Requests & Transfers</span></a></li>
-                </ul>
+                <a href="<?= base_url('projects') ?>" class="<?= $isProjects ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">edit_calendar</span>
+                    <span class="label">Projects</span>
+                </a>
             </li>
-        <li><a href="<?= base_url('staff') ?>" class="<?= $isStaff ? 'active' : '' ?>"><span class="icon material-symbols-outlined" aria-hidden="true">person</span><span class="label">Staff</span></a></li>
+            <?php endif; ?>
+
+            <!-- Resources — Admin / OpsMgr / PM -->
+            <?php if (pz_can('view_resources')): ?>
+            <li>
+                <a href="<?= base_url('resources') ?>" class="<?= $isResources ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">inventory_2</span>
+                    <span class="label">Resources</span>
+                </a>
+                <?php if (pz_can('view_requests')): ?>
+                <ul class="submenu">
+                    <li><a href="<?= base_url('requests') ?>">
+                        <span class="icon material-symbols-outlined" aria-hidden="true">contact_support</span>
+                        <span class="label">Resource Requests & Transfers</span>
+                    </a></li>
+                </ul>
+                <?php endif; ?>
+            </li>
+            <?php endif; ?>
+
+            <!-- Staff — Admin / OpsMgr -->
+            <?php if (pz_can('view_staff')): ?>
+            <li>
+                <a href="<?= base_url('staff') ?>" class="<?= $isStaff ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">person</span>
+                    <span class="label">Staff</span>
+                </a>
+            </li>
+            <?php endif; ?>
+
         </ul>
 
         <div class="logout-section">
@@ -53,7 +98,6 @@ document.addEventListener('DOMContentLoaded', function () {
   var sidebar = document.querySelector('.sidebar');
   var overlay = document.getElementById('sidebarOverlay');
 
-  // Restore desktop collapsed state
   if (localStorage.getItem('pz_sidebar_collapsed') === 'true') {
     sidebar.classList.add('toggled');
     document.body.classList.add('sidebar-toggled');
@@ -62,8 +106,7 @@ document.addEventListener('DOMContentLoaded', function () {
   function toggleSidebar() {
     sidebar.classList.toggle('toggled');
     document.body.classList.toggle('sidebar-toggled');
-    localStorage.setItem('pz_sidebar_collapsed',
-      sidebar.classList.contains('toggled'));
+    localStorage.setItem('pz_sidebar_collapsed', sidebar.classList.contains('toggled'));
     if (overlay) overlay.classList.toggle('show',
       window.innerWidth < 768 && !sidebar.classList.contains('toggled'));
   }

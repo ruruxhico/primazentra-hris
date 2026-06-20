@@ -221,17 +221,9 @@
                                             </div>
                                             <div class="equipment-address-group equipment-address-warehouse">
                                                 <div class="unit-warehouse-input-wrap">
-                                                    <input type="text" name="items[<?= $index ?>][address]" class="equipment-warehouse-input" list="warehouseLocationSuggestions" value="<?= esc($currentAddress) ?>" placeholder="Type warehouse location or pick on map">
+                                                    <input type="text" name="items[<?= $index ?>][address]" class="equipment-warehouse-input" value="<?= esc($currentAddress) ?>" placeholder="Type warehouse location or pick on map" autocomplete="off">
                                                     <button type="button" class="equipment-map-btn">Map</button>
                                                 </div>
-                                                <?php if ($defaultWarehouseAddress): ?>
-                                                <div class="warehouse-saved-strip" <?= $locationType === 'Project Site' ? 'style="display:none"' : '' ?>>
-                                                    <button type="button" class="warehouse-use-saved-btn">
-                                                        <span class="material-symbols-outlined" style="font-size:13px">push_pin</span>
-                                                        Use saved: <span class="wss-label"><?= esc($defaultWarehouseAddress) ?></span>
-                                                    </button>
-                                                </div>
-                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </div>
@@ -266,12 +258,6 @@
         </form>
     </div>
 </div>
-
-<datalist id="warehouseLocationSuggestions">
-    <?php foreach ($warehouseLocations as $warehouse): ?>
-        <option value="<?= esc((string)($warehouse['value'] ?? '')) ?>"></option>
-    <?php endforeach; ?>
-</datalist>
 
 <template id="equipmentItemTemplate">
     <div class="unit-card" data-warehouse-value="" data-project-value="">
@@ -336,14 +322,8 @@
                     </div>
                     <div class="equipment-address-group equipment-address-warehouse">
                         <div class="unit-warehouse-input-wrap">
-                            <input type="text" name="__INDEX__[address]" class="equipment-warehouse-input" list="warehouseLocationSuggestions" placeholder="Type warehouse location or pick on map">
+                            <input type="text" name="__INDEX__[address]" class="equipment-warehouse-input" placeholder="Type warehouse location or pick on map" autocomplete="off">
                             <button type="button" class="equipment-map-btn">Map</button>
-                        </div>
-                        <div class="warehouse-saved-strip" style="display:none">
-                            <button type="button" class="warehouse-use-saved-btn">
-                                <span class="material-symbols-outlined" style="font-size:13px">push_pin</span>
-                                Use saved: <span class="wss-label"></span>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -387,6 +367,10 @@ var _eqMap = null, _eqMarker = null, _eqAuto = null;
 window.initEquipmentMap = function () { /* Maps API ready; map created lazily on modal open */ };
 
 var warehouseDefault = <?= json_encode($defaultWarehouseAddress) ?>;
+window.whSavedLocations  = <?= json_encode($savedWarehouseLocations ?? []) ?>;
+window.whOtherLocations  = <?= json_encode(array_column($warehouseLocations ?? [], 'value')) ?>;
+window.whSaveUrl         = '<?= base_url('resources/warehouse-saved-location') ?>';
+window.whDeleteUrl       = '<?= base_url('resources/warehouse-saved-location-delete') ?>';
 
 document.addEventListener('DOMContentLoaded', function () {
     var checkbox  = document.getElementById('add_specific_units_now');
@@ -471,7 +455,6 @@ document.addEventListener('DOMContentLoaded', function () {
         var warehouseWrap = card.querySelector('.equipment-address-warehouse');
         var projectSelect = card.querySelector('.equipment-address-select');
         var warehouseInput = card.querySelector('.equipment-warehouse-input');
-        var savedStrip    = card.querySelector('.warehouse-saved-strip');
         var currentType = (typeSelect && typeSelect.value) || 'Warehouse';
 
         if (currentType === 'Project Site') {
@@ -481,7 +464,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (projectSelect) projectSelect.disabled = false;
             if (warehouseInput) warehouseInput.disabled = true;
             if (projectSelect && card.dataset.projectValue) projectSelect.value = card.dataset.projectValue;
-            if (savedStrip) savedStrip.style.display = 'none';
         } else {
             card.dataset.projectValue = (projectSelect && projectSelect.value) || card.dataset.projectValue || '';
             projectWrap.style.display = 'none';
@@ -490,11 +472,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (warehouseInput) {
                 warehouseInput.disabled = false;
                 if (card.dataset.warehouseValue) warehouseInput.value = card.dataset.warehouseValue;
-            }
-            if (savedStrip && warehouseDefault) {
-                savedStrip.style.display = '';
-                var lbl = savedStrip.querySelector('.wss-label');
-                if (lbl) lbl.textContent = warehouseDefault;
             }
         }
     }
@@ -560,19 +537,19 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeSelect && !typeSelect.value) typeSelect.value = 'Warehouse';
         syncLocationFields(card);
 
-        // Auto-fill warehouse address for new cards when a default is saved
+        // Auto-fill warehouse address for new cards (prefer first saved location, fall back to default)
         var wi = card.querySelector('.equipment-warehouse-input');
-        if (warehouseDefault && wi && !wi.value && !card.dataset.warehouseValue) {
-            wi.value = warehouseDefault;
-            card.dataset.warehouseValue = warehouseDefault;
+        if (wi && !wi.value && !card.dataset.warehouseValue) {
+            var firstSaved = (window.whSavedLocations || [])[0];
+            var autoAddr   = firstSaved ? firstSaved.address : (warehouseDefault || '');
+            if (autoAddr) {
+                wi.value = autoAddr;
+                card.dataset.warehouseValue = autoAddr;
+            }
         }
 
-        var savedBtn = card.querySelector('.warehouse-use-saved-btn');
-        if (savedBtn && wi) {
-            savedBtn.addEventListener('click', function () {
-                wi.value = warehouseDefault;
-                card.dataset.warehouseValue = warehouseDefault;
-            });
+        if (wi && typeof window.initWarehousePicker === 'function') {
+            window.initWarehousePicker(wi, card);
         }
     }
 
@@ -816,12 +793,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         wdbStatic.style.display = '';
                         wdbEditForm.style.display = 'none';
                         wdbEditBtn.style.display = '';
-                        document.querySelectorAll('.wss-label').forEach(function (el) { el.textContent = data.address; });
-                        document.querySelectorAll('.warehouse-saved-strip').forEach(function (el) {
-                            var c = el.closest('.unit-card');
-                            var lt = c && c.querySelector('.equipment-location-type');
-                            if (!lt || lt.value !== 'Project Site') el.style.display = '';
-                        });
                     } else {
                         alert('Could not save: ' + (data.message || 'Unknown error'));
                     }

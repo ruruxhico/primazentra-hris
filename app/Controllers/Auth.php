@@ -254,6 +254,7 @@ class Auth extends BaseController {
             session()->set([
                 'isLoggedIn'              => true,
                 'userId'                  => $user['id'],
+                'userEmail'               => (string)($userData['email'] ?? $email),
                 'userName'                => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
                 'role'                    => $userData['role'],
                 'login_time'              => time(),
@@ -268,6 +269,7 @@ class Auth extends BaseController {
         session()->set([
             'isLoggedIn'  => true,
             'userId'      => $user['id'],
+            'userEmail'   => (string)($userData['email'] ?? $email),
             'userName'    => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
             'role'        => $userData['role'],
             'login_time'  => time(),

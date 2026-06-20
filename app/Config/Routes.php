@@ -46,7 +46,24 @@ $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 $routes->get('projects/(:segment)/resources',                      'Projects::resources/$1');
 $routes->post('projects/(:segment)/resources/assign',              'Projects::assignResource/$1');
 $routes->post('projects/(:segment)/resources/unassign',            'Projects::unassignResource/$1');
-$routes->get('projects/(:segment)/resources/units/(:segment)',     'Projects::getEquipmentUnits/$1/$2');
+$routes->get('projects/(:segment)/resources/units/(:segment)',     'Projects::resourceUnits/$1/$2');
+$routes->post('projects/(:segment)/resources/bulk-assign-manpower', 'Projects::bulkAssignManpower/$1');
+$routes->post('projects/(:segment)/resources/bulk-assign-equipment','Projects::bulkAssignEquipment/$1');
+
+// Project Reports (Emergency + Daily Progress)
+$routes->get('projects/(:segment)/emergency-reports/json',         'Reports::emergencyList/$1');
+$routes->get('projects/(:segment)/emergency-reports/(:segment)',   'Reports::emergencyShow/$1/$2');
+$routes->post('projects/(:segment)/emergency-reports',             'Reports::emergencyCreate/$1');
+$routes->get('projects/(:segment)/daily-reports/json',             'Reports::dailyList/$1');
+$routes->get('projects/(:segment)/daily-reports/(:segment)',       'Reports::dailyShow/$1/$2');
+$routes->post('projects/(:segment)/daily-reports',                 'Reports::dailyCreate/$1');
+
+// Profile
+$routes->get('profile',                   'Profile::index');
+$routes->post('profile/update',           'Profile::update');
+$routes->post('profile/upload-photo',     'Profile::uploadPhoto');
+$routes->get('profile/change-password',   'Profile::changePassword');
+$routes->post('profile/change-password',  'Profile::processChangePassword');
 
 // Resource Requests & Transfers
 $routes->get('requests',                          'ResourceRequests::index');
@@ -70,6 +87,8 @@ $routes->get('resources/delete/(:segment)', 'Resources::delete/$1');
 $routes->get('resources/viewItems/(:segment)', 'Resources::viewItems/$1');
 $routes->post('resources/addItem/(:segment)', 'Resources::addItem/$1');
 $routes->post('resources/warehouse-default', 'Resources::saveWarehouseDefault');
+$routes->post('resources/warehouse-saved-location', 'Resources::saveWarehouseLocation');
+$routes->post('resources/warehouse-saved-location-delete', 'Resources::deleteWarehouseLocation');
 // Equipment CRUD
 $routes->post('resources/equipment/create', 'Resources::createEquipment');
 $routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');

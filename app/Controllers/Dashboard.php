@@ -56,9 +56,77 @@ class Dashboard extends BaseController
                 log_message('warning', 'Dashboard: pending requests - ' . $e->getMessage());
             }
 
+            // ── Resources ───────────────────────────────────────────
+            $totalResources     = $this->resourceModel->countResources();
+            $availableResources = $this->resourceModel->getAvailableResources();
+            $deployedResources  = $this->resourceModel->getDeployedResources();
+            $availableTools     = $this->resourceModel->getAvailableResources();
+
+            // ── Manpower ─────────────────────────────────────────────
+            $allManpower = [];
+            try {
+                $allManpower = $this->manpowerModel->getAllManpower();
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: manpower fetch failed - ' . $e->getMessage());
+            }
+            $availableManpower = array_values(array_filter($allManpower, function ($m) {
+                return ($m['status'] ?? '') === 'Available';
+            }));
+
+            // ── Build project → assigned-resource maps ────────────────
+            // Must be built BEFORE the activeProjects loop so enrichProject sees them.
+
+            // Manpower: assigned_project_id is a plain string doc ID
+            $manpowerByProject = [];
+            foreach ($allManpower as $m) {
+                $apid = trim((string)($m['assigned_project_id'] ?? ''));
+                if ($apid === '') continue;
+                $fn   = trim((string)($m['first_name'] ?? ''));
+                $ln   = trim((string)($m['last_name']  ?? ''));
+                $name = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper($m['name'] ?? '');
+                if ($name === '') continue;
+                $manpowerByProject[$apid][] = ['name' => $name, 'id' => $m['id'], 'unit_id' => ''];
+            }
+
+            // Equipment + Tools: assigned_project_id on the items subcollection
+            $equipmentByProject = [];
+            $toolsByProject     = [];
+            try {
+                foreach ($this->resourceModel->getAllResources() as $res) {
+                    $resId    = $res['id'];
+                    $resName  = strtoupper(trim((string)($res['name'] ?? '')));
+                    $category = $res['category'] ?? '';
+
+                    foreach ($this->resourceModel->getResourceItems($resId) as $item) {
+                        $apid = $item['assigned_project_id'] ?? null;
+                        $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $apid->id()
+                            : trim((string)($apid ?? ''));
+                        if ($itemPid === '') continue;
+
+                        $unitId = $item['__id'] ?? $item['id'] ?? '';
+                        $pill   = ['name' => $resName, 'id' => $resId, 'unit_id' => $unitId];
+
+                        if ($category === 'Tools') {
+                            $toolsByProject[$itemPid][] = $pill;
+                        } else {
+                            $equipmentByProject[$itemPid][] = $pill;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: resource item scan failed - ' . $e->getMessage());
+            }
+
             $activeProjects = [];
             foreach ($rawProjects as $p) {
-                $enriched = $this->enrichProject($p);
+                $pid = $p['id'] ?? '';
+                $assignedResources = [
+                    'equipment' => $equipmentByProject[$pid] ?? [],
+                    'tools'     => $toolsByProject[$pid]     ?? [],
+                    'manpower'  => $manpowerByProject[$pid]  ?? [],
+                ];
+                $enriched = $this->enrichProject($p, $assignedResources);
                 $pid = $enriched['id'] ?? '';
                 foreach (['_equipment', '_tools', '_manpower'] as $key) {
                     $enriched[$key] = array_map(function (array $pill) use ($pid, $pendingMap, $pendingNameMap): array {
@@ -90,23 +158,6 @@ class Dashboard extends BaseController
             // ── Blockers: low progress or halted ────────────────────
             $blockers = array_values(array_filter($activeProjects, function ($p) {
                 return ($p['_progress'] < 30) || (($p['status'] ?? '') === 'Halted');
-            }));
-
-            // ── Resources ───────────────────────────────────────────
-            $totalResources    = $this->resourceModel->countResources();
-            $availableResources = $this->resourceModel->getAvailableResources();
-            $deployedResources  = $this->resourceModel->getDeployedResources();
-            $availableTools     = $this->resourceModel->getAvailableResources();
-
-            // ── Manpower ─────────────────────────────────────────────
-            $allManpower = [];
-            try {
-                $allManpower = $this->manpowerModel->getAllManpower();
-            } catch (\Throwable $e) {
-                log_message('warning', 'Dashboard: manpower fetch failed - ' . $e->getMessage());
-            }
-            $availableManpower = array_values(array_filter($allManpower, function ($m) {
-                return ($m['status'] ?? '') === 'Available';
             }));
 
             // ── Staff ────────────────────────────────────────────────
@@ -173,7 +224,7 @@ class Dashboard extends BaseController
 
     // ── Helpers ───────────────────────────────────────────────────────
 
-    private function enrichProject(array $p): array
+    private function enrichProject(array $p, array $assignedResources = []): array
     {
         // Normalise the location field so downstream helpers always get a plain array
         $p['location'] = $this->normaliseLocation($p['location'] ?? null);
@@ -185,11 +236,13 @@ class Dashboard extends BaseController
         [$p['_lat'], $p['_lng']] = $this->extractLatLng($p);
         $p['_maps_url']  = $this->mapsUrl($p);
 
-        // Resource pills: split by category — Equipment / Tools / Manpower
+        // Resource pills — merge mobile-app inline resources with web-assigned resources.
+        // PM/SE are intentionally excluded; only real resources are shown.
         $equipment = [];
         $tools     = [];
         $manpower  = [];
 
+        // Source 1: inline resources field (written by mobile drag-and-drop)
         if (!empty($p['resources']) && is_array($p['resources'])) {
             foreach ($p['resources'] as $res) {
                 $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
@@ -197,8 +250,8 @@ class Dashboard extends BaseController
                 if ($name === '') continue;
                 $pill = [
                     'name'    => $name,
-                    'id'      => (string)($res['ref_id']    ?? ''),
-                    'unit_id' => (string)($res['unit_id']   ?? ''),
+                    'id'      => (string)($res['ref_id']  ?? ''),
+                    'unit_id' => (string)($res['unit_id'] ?? ''),
                 ];
                 if ($cat === 'manpower')      $manpower[]  = $pill;
                 elseif ($cat === 'equipment') $equipment[] = $pill;
@@ -206,12 +259,26 @@ class Dashboard extends BaseController
             }
         }
 
-        if (empty($manpower)) {
-            $pm = trim((string)($p['project_manager_name'] ?? ''));
-            $se = trim((string)($p['site_engineer_name']   ?? ''));
-            if ($pm && $pm !== 'N/A') $manpower[] = ['name' => strtoupper($pm), 'id' => '', 'unit_id' => ''];
-            if ($se && $se !== 'N/A') $manpower[] = ['name' => strtoupper($se), 'id' => '', 'unit_id' => ''];
-        }
+        // Source 2: web-assigned resources (assigned_project_id on manpower/item docs)
+        // Deduplicate by name+unit_id to avoid double-counting
+        $seen = [];
+        $merge = function (array &$target, array $incoming) use (&$seen): void {
+            foreach ($incoming as $pill) {
+                $key = ($pill['id'] ?? '') . '|' . ($pill['unit_id'] ?? '') . '|' . strtolower($pill['name'] ?? '');
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+                $target[] = $pill;
+            }
+        };
+
+        // Seed seen set with pills already added from Source 1
+        foreach ($equipment as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+        foreach ($tools     as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+        foreach ($manpower  as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+
+        $merge($equipment, $assignedResources['equipment'] ?? []);
+        $merge($tools,     $assignedResources['tools']     ?? []);
+        $merge($manpower,  $assignedResources['manpower']  ?? []);
 
         $p['_equipment']    = $equipment;
         $p['_tools']        = $tools;

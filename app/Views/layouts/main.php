@@ -11,7 +11,7 @@
     <link rel="shortcut icon" type="image/x-icon" href="<?= asset_url('favicon.ico') ?>?v=3">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
     <link rel="stylesheet" href="<?= base_url(is_file(FCPATH . 'css/styles.css') ? 'css/styles.css' : 'public/css/styles.css') ?>?v=<?= filemtime(ROOTPATH . 'public/css/styles.css') ?>">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
     <?= $this->renderSection('head') ?>
 </head>
 <body>
@@ -29,15 +29,23 @@
           <div class="header-right">
             <span class="notification-icon">💬</span>
             <span class="notification-icon">🔔</span>
-            <div class="user-profile">
-              <span class="avatar-initial">
-                <?= strtoupper(substr($userName !== '' ? $userName : 'User', 0, 1)) ?>
+            <?php
+              $hdrPic = (string)(session()->get('profilePicture') ?? '');
+              $hdrPicValid = $hdrPic !== '' && file_exists(FCPATH . $hdrPic);
+            ?>
+            <a href="<?= base_url('profile') ?>" class="user-profile" style="text-decoration:none;color:inherit;" title="My Profile">
+              <span class="avatar-initial" style="<?= $hdrPicValid ? 'padding:0;overflow:hidden;' : '' ?>">
+                <?php if ($hdrPicValid): ?>
+                  <img src="<?= base_url($hdrPic) ?>?v=<?= filemtime(FCPATH . $hdrPic) ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                <?php else: ?>
+                  <?= strtoupper(substr($userName !== '' ? $userName : 'User', 0, 1)) ?>
+                <?php endif; ?>
               </span>
               <div>
                 <strong><?= htmlspecialchars(is_array($userName) ? 'User' : (string) $userName, ENT_QUOTES, 'UTF-8') ?></strong><br>
                 <small><?= strtoupper($roleLabel) ?></small>
               </div>
-            </div>
+            </a>
           </div>
         </header>
 
@@ -111,6 +119,232 @@
   }());
   </script>
 
+  <!-- ── Warehouse address picker (shared between equipment & tools forms) ── -->
+  <script>
+  window.whCsrfTokenName = '<?= csrf_token() ?>';
+
+  window.initWarehousePicker = function (input, card) {
+    var wrap = input.closest('.unit-warehouse-input-wrap');
+    if (!wrap || wrap.dataset.pickerInit) return;
+    wrap.dataset.pickerInit = '1';
+
+    var picker = document.createElement('div');
+    picker.className = 'wh-picker';
+    wrap.appendChild(picker);
+
+    var nameRow = null;
+
+    function getSaved()  { return window.whSavedLocations  || []; }
+    function getOther()  {
+      var savedAddrs = getSaved().map(function (l) { return (l.address || '').toLowerCase(); });
+      return (window.whOtherLocations || []).filter(function (a) {
+        return a.trim() !== '' && savedAddrs.indexOf(a.toLowerCase()) === -1;
+      });
+    }
+
+    function esc(str) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(str || '')));
+      return d.innerHTML;
+    }
+
+    function renderPicker(filter) {
+      picker.innerHTML = '';
+      filter = (filter || '').toLowerCase().trim();
+
+      var saved = getSaved().filter(function (l) {
+        return !filter || (l.name || '').toLowerCase().includes(filter) || (l.address || '').toLowerCase().includes(filter);
+      });
+      var other = getOther().filter(function (a) {
+        return !filter || a.toLowerCase().includes(filter);
+      });
+      var curAddr   = (input.value || '').trim();
+      var alreadySaved = getSaved().some(function (l) {
+        return (l.address || '').toLowerCase() === curAddr.toLowerCase();
+      });
+
+      if (saved.length > 0) {
+        var lbl = document.createElement('div');
+        lbl.className = 'wh-picker-section-label';
+        lbl.textContent = 'Saved Locations';
+        picker.appendChild(lbl);
+
+        saved.forEach(function (loc) {
+          var item = document.createElement('div');
+          item.className = 'wh-picker-item';
+          item.innerHTML =
+            '<span class="material-symbols-outlined wh-picker-pin">push_pin</span>' +
+            '<div class="wh-picker-info">' +
+              '<span class="wh-picker-name">'       + esc(loc.name || loc.address) + '</span>' +
+              '<span class="wh-picker-addr-small">' + esc(loc.address)             + '</span>' +
+            '</div>' +
+            '<button type="button" class="wh-picker-remove" title="Remove">&#10005;</button>';
+
+          item.querySelector('.wh-picker-info').addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            input.value = loc.address;
+            if (card) card.dataset.warehouseValue = loc.address;
+            closePicker();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+          item.querySelector('.wh-picker-remove').addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            doDelete(loc.address);
+          });
+          picker.appendChild(item);
+        });
+      }
+
+      if (other.length > 0) {
+        if (saved.length > 0) {
+          var div = document.createElement('hr');
+          div.className = 'wh-picker-divider';
+          picker.appendChild(div);
+        }
+        var lbl2 = document.createElement('div');
+        lbl2.className = 'wh-picker-section-label';
+        lbl2.textContent = 'Other Warehouse Locations';
+        picker.appendChild(lbl2);
+
+        other.forEach(function (addr) {
+          var item = document.createElement('div');
+          item.className = 'wh-picker-item';
+          item.innerHTML =
+            '<span class="material-symbols-outlined wh-picker-other-icon">warehouse</span>' +
+            '<span class="wh-picker-addr-small" style="flex:1;min-width:0;color:#444;">' + esc(addr) + '</span>';
+          item.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            input.value = addr;
+            if (card) card.dataset.warehouseValue = addr;
+            closePicker();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+          picker.appendChild(item);
+        });
+      }
+
+      if (saved.length === 0 && other.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'wh-picker-empty';
+        empty.textContent = filter ? 'No matches found' : 'No saved locations yet — type an address below, then save it';
+        picker.appendChild(empty);
+      }
+
+      if (curAddr && !alreadySaved) {
+        var saveRow = document.createElement('div');
+        saveRow.className = 'wh-picker-save-row';
+        var saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'wh-picker-save-btn';
+        var preview = curAddr.length > 38 ? curAddr.slice(0, 38) + '…' : curAddr;
+        saveBtn.textContent = '+ Save "' + preview + '" as…';
+        saveBtn.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          showNameRow(curAddr, saveRow);
+        });
+        saveRow.appendChild(saveBtn);
+        picker.appendChild(saveRow);
+      }
+    }
+
+    function showNameRow(address, saveRow) {
+      if (nameRow) return;
+      nameRow = document.createElement('div');
+      nameRow.className = 'wh-picker-name-row';
+      var ni  = document.createElement('input');
+      ni.type = 'text';
+      ni.className = 'wh-picker-name-input';
+      ni.placeholder = 'Nickname, e.g. "Main Warehouse"';
+      var ok  = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'wh-picker-name-confirm';
+      ok.textContent = 'Save';
+      var cn  = document.createElement('button');
+      cn.type = 'button';
+      cn.className = 'wh-picker-name-cancel';
+      cn.textContent = '×';
+
+      nameRow.appendChild(ni);
+      nameRow.appendChild(ok);
+      nameRow.appendChild(cn);
+      picker.insertBefore(nameRow, saveRow);
+      ni.focus();
+
+      ok.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        doSave(ni.value.trim() || address, address);
+      });
+      cn.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        nameRow.remove();
+        nameRow = null;
+      });
+      ni.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter')  { ev.preventDefault(); ok.dispatchEvent(new MouseEvent('mousedown')); }
+        if (ev.key === 'Escape') { ev.preventDefault(); cn.dispatchEvent(new MouseEvent('mousedown')); }
+      });
+    }
+
+    function csrfFd() {
+      var fd = new FormData();
+      var n  = window.whCsrfTokenName;
+      var el = n ? document.querySelector('input[name="' + n + '"]') : null;
+      if (el) fd.append(n, el.value);
+      return fd;
+    }
+
+    function doSave(name, address) {
+      var fd = csrfFd();
+      fd.append('name', name);
+      fd.append('address', address);
+      fetch(window.whSaveUrl || '', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.success && d.saved_locations) {
+            window.whSavedLocations = d.saved_locations;
+            if (nameRow) { nameRow.remove(); nameRow = null; }
+            renderPicker(input.value);
+          }
+        })
+        .catch(function () {});
+    }
+
+    function doDelete(address) {
+      var fd = csrfFd();
+      fd.append('address', address);
+      fetch(window.whDeleteUrl || '', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.success) {
+            window.whSavedLocations = d.saved_locations || [];
+            renderPicker(input.value);
+          }
+        })
+        .catch(function () {});
+    }
+
+    function openPicker() {
+      renderPicker(input.value);
+      picker.classList.add('open');
+    }
+
+    function closePicker() {
+      picker.classList.remove('open');
+      if (nameRow) { nameRow.remove(); nameRow = null; }
+    }
+
+    input.addEventListener('focus', openPicker);
+    input.addEventListener('input', function () {
+      if (!picker.classList.contains('open')) picker.classList.add('open');
+      renderPicker(this.value);
+    });
+    input.addEventListener('blur', function () {
+      setTimeout(closePicker, 150);
+    });
+  };
+  </script>
+
   <!-- ── Interactive pagination ── -->
   <script>
   (function () {
@@ -139,9 +373,9 @@
       var p = new URLSearchParams(window.location.search);
       var target = null;
 
-      if (p.has('eq_page'))    target = document.getElementById('eq-section');
-      if (p.has('tools_page')) target = document.getElementById('tools-section');
-      if (p.has('mp_page'))    target = document.getElementById('mp-section');
+      if (p.has('page_equipment')) target = document.getElementById('eq-section');
+      if (p.has('page_tools'))    target = document.getElementById('tools-section');
+      if (p.has('page_manpower')) target = document.getElementById('mp-section');
       // Staff and Projects both use 'page' — pick the one present on the page
       if (!target && p.has('page')) {
         target = document.getElementById('staff-section') ||

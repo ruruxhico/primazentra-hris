@@ -22,6 +22,11 @@ class Projects extends BaseController
 
     public function index()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+
+        helper('access');
+        if (!pz_can('view_projects')) return redirect()->to('dashboard');
+
         try {
             $projects = [];
 
@@ -33,6 +38,14 @@ class Projects extends BaseController
                 $projectData = $doc->data();
                 $projectData['id'] = $doc->id();
                 $projects[] = $this->enrichProjectForView($projectData);
+            }
+
+            // PM: show only their own projects by default; toggle via ?view_all=1
+            $uid       = (string) session()->get('userId');
+            $isViewAll = trim((string)($this->request->getGet('view_all') ?? '')) === '1';
+            if (pz_is('Project Manager') && !$isViewAll) {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    ($p['pm_id_normalized'] ?? '') === $uid));
             }
 
             // â€” Build PM / SE option lists from actual project data â€”
@@ -53,12 +66,21 @@ class Projects extends BaseController
             asort($pmOptions);
             asort($seOptions);
 
+            // â€” Build client options from all projects (before filtering) â€”
+            $clientOptions = [];
+            foreach ($projects as $p) {
+                $cn = strtoupper(trim((string)($p['client_name'] ?? '')));
+                if ($cn !== '') $clientOptions[$cn] = $cn;
+            }
+            ksort($clientOptions);
+
             // â€” Read filters from GET â€”
             $filterStatus = trim((string) ($this->request->getGet('status') ?? ''));
             $filterRegion = trim((string) ($this->request->getGet('region') ?? ''));
             $filterPm     = trim((string) ($this->request->getGet('pm_id') ?? ''));
             $filterSe     = trim((string) ($this->request->getGet('se_id') ?? ''));
             $filterType   = trim((string) ($this->request->getGet('type') ?? ''));
+            $filterClient = trim((string) ($this->request->getGet('client') ?? ''));
             $filterSort   = trim((string) ($this->request->getGet('sort') ?? ''));
 
             // â€” Apply filters â€”
@@ -81,6 +103,10 @@ class Projects extends BaseController
             if ($filterType !== '') {
                 $projects = array_values(array_filter($projects, fn($p) =>
                     strcasecmp((string) ($p['project_type'] ?? ''), $filterType) === 0));
+            }
+            if ($filterClient !== '') {
+                $projects = array_values(array_filter($projects, fn($p) =>
+                    strcasecmp(trim((string)($p['client_name'] ?? '')), $filterClient) === 0));
             }
 
             // â€” Sort â€”
@@ -115,17 +141,21 @@ class Projects extends BaseController
                 'pagerOffset'     => $offset,
                 'pmOptions'       => $pmOptions,
                 'seOptions'       => $seOptions,
+                'clientOptions'   => $clientOptions,
                 'activeFilters'   => [
                     'status' => $filterStatus,
                     'region' => $filterRegion,
                     'pm_id'  => $filterPm,
                     'se_id'  => $filterSe,
                     'type'   => $filterType,
+                    'client' => $filterClient,
                     'sort'   => $filterSort,
                 ],
                 'recentlyDeleted' => $recentlyDeleted,
                 'userName'        => session()->get('userName') ?? 'User',
                 'role'            => session()->get('role') ?? 'Staff',
+                'isPm'            => pz_is('Project Manager'),
+                'isViewAll'       => $isViewAll,
             ];
 
             return view('projects/projects_view', $data);
@@ -152,6 +182,10 @@ class Projects extends BaseController
 
     public function create()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('create_project')) return redirect()->to('dashboard')->with('error', 'Access denied.');
+
         if (strtolower($this->request->getMethod()) === 'post') {
             // validate input using Config\Validation 'projects' group
             if (! $this->validate('projects')) {
@@ -194,6 +228,11 @@ class Projects extends BaseController
                     $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
                 }
 
+                if ($this->request->getPost('add_resources_now')) {
+                    return redirect()->to('projects/' . $projectId . '/resources')
+                        ->with('success', 'Project created! Now assign resources.');
+                }
+
                 return redirect()->to('projects')->with('success', 'Project created successfully!');
             } catch (\Exception $e) {
                 log_message('error', 'Projects::create - ' . $e->getMessage());
@@ -205,9 +244,10 @@ class Projects extends BaseController
             'pageTitle' => 'Add Project',
             'activePage' => 'projects',
             'project' => [],
-            'phases' => [],   // JS auto-fills from project type selection
+            'phases' => [],
             'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
             'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
+            'existingClients' => $this->getExistingClientNames(),
             'userName' => session()->get('userName') ?? 'User',
             'role' => session()->get('role') ?? 'Staff',
             'googleMapsBrowserKey' => (new GoogleMaps())->browserKey,
@@ -216,6 +256,10 @@ class Projects extends BaseController
 
     public function update($id)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_project')) return redirect()->to('projects')->with('error', 'Access denied — only Administrators and Operations Managers may edit projects.');
+
         try {
                 if (strtolower($this->request->getMethod()) === 'post') {
                 // validate using Config\Validation 'projects' group
@@ -231,6 +275,12 @@ class Projects extends BaseController
                 $projectData = $this->buildProjectPayload();
                 $projectData['created_at'] = $existing['created_at'] ?? time();
                 $projectData['updated_at'] = time();
+
+                // Preserve terminal statuses set outside the form
+                $existingStatus = (string)($existing['status'] ?? '');
+                if (in_array($existingStatus, ['Completed', 'Archived'], true)) {
+                    $projectData['status'] = $existingStatus;
+                }
 
                 // If user did not opt to add/update tasks now, preserve existing overall progress
                 $addTasksNow = (bool) $this->request->getPost('add_tasks_now');
@@ -276,6 +326,7 @@ class Projects extends BaseController
                 'phases' => $this->getProjectPhases($id),
                 'projectManagers' => $this->usersModel->getUsersByRole(['PM', 'Project Manager']),
                 'siteEngineers' => $this->usersModel->getUsersByRole(['SE', 'Site Engineer']),
+                'existingClients' => $this->getExistingClientNames(),
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'Staff',
                 'googleMapsBrowserKey' => (new GoogleMaps())->browserKey,
@@ -288,6 +339,15 @@ class Projects extends BaseController
 
     public function delete($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('delete_project')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+            }
+            return redirect()->to('projects')->with('error', 'Access denied.');
+        }
+
         // Support POST delete via AJAX and GET fallback with segment
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
@@ -450,12 +510,348 @@ class Projects extends BaseController
         }
     }
 
+    // ── Project Resources ─────────────────────────────────────────────────
+
+    public function resources(string $id)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+
+        try {
+            $project = $this->getProjectById($id);
+            if (!$project) return redirect()->to('projects')->with('error', 'Project not found');
+
+            $db            = $this->firestore->getDb();
+            $manpowerModel = new \App\Models\Model_Manpower();
+            $resourceModel = new \App\Models\Model_Resources();
+
+            // ── Manpower ──
+            $allManpower        = [];
+            $assignedManpower   = [];
+            $assignedManpowerIds = [];
+
+            foreach ($manpowerModel->getAllManpower() as $m) {
+                $mpId  = $m['id'];
+                $fn    = trim((string)($m['first_name'] ?? ''));
+                $ln    = trim((string)($m['last_name']  ?? ''));
+                $name  = $fn . ($fn && $ln ? ' ' : '') . $ln;
+                $allManpower[] = [
+                    'id'             => $mpId,
+                    'first_name'     => $fn,
+                    'last_name'      => $ln,
+                    'name'           => $name,
+                    'role'           => $m['role'] ?? ($m['manpower_details']['role'] ?? ''),
+                    'specialization' => $m['specialization'] ?? ($m['manpower_details']['specialization'] ?? ''),
+                    'skills'         => $m['skills'] ?? ($m['manpower_details']['skills'] ?? []),
+                    'status'         => $m['status'] ?? 'Available',
+                    'current_site'   => $m['current_site_deployment'] ?? ($m['current_site'] ?? ''),
+                ];
+                $apid = (string)($m['assigned_project_id'] ?? '');
+                if ($apid === $id) {
+                    $assignedManpower[]          = ['name' => $name];
+                    $assignedManpowerIds[$mpId]  = 'mp:' . $mpId;
+                }
+            }
+
+            // ── Equipment & Tools ──
+            $allEquipment     = [];
+            $allTools         = [];
+            $resourceItemStats = [];
+            $assignedEqGroups  = [];
+
+            foreach ($resourceModel->getAllResources() as $res) {
+                $resId    = $res['id'];
+                $resName  = $res['name'] ?? '';
+                $category = $res['category'] ?? '';
+
+                $total         = 0;
+                $available     = 0;
+                $assignedCount = 0;
+
+                foreach ($resourceModel->getResourceItems($resId) as $item) {
+                    $total++;
+                    $status = $item['status'] ?? 'Available';
+                    if (in_array($status, ['Available', 'In-Storage'], true)) $available++;
+                    $apid = $item['assigned_project_id'] ?? null;
+                    $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $apid->id()
+                        : (string)($apid ?? '');
+                    if ($itemPid === $id) $assignedCount++;
+                }
+
+                $resourceItemStats[$resId] = ['total' => $total, 'available' => $available, 'assigned' => $assignedCount];
+                $entry = ['id' => $resId, 'name' => $resName];
+
+                if ($category === 'Tools') {
+                    $allTools[] = $entry;
+                } else {
+                    $allEquipment[] = $entry;
+                }
+
+                if ($assignedCount > 0) {
+                    $assignedEqGroups[] = ['name' => $resName, 'count' => $assignedCount];
+                }
+            }
+
+            return view('projects/project_resources', [
+                'pageTitle'           => 'Project Resources — ' . strtoupper($project['project_name'] ?? ''),
+                'activePage'          => 'projects',
+                'userName'            => session()->get('userName') ?? 'User',
+                'role'                => session()->get('role') ?? 'Staff',
+                'projectId'           => $id,
+                'project'             => $project,
+                'allManpower'         => $allManpower,
+                'allEquipment'        => $allEquipment,
+                'allTools'            => $allTools,
+                'assignedManpower'    => $assignedManpower,
+                'assignedEqGroups'    => $assignedEqGroups,
+                'assignedManpowerIds' => $assignedManpowerIds,
+                'resourceItemStats'   => $resourceItemStats,
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::resources - ' . $e->getMessage());
+            return redirect()->to('projects')->with('error', 'Failed to load resources');
+        }
+    }
+
+    public function assignResource(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['success' => false, 'message' => 'Unauthenticated']);
+        }
+
+        $type   = trim((string)($this->request->getPost('type')    ?? ''));
+        $refId  = trim((string)($this->request->getPost('ref_id')  ?? ''));
+        $unitId = trim((string)($this->request->getPost('unit_id') ?? ''));
+
+        try {
+            $db = $this->firestore->getDb();
+
+            if ($type === 'manpower') {
+                $db->collection('manpower')->document($refId)->set([
+                    'assigned_project_id' => $id,
+                    'status'              => 'Deployed',
+                ], ['merge' => true]);
+            } else {
+                $db->collection('resource')->document($refId)->collection('items')->document($unitId)->set([
+                    'assigned_project_id' => $db->collection('project')->document($id),
+                    'status'              => 'In-Use',
+                ], ['merge' => true]);
+            }
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::assignResource - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign resource']);
+        }
+    }
+
+    public function unassignResource(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['success' => false, 'message' => 'Unauthenticated']);
+        }
+
+        $assignmentId = trim((string)($this->request->getPost('assignment_id') ?? ''));
+
+        try {
+            $db = $this->firestore->getDb();
+
+            if (str_starts_with($assignmentId, 'mp:')) {
+                $mpId = substr($assignmentId, 3);
+                $db->collection('manpower')->document($mpId)->set([
+                    'assigned_project_id' => null,
+                    'status'              => 'Available',
+                ], ['merge' => true]);
+            } elseif (str_starts_with($assignmentId, 'unit:')) {
+                [, $resId, $unitId] = explode(':', $assignmentId, 3);
+                $db->collection('resource')->document($resId)->collection('items')->document($unitId)->set([
+                    'assigned_project_id' => null,
+                    'status'              => 'In-Storage',
+                ], ['merge' => true]);
+            } else {
+                return $this->response->setJSON(['success' => false, 'message' => 'Invalid assignment ID']);
+            }
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::unassignResource - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to unassign']);
+        }
+    }
+
+    public function resourceUnits(string $id, string $resourceId)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['success' => false]);
+        }
+
+        try {
+            $resourceModel = new \App\Models\Model_Resources();
+            $items = $resourceModel->getResourceItems($resourceId);
+
+            $out = [];
+            foreach ($items as $item) {
+                $unitId = $item['__id'] ?? $item['id'] ?? '';
+                $apid   = $item['assigned_project_id'] ?? null;
+                $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $apid->id()
+                    : (string)($apid ?? '');
+                $isHere  = ($itemPid === $id);
+
+                $out[] = [
+                    'id'                      => $unitId,
+                    'serial_number'           => $item['serial_number'] ?? ($item['unit_name'] ?? $unitId),
+                    'status'                  => $item['status'] ?? 'Unknown',
+                    'assigned_to_this_project' => $isHere,
+                    'assignment_id'            => $isHere ? 'unit:' . $resourceId . ':' . $unitId : null,
+                ];
+            }
+
+            return $this->response->setJSON(['success' => true, 'items' => $out]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::resourceUnits - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to load units']);
+        }
+    }
+
+    public function bulkAssignManpower(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['success' => false, 'message' => 'Unauthenticated']);
+        }
+
+        $role   = trim((string)($this->request->getPost('role')           ?? ''));
+        $spec   = trim((string)($this->request->getPost('specialization') ?? ''));
+        $skill  = trim((string)($this->request->getPost('skill')          ?? ''));
+        $qty    = max(1, (int)($this->request->getPost('quantity')        ?? 1));
+
+        try {
+            $db            = $this->firestore->getDb();
+            $manpowerModel = new \App\Models\Model_Manpower();
+            $candidates    = [];
+
+            foreach ($manpowerModel->getAllManpower() as $m) {
+                $mpStatus = $m['status'] ?? 'Available';
+                if ($mpStatus !== 'Available') continue;
+
+                $apid = (string)($m['assigned_project_id'] ?? '');
+                if ($apid !== '' && $apid !== 'null') continue;
+
+                if ($role !== '') {
+                    $mpRole = strtolower($m['role'] ?? ($m['manpower_details']['role'] ?? ''));
+                    if ($mpRole !== strtolower($role)) continue;
+                }
+                if ($spec !== '') {
+                    $mpSpec = strtolower($m['specialization'] ?? ($m['manpower_details']['specialization'] ?? ''));
+                    if ($mpSpec !== strtolower($spec)) continue;
+                }
+                if ($skill !== '') {
+                    $mpSkills = (array)($m['skills'] ?? ($m['manpower_details']['skills'] ?? []));
+                    $found = false;
+                    foreach ($mpSkills as $s) {
+                        if (stripos((string)$s, $skill) !== false) { $found = true; break; }
+                    }
+                    if (!$found) continue;
+                }
+
+                $candidates[] = $m['id'];
+            }
+
+            if (empty($candidates)) {
+                return $this->response->setJSON(['success' => false, 'message' => 'No available workers match the selected filters.']);
+            }
+
+            shuffle($candidates);
+            $toAssign = array_slice($candidates, 0, $qty);
+
+            foreach ($toAssign as $mpId) {
+                $db->collection('manpower')->document($mpId)->set([
+                    'assigned_project_id' => $id,
+                    'status'              => 'Deployed',
+                ], ['merge' => true]);
+            }
+
+            return $this->response->setJSON(['success' => true, 'assigned' => count($toAssign)]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::bulkAssignManpower - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign manpower']);
+        }
+    }
+
+    public function bulkAssignEquipment(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['success' => false, 'message' => 'Unauthenticated']);
+        }
+
+        $resourceId = trim((string)($this->request->getPost('resource_id') ?? ''));
+        if ($resourceId === '') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Missing resource ID']);
+        }
+
+        $brand    = strtolower(trim((string)($this->request->getPost('brand')    ?? '')));
+        $quantity = max(1, (int)($this->request->getPost('quantity') ?? 9999));
+
+        try {
+            $db            = $this->firestore->getDb();
+            $resourceModel = new \App\Models\Model_Resources();
+            $items         = $resourceModel->getResourceItems($resourceId);
+            $assigned      = 0;
+
+            foreach ($items as $item) {
+                if ($assigned >= $quantity) break;
+
+                $status = $item['status'] ?? 'Available';
+                if (!in_array($status, ['Available', 'In-Storage'], true)) continue;
+
+                $apid = $item['assigned_project_id'] ?? null;
+                $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $apid->id()
+                    : (string)($apid ?? '');
+                if ($itemPid !== '') continue;
+
+                if ($brand !== '') {
+                    $itemBrand = strtolower((string)($item['brand'] ?? $item['make'] ?? $item['manufacturer'] ?? ''));
+                    if ($itemBrand === '' || stripos($itemBrand, $brand) === false) continue;
+                }
+
+                $unitId = $item['__id'] ?? $item['id'] ?? '';
+                if ($unitId === '') continue;
+
+                $db->collection('resource')->document($resourceId)->collection('items')->document($unitId)->set([
+                    'assigned_project_id' => $db->collection('project')->document($id),
+                    'status'              => 'In-Use',
+                ], ['merge' => true]);
+                $assigned++;
+            }
+
+            if ($assigned === 0) {
+                return $this->response->setJSON(['success' => false, 'message' => 'No units available at warehouse for this model.']);
+            }
+
+            return $this->response->setJSON(['success' => true, 'assigned' => $assigned]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::bulkAssignEquipment - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign equipment']);
+        }
+    }
+
     private function buildProjectPayload(): array
     {
         $projectName = trim((string) $this->request->getPost('project_name'));
         $projectType = (string) $this->request->getPost('project_type');
-        $status = (string) ($this->request->getPost('status') ?: 'Planned');
         $budget = (float) ($this->request->getPost('budget') ?: 0);
+
+        $rawStart = $this->normalizeDateValue($this->request->getPost('start_date'));
+        $rawEnd   = $this->normalizeDateValue($this->request->getPost('end_date'));
+        $today    = date('Y-m-d');
+        if ($rawStart === '' || $rawStart > $today) {
+            $status = 'Planned';
+        } elseif ($rawEnd !== '' && $rawEnd < $today) {
+            $status = 'Past Deadline';
+        } else {
+            $status = 'On-going';
+        }
 
         $tasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
         $overallProgress = $this->calculateOverallProgress($tasks);
@@ -987,6 +1383,18 @@ class Projects extends BaseController
             'completion_percent' => '',
             'status' => 'Pending'
         ]];
+    }
+
+    private function getExistingClientNames(): array
+    {
+        $clients = [];
+        foreach ($this->firestore->getDb()->collection('project')->documents() as $doc) {
+            if (!$doc->exists()) continue;
+            $cn = strtoupper(trim((string)($doc->data()['client_name'] ?? '')));
+            if ($cn !== '') $clients[$cn] = true;
+        }
+        ksort($clients);
+        return array_keys($clients);
     }
 
     private function resolveRegion(string $address): string

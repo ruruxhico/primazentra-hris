@@ -101,9 +101,11 @@
         ▼ FILTER<?php if ($activeCount > 0): ?><span class="filter-badge"><?= $activeCount ?></span><?php endif; ?>
     </button>
 
+    <?php if (pz_can('create_staff')): ?>
     <a href="<?= base_url('staff/create') ?>" class="btn btn-success">
         + ADD
     </a>
+    <?php endif; ?>
 
     <button class="btn btn-export" data-module="staff" onclick="openStaffExportModal()">
         ⬆ EXPORT

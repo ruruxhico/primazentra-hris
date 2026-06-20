@@ -19,6 +19,10 @@ class Staff extends BaseController
 
     public function index()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('view_staff')) return redirect()->to('dashboard');
+
         try {
             // Fetch staff from Firestore, order by created_at ascending so new records appear at the bottom
             $db = $this->firestore->getDb();
@@ -149,6 +153,10 @@ class Staff extends BaseController
 
     public function create()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('create_staff')) return redirect()->to('staff')->with('error', 'Only Administrators may create new user accounts.');
+
         if (strtolower($this->request->getMethod()) === 'post') {
             // Validate using named rule group 'staff'
             if (! $this->validate('staff')) {
@@ -226,6 +234,10 @@ class Staff extends BaseController
 
     public function update($id)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_staff')) return redirect()->to('staff')->with('error', 'Access denied.');
+
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
                 // Validate using Config\Validation 'staff' group
@@ -354,6 +366,15 @@ class Staff extends BaseController
 
     public function delete($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_staff')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+            }
+            return redirect()->to('staff')->with('error', 'Access denied.');
+        }
+
         // If this is an AJAX/POST request, expect the ID in POST and return JSON
         if (strtolower($this->request->getMethod()) === 'post') {
             try {

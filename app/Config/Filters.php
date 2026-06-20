@@ -123,6 +123,8 @@ class Filters extends BaseFilters
                 'staff/*',
                 'users',
                 'users/*',
+                'profile',
+                'profile/*',
             ],
         ],
     ];

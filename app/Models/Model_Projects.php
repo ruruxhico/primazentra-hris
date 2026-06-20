@@ -60,7 +60,7 @@ class Model_Projects extends Model_BaseFirestore
     {
         $db = $this->firestore->getDb();
         $collection = $db->collection($this->collection);
-        $query = $collection->where('status', 'in', ['On-going', 'Planned', 'Completed', 'ON-GOING', 'PLANNED', 'COMPLETED']);
+        $query = $collection->where('status', 'in', ['On-going', 'Planned', 'Completed', 'Past Deadline', 'ON-GOING', 'PLANNED', 'COMPLETED', 'PAST DEADLINE']);
         $documents = $query->documents();
 
         $projects = [];
