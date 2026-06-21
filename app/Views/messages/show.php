@@ -5,11 +5,15 @@
 .msg-show-wrap {
     display:flex; flex-direction:column;
     height:calc(100vh - 120px); min-height:400px;
+    background:#fff; border:1px solid #e2ddd4; border-radius:14px;
+    box-shadow:0 2px 10px rgba(0,0,0,0.08);
+    padding:1.25rem 1.5rem 0;
 }
 
 .msg-chat-hdr {
     display:flex; align-items:center; gap:12px;
     padding-bottom:12px; border-bottom:1px solid #eee; flex-shrink:0;
+    position:relative;
 }
 .msg-back-btn {
     background:none; border:none; cursor:pointer; color:#b8960c;
@@ -18,8 +22,31 @@
 }
 .msg-back-btn:hover { background:#fdf8e1; }
 .msg-back-btn .material-symbols-outlined { font-size:22px; }
-.msg-chat-title { font-size:1rem; font-weight:700; color:#1a1a1a; }
-.msg-chat-members { font-size:.75rem; color:#aaa; margin-top:2px; }
+.msg-chat-title { font-size:1.1rem; font-weight:700; color:#1a1a1a; }
+
+.msg-hdr-info-btn {
+    flex-shrink:0; background:none; border:none; cursor:pointer;
+    color:#b8960c; padding:4px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .12s;
+}
+.msg-hdr-info-btn:hover { background:#f0ead8; }
+.msg-hdr-info-btn .material-symbols-outlined { font-size:20px; font-variation-settings:'FILL' 1; }
+
+.msg-hdr-pop {
+    display:none; position:absolute; right:0; top:calc(100% + 8px);
+    background:#fff; border:1px solid #e8d97a; border-radius:10px;
+    padding:10px 14px; min-width:180px; max-width:260px;
+    box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:200;
+    font-size:.88rem; color:#333;
+}
+.msg-hdr-pop.open { display:block; }
+.msg-hdr-pop-title {
+    font-weight:700; font-size:.82rem; color:#b8960c;
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;
+}
+.msg-hdr-pop ul { margin:0; padding:0 0 0 14px; }
+.msg-hdr-pop li { margin-bottom:3px; }
 
 .msg-thread {
     flex:1; overflow-y:auto; padding:16px 4px;
@@ -40,10 +67,10 @@
 .msg-bubble-wrap { max-width:72%; display:flex; flex-direction:column; }
 .msg-bubble-row.mine .msg-bubble-wrap { align-items:flex-end; }
 
-.msg-sender-label { font-size:.7rem; color:#aaa; margin-bottom:3px; padding:0 4px; }
+.msg-sender-label { font-size:.78rem; color:#aaa; margin-bottom:3px; padding:0 4px; }
 
 .msg-bubble {
-    padding:9px 14px; border-radius:16px; font-size:.88rem;
+    padding:9px 14px; border-radius:16px; font-size:.95rem;
     line-height:1.45; word-break:break-word;
     background:#f0f0f0; color:#222; border-bottom-left-radius:4px;
 }
@@ -64,7 +91,7 @@
 .msg-file-link .material-symbols-outlined { font-size:20px; }
 .msg-bubble-row.mine .msg-file-link { color:#fff; }
 
-.msg-time { font-size:.68rem; color:#bbb; margin-top:3px; padding:0 4px; }
+.msg-time { font-size:.75rem; color:#bbb; margin-top:3px; padding:0 4px; }
 .msg-bubble-row.mine .msg-time { text-align:right; }
 
 .msg-date-div {
@@ -85,21 +112,28 @@
 #threadLoading { text-align:center; padding:40px; color:#aaa; font-size:.9rem; }
 
 /* Compose */
-.msg-compose-area { flex-shrink:0; border-top:1px solid #eee; padding-top:10px; }
+.msg-compose-area { flex-shrink:0; border-top:1px solid #eee; padding-top:10px; padding-bottom:14px; }
 
-.msg-attach-preview {
-    display:none; align-items:center; gap:10px;
-    background:#fdf8e1; border:1px solid #e8d97a; border-radius:8px;
-    padding:8px 12px; margin-bottom:8px; font-size:.83rem;
+/* Multi-file chip row */
+.msg-chips-row {
+    display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px;
 }
-.msg-attach-preview.visible { display:flex; }
-.msg-attach-preview img { max-height:60px; border-radius:6px; }
-.msg-attach-preview .att-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555; }
-.msg-remove-att {
+.msg-att-chip {
+    display:flex; align-items:center; gap:5px;
+    background:#fdf8e1; border:1px solid #e8d97a; border-radius:20px;
+    padding:4px 8px 4px 5px; font-size:.77rem; max-width:210px;
+}
+.att-chip-img {
+    width:30px; height:30px; border-radius:5px; object-fit:cover; flex-shrink:0;
+}
+.att-chip-icon { font-size:20px; color:#b8960c; flex-shrink:0; }
+.att-chip-name {
+    flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555; max-width:130px;
+}
+.att-chip-rm {
     background:none; border:none; cursor:pointer; color:#c00;
-    display:flex; align-items:center; padding:2px;
+    font-size:17px; line-height:1; padding:0 2px; flex-shrink:0;
 }
-.msg-remove-att .material-symbols-outlined { font-size:18px; }
 
 .msg-compose {
     display:flex; align-items:flex-end; gap:8px;
@@ -115,7 +149,7 @@
 
 .msg-compose textarea {
     flex:1; resize:none; border:1.5px solid #ddd; border-radius:10px;
-    padding:10px 12px; font-size:.88rem; outline:none;
+    padding:10px 12px; font-size:.95rem; outline:none;
     line-height:1.4; max-height:120px; overflow-y:auto;
     transition:border-color .15s; font-family:inherit;
 }
@@ -170,7 +204,13 @@
         </button>
         <div style="flex:1; min-width:0">
             <div class="msg-chat-title" id="chatTitle">Loading…</div>
-            <div class="msg-chat-members" id="chatMembers"></div>
+        </div>
+        <button class="msg-hdr-info-btn" id="hdrInfoBtn" title="View members">
+            <span class="material-symbols-outlined">info</span>
+        </button>
+        <div class="msg-hdr-pop" id="hdrPop">
+            <div class="msg-hdr-pop-title">Members</div>
+            <ul id="hdrMemberList"></ul>
         </div>
     </div>
 
@@ -179,15 +219,10 @@
     </div>
 
     <div class="msg-compose-area">
-        <div class="msg-attach-preview" id="attachPreview">
-            <span id="attThumb"></span>
-            <span class="att-name" id="attName"></span>
-            <button class="msg-remove-att" id="removeAtt" aria-label="Remove">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-        </div>
+        <div class="msg-chips-row" id="attachChips"></div>
         <div class="msg-compose">
-            <input type="file" id="fileInput" style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
+            <input type="file" id="fileInput" style="display:none" multiple
+                   accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip">
             <button class="msg-attach-btn" id="attachBtn" aria-label="Attach file">
                 <span class="material-symbols-outlined">attach_file</span>
             </button>
@@ -212,17 +247,14 @@
     var _myUid  = '<?= esc(session()->get('userId') ?? '') ?>';
     var _known  = {};
     var _atBot  = true;
-    var _selectedFile = null;
+    var _selectedFiles = [];   // array of File objects
 
-    var thread     = document.getElementById('msgThread');
-    var input      = document.getElementById('msgInput');
-    var sendBtn    = document.getElementById('sendBtn');
-    var fileInput  = document.getElementById('fileInput');
-    var attachBtn  = document.getElementById('attachBtn');
-    var preview    = document.getElementById('attachPreview');
-    var attThumb   = document.getElementById('attThumb');
-    var attName    = document.getElementById('attName');
-    var removeAtt  = document.getElementById('removeAtt');
+    var thread    = document.getElementById('msgThread');
+    var input     = document.getElementById('msgInput');
+    var sendBtn   = document.getElementById('sendBtn');
+    var fileInput = document.getElementById('fileInput');
+    var attachBtn = document.getElementById('attachBtn');
+    var chipsRow  = document.getElementById('attachChips');
 
     function h(s) {
         var d = document.createElement('div');
@@ -356,9 +388,13 @@
 
         if (initial && chat) {
             document.getElementById('chatTitle').textContent = chat.project_name || 'Project Chat';
-            var names = Object.values(chat.member_names || {});
-            document.getElementById('chatMembers').textContent =
-                names.length ? names.join(', ') : '';
+            var names = Object.values(chat.member_names || {}).filter(Boolean);
+            var list  = document.getElementById('hdrMemberList');
+            if (list) {
+                list.innerHTML = names.length
+                    ? names.map(function (n) { return '<li>' + h(n) + '</li>'; }).join('')
+                    : '<li style="color:#aaa">No member info</li>';
+            }
         }
     }
 
@@ -384,31 +420,67 @@
 
     // ── File attach ────────────────────────────────────────────────────────
 
-    function setSelectedFile(f) {
-        _selectedFile = f;
-        attName.textContent = f.name;
-        attThumb.innerHTML = '';
-        if (f.type.startsWith('image/')) {
-            var reader = new FileReader();
-            reader.onload = function (e) {
-                var img = document.createElement('img');
-                img.src = e.target.result;
-                attThumb.appendChild(img);
-            };
-            reader.readAsDataURL(f);
-        } else {
-            attThumb.innerHTML = '<span class="material-symbols-outlined" style="font-size:28px;color:#b8960c">description</span>';
-        }
-        preview.classList.add('visible');
+    function renderChips() {
+        chipsRow.innerHTML = '';
+        _selectedFiles.forEach(function (f, idx) {
+            var chip = document.createElement('div');
+            chip.className = 'msg-att-chip';
+
+            if (f.type.startsWith('image/')) {
+                var reader = new FileReader();
+                (function (el) {
+                    reader.onload = function (e) {
+                        var img = document.createElement('img');
+                        img.className = 'att-chip-img';
+                        img.src = e.target.result;
+                        el.insertBefore(img, el.firstChild);
+                    };
+                })(chip);
+                reader.readAsDataURL(f);
+            } else {
+                var icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined att-chip-icon';
+                icon.textContent = 'description';
+                chip.appendChild(icon);
+            }
+
+            var name = document.createElement('span');
+            name.className = 'att-chip-name';
+            name.textContent = f.name;
+            chip.appendChild(name);
+
+            var rm = document.createElement('button');
+            rm.className = 'att-chip-rm';
+            rm.type = 'button';
+            rm.textContent = '×';
+            rm.setAttribute('aria-label', 'Remove');
+            rm.dataset.idx = idx;
+            rm.addEventListener('click', function () {
+                _selectedFiles.splice(parseInt(this.dataset.idx), 1);
+                if (_selectedFiles.length === 0) fileInput.value = '';
+                renderChips();
+            });
+            chip.appendChild(rm);
+
+            chipsRow.appendChild(chip);
+        });
+    }
+
+    function addFile(f) {
+        _selectedFiles.push(f);
+        renderChips();
     }
 
     attachBtn.addEventListener('click', function () { fileInput.click(); });
 
     fileInput.addEventListener('change', function () {
-        if (fileInput.files[0]) setSelectedFile(fileInput.files[0]);
+        for (var i = 0; i < fileInput.files.length; i++) {
+            addFile(fileInput.files[i]);
+        }
+        fileInput.value = ''; // reset so same file can be re-added
     });
 
-    // Paste image directly into the compose box
+    // Paste image from clipboard into the compose box
     input.addEventListener('paste', function (e) {
         var items = e.clipboardData && e.clipboardData.items;
         if (!items) return;
@@ -417,18 +489,10 @@
                 e.preventDefault();
                 var blob = items[i].getAsFile();
                 var ext  = items[i].type.split('/')[1] || 'png';
-                setSelectedFile(new File([blob], 'pasted-image-' + Date.now() + '.' + ext, { type: items[i].type }));
+                addFile(new File([blob], 'pasted-image-' + Date.now() + '.' + ext, { type: items[i].type }));
                 break;
             }
         }
-    });
-
-    removeAtt.addEventListener('click', function () {
-        _selectedFile = null;
-        fileInput.value = '';
-        preview.classList.remove('visible');
-        attThumb.innerHTML = '';
-        attName.textContent = '';
     });
 
     // ── Toast ──────────────────────────────────────────────────────────────
@@ -453,52 +517,101 @@
 
     // ── Send ───────────────────────────────────────────────────────────────
 
-    function send() {
-        var text = input.value.trim();
-        if (!text && !_selectedFile) return;
-
-        sendBtn.disabled = true;
-
-        var fetchOpts;
-        if (_selectedFile) {
-            // File upload — must use multipart FormData
+    function doSend(file, text) {
+        var opts;
+        if (file) {
             var fd = new FormData();
-            fd.append('text', text);
-            fd.append('file', _selectedFile);
-            fetchOpts = {
+            fd.append('file', file);
+            if (text) fd.append('text', text);
+            opts = {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 body: fd,
             };
         } else {
-            // Text only — use JSON to avoid multipart parsing issues
-            fetchOpts = {
+            opts = {
                 method: 'POST', credentials: 'same-origin',
                 headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: JSON.stringify({ text: text }),
             };
         }
-
-        fetch(_base + 'messages/' + _chatId + '/send', fetchOpts)
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-            if (d.success) {
-                input.value = '';
-                input.style.height = '';
-                removeAtt.click();
-                _atBot = true;
-                load(false);
-            } else {
-                console.error('sendMessage failed:', d);
-                showToast(d.error || 'Failed to send.', 'error');
+        return fetch(_base + 'messages/' + _chatId + '/send', opts).then(function (r) {
+            var status = r.status;
+            if (!r.ok && status !== 400 && status !== 403 && status !== 500) {
+                throw new Error('HTTP ' + status);
             }
-        })
-        .catch(function (err) {
-            console.error('sendMessage error:', err);
-            showToast('Network error. Please try again.', 'error');
-        })
-        .finally(function () { sendBtn.disabled = false; });
+            return r.text().then(function (raw) {
+                try {
+                    var d = JSON.parse(raw);
+                    if (!d.success && !d.error) {
+                        console.warn('[pz-msg] send failed, status=' + status + ', body:', raw);
+                        d.error = 'Server error (HTTP ' + status + ')';
+                    }
+                    return d;
+                } catch (e) {
+                    console.error('[pz-msg] non-JSON response, status=' + status + ':', raw.substring(0, 300));
+                    throw new Error('Non-JSON response (HTTP ' + status + ')');
+                }
+            });
+        });
     }
+
+    async function send() {
+        var text = input.value.trim();
+        if (!text && _selectedFiles.length === 0) return;
+
+        sendBtn.disabled = true;
+        var failed = false;
+        var files  = _selectedFiles.slice(); // snapshot
+
+        try {
+            if (files.length === 0) {
+                // Text-only: one JSON send
+                var d = await doSend(null, text);
+                if (!d.success) { showToast(d.error || 'Failed to send.', 'error'); failed = true; }
+            } else {
+                // Text first (separate bubble), then each file
+                if (text) {
+                    var d = await doSend(null, text);
+                    if (!d.success) { showToast(d.error || 'Failed to send.', 'error'); failed = true; }
+                }
+                for (var i = 0; i < files.length; i++) {
+                    console.log('[pz-msg] sending file:', files[i].name, files[i].size, files[i].type);
+                    var d = await doSend(files[i], '');
+                    console.log('[pz-msg] file send result:', d);
+                    if (!d.success) {
+                        showToast(d.error || 'Failed to send attachment.', 'error');
+                        failed = true;
+                        break;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('[pz-msg] sendMessage error:', err);
+            showToast('Error: ' + err.message, 'error');
+            failed = true;
+        }
+
+        if (!failed) {
+            input.value = '';
+            input.style.height = '';
+            _selectedFiles = [];
+            renderChips();
+        }
+        _atBot = true;
+        load(false);
+        sendBtn.disabled = false;
+    }
+
+    // Header info button
+    document.getElementById('hdrInfoBtn').addEventListener('click', function () {
+        document.getElementById('hdrPop').classList.toggle('open');
+    });
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#hdrInfoBtn') && !e.target.closest('#hdrPop')) {
+            document.getElementById('hdrPop').classList.remove('open');
+        }
+    });
 
     sendBtn.addEventListener('click', send);
     input.addEventListener('keydown', function (e) {

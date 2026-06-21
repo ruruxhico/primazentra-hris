@@ -6,15 +6,13 @@
     $project     = $project     ?? [];
     $projectName = strtoupper($project['project_name'] ?? 'PROJECT');
 
-    // Collect unique roles / specializations for bulk-assign dropdowns
+    // Collect unique roles for bulk-assign dropdown
     $mpRoles = [];
-    $mpSpecs = [];
     foreach (($allManpower ?? []) as $m) {
-        if (!empty($m['role']))           $mpRoles[$m['role']] = true;
-        if (!empty($m['specialization'])) $mpSpecs[$m['specialization']] = true;
+        if (!empty($m['role'])) $mpRoles[$m['role']] = true;
     }
     ksort($mpRoles);
-    ksort($mpSpecs);
+    $mpSpecs = ['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'];
 ?>
 
 <style>
@@ -49,9 +47,10 @@
     gap: 10px; margin-bottom: 4px;
 }
 .pres-assigned-card {
-    background: #fff; border: 1px solid #e5e0d0; border-radius: 10px;
+    background: #fff; border: 1px solid #ddd6c8; border-radius: 10px;
     padding: 14px 18px; margin-bottom: 0;
     display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
 }
 .pres-assigned-icon { color: #C47A0F; font-size: 1.2rem;
     font-variation-settings: 'FILL' 1, 'wght' 600; }
@@ -96,18 +95,45 @@
 
 /* Base card — horizontal (manpower) */
 .pres-res-card {
-    background: #fff; border: 1px solid #e5e0d0; border-radius: 12px;
+    background: #fff; border: 1px solid #ddd6c8; border-radius: 12px;
     padding: 16px 18px; margin-bottom: 0;
     display: flex; align-items: center; gap: 14px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.07);
     transition: border-color .15s, box-shadow .15s;
 }
 .pres-res-card:hover { border-color: #d4c185; box-shadow: 0 2px 8px rgba(140,112,28,.08); }
 .pres-res-info { flex: 1; min-width: 0; }
 .pres-res-name { font-size: 0.95rem; font-weight: 800; color: #2c1f07; }
-.pres-res-sub  { font-size: 0.78rem; color: #999; margin-top: 3px; }
+.pres-res-sub  { font-size: 0.78rem; color: #666; margin-top: 3px; }
 .pres-res-avail { color: #5a8a3c; }
-.pres-res-site { font-size: 0.75rem; color: #bbb; margin-top: 3px; }
+.pres-res-site { font-size: 0.75rem; color: #888; margin-top: 3px; }
 .pres-res-site-here { color: #8C701C; font-weight: 600; }
+
+/* Role badges */
+.pres-role-badge {
+    display: inline-block; font-size: 0.7rem; font-weight: 700;
+    letter-spacing: 0.05em; border-radius: 20px; white-space: nowrap;
+    padding: 2px 9px; margin-top: 4px;
+}
+.pres-role-field-worker { background: #dbeafe; color: #1e40af; }
+.pres-role-foreman      { background: #fef3c7; color: #7c4a00; }
+
+/* Role filter chips */
+.pres-role-filter {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 0.9rem; flex-wrap: wrap;
+}
+.pres-role-chip {
+    padding: 5px 14px; border: 1.5px solid #ddd; border-radius: 20px;
+    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
+    cursor: pointer; background: #fff; color: #666;
+    transition: background .12s, border-color .12s, color .12s;
+    font-family: inherit;
+}
+.pres-role-chip:hover { border-color: #b8960c; color: #7a5c00; }
+.pres-role-chip.active { background: #3a2a0a; border-color: #3a2a0a; color: #fff; }
+.pres-role-chip.active-fw { background: #1e40af; border-color: #1e40af; color: #fff; }
+.pres-role-chip.active-fm { background: #7c4a00; border-color: #7c4a00; color: #fff; }
 .pres-res-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
 /* Column variant — vertical (equipment / tools) */
@@ -294,10 +320,16 @@
             </button>
         </div>
 
+        <div class="pres-role-filter">
+            <button class="pres-role-chip active" id="roleChipAll" data-role="">ALL</button>
+            <button class="pres-role-chip" id="roleChipFW" data-role="FIELD WORKER">FIELD WORKER</button>
+            <button class="pres-role-chip" id="roleChipFM" data-role="FOREMAN">FOREMAN</button>
+        </div>
+
         <?php if (empty($allManpower)): ?>
         <p class="pres-empty">No manpower records found.</p>
         <?php else: ?>
-        <div class="pres-res-grid">
+        <div class="pres-res-grid" id="mpGrid">
         <?php foreach ($allManpower as $m):
             $mpId         = $m['id'];
             $mpName       = strtoupper($m['name'] ?: 'UNNAMED');
@@ -307,11 +339,12 @@
             $isHere       = isset($assignedManpowerIds[$mpId]);
             $assignmentId = $assignedManpowerIds[$mpId] ?? '';
         ?>
-        <div class="pres-res-card">
+        <div class="pres-res-card" data-role="<?= esc($mpRole) ?>">
             <div class="pres-res-info">
                 <div class="pres-res-name"><?= esc($mpName) ?></div>
                 <?php if ($mpRole): ?>
-                <div class="pres-res-sub"><?= esc($mpRole) ?></div>
+                <?php $badgeClass = $mpRole === 'FOREMAN' ? 'pres-role-foreman' : 'pres-role-field-worker'; ?>
+                <span class="pres-role-badge <?= $badgeClass ?>"><?= esc($mpRole) ?></span>
                 <?php endif; ?>
                 <?php if ($isHere): ?>
                     <div class="pres-res-site pres-res-site-here">Assigned to this project</div>
@@ -436,7 +469,7 @@
             <label>Specialization (optional)</label>
             <select class="pres-bulk-select" id="bulkSpec">
                 <option value="">Any specialization</option>
-                <?php foreach (array_keys($mpSpecs) as $s): ?>
+                <?php foreach ($mpSpecs as $s): ?>
                 <option value="<?= esc($s) ?>"><?= esc($s) ?></option>
                 <?php endforeach; ?>
             </select>
@@ -446,6 +479,9 @@
             <label>Skill Needed (optional)</label>
             <select class="pres-bulk-select" id="bulkSkill">
                 <option value="">Any skill</option>
+                <?php foreach (['ELECTRICIAN', 'MASON', 'LABOR/HELPER'] as $sk): ?>
+                <option value="<?= esc($sk) ?>"><?= esc($sk) ?></option>
+                <?php endforeach; ?>
             </select>
         </div>
 
@@ -473,12 +509,6 @@
             <button class="pres-modal-close" data-close="modalBulkEquipment">&times;</button>
         </div>
         <p class="pres-modal-sub" id="bulkEqSub"></p>
-
-        <div class="pres-bulk-field">
-            <label>Brand / Make (optional)</label>
-            <input type="text" class="pres-bulk-input" id="bulkEqBrand"
-                   placeholder="e.g. Makita, Caterpillar — leave blank for any">
-        </div>
 
         <div class="pres-bulk-field">
             <label>Quantity to assign</label>
@@ -514,6 +544,33 @@
     var CSRF_N   = '<?= csrf_token() ?>';
     var CSRF_V   = '<?= csrf_hash() ?>';
     var BASE     = '<?= base_url() ?>';
+
+    /* ── Role filter ── */
+    (function () {
+        var chips    = document.querySelectorAll('.pres-role-chip');
+        var grid     = document.getElementById('mpGrid');
+        var activeRole = '';
+
+        chips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                activeRole = chip.dataset.role;
+                chips.forEach(function (c) {
+                    c.classList.remove('active', 'active-fw', 'active-fm');
+                });
+                if (!activeRole) {
+                    chip.classList.add('active');
+                } else if (activeRole === 'FIELD WORKER') {
+                    chip.classList.add('active-fw');
+                } else {
+                    chip.classList.add('active-fm');
+                }
+                if (!grid) return;
+                grid.querySelectorAll('.pres-res-card').forEach(function (card) {
+                    card.style.display = (!activeRole || card.dataset.role === activeRole) ? '' : 'none';
+                });
+            });
+        });
+    }());
 
     /* ── Tabs ── */
     document.querySelectorAll('.pres-tab').forEach(function (tab) {
@@ -617,7 +674,6 @@
             btn.closest('.pres-res-card').querySelector('.pres-res-name').textContent;
         document.getElementById('bulkEqSub').textContent =
             avail + ' unit(s) available at warehouse';
-        document.getElementById('bulkEqBrand').value = '';
         updateBulkEqDisplay();
         openModal('modalBulkEquipment');
     }
@@ -639,7 +695,6 @@
         btn.disabled = true; btn.textContent = 'Assigning…';
         post(BASE + 'projects/' + PID + '/resources/bulk-assign-equipment', {
             resource_id: bulkEqResourceId,
-            brand:       document.getElementById('bulkEqBrand').value.trim(),
             quantity:    bulkEqQty,
         }).then(function (d) {
             btn.disabled = false;

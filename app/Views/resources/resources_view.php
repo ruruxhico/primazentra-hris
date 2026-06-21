@@ -40,12 +40,14 @@
     display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
     margin: 0 2rem 0.9rem;
 }
+.rv-search-wrap { position: relative; flex: 1; min-width: 200px; }
+.rv-search-wrap .material-symbols-outlined { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; color: #aaa; pointer-events: none; }
 .rv-search {
-    flex: 1; min-width: 160px; padding: 8px 12px;
-    border: 1px solid #ddd; border-radius: 8px;
-    font-size: 0.87rem; font-family: inherit; outline: none;
+    width: 100%; padding: 8px 14px 8px 38px;
+    border: 1.5px solid #ddd; border-radius: 999px;
+    font-size: 0.87rem; font-family: inherit; outline: none; box-sizing: border-box;
 }
-.rv-search:focus { border-color: #C47A0F; }
+.rv-search:focus { border-color: #C47A0F; box-shadow: 0 0 0 3px rgba(196,122,15,.1); }
 .rv-btn {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 7px 14px; border-radius: 8px; font-size: 0.8rem;
@@ -65,8 +67,9 @@
 
 /* ── Filter panel ───────────────────────────────────────────── */
 .rv-filter-panel {
-    background: #fdf8ee; border: 1px solid #e8d9a8; border-radius: 8px;
+    background: #fff; border: 1px solid #e0d4b0; border-radius: 8px;
     padding: 14px 16px 10px; margin: 0 2rem 0.9rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
 }
 .rv-filter-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .rv-filter-row:last-child { margin-bottom: 0; }
@@ -104,7 +107,7 @@
 .mp-status-other     { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
 
 /* ── Recently Deleted ───────────────────────────────────────── */
-.rv-rd-wrap { margin: 1.5rem 2rem 0; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
+.rv-rd-wrap { margin: 1.5rem 2rem 0; border: 1px solid #e0d4b0; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); background: #fff; }
 .rv-rd-toggle {
     width: 100%; display: flex; align-items: center; gap: 0.5rem;
     background: #fdf8ee; border: none; padding: 0.7rem 1rem;
@@ -120,7 +123,7 @@
     font-size: 0.7rem; font-weight: 800; padding: 0.1rem 0.45rem; line-height: 1.4;
 }
 .rv-rd-panel { padding: 0.7rem 1rem; background: #fff; }
-.rv-rd-empty { color: #aaa; font-size: 0.85rem; text-align: center; padding: 0.8rem 0; }
+.rv-rd-empty { color: #888; font-size: 0.85rem; text-align: center; padding: 0.8rem 0; }
 .rd-table { font-size: 0.84rem; width: 100%; border-collapse: collapse; }
 .rd-table th { background: #fdf8ee; color: #8c701c; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; border-bottom: 2px solid #e8d9a8; text-align: left; }
 .rd-table td { padding: 6px 10px; border-bottom: 1px solid #f0e6c8; font-size: 0.82rem; }
@@ -189,7 +192,10 @@
 <div id="panel-equipment" class="rv-panel <?= $activeTab === 'equipment' ? 'active' : '' ?>">
 
     <div class="rv-controls">
-        <input type="text" id="searchEquipment" class="rv-search" placeholder="Search equipment…">
+        <div class="rv-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchEquipment" class="rv-search" placeholder="Search equipment…">
+        </div>
         <button type="button" class="rv-btn rv-btn-filter" id="eqFilterToggle">
             <span class="material-symbols-outlined">tune</span>
             Filter<?php if ($eqActiveCount > 0): ?><span class="rv-filter-badge"><?= $eqActiveCount ?></span><?php endif; ?>
@@ -332,7 +338,10 @@
 <div id="panel-tools" class="rv-panel <?= $activeTab === 'tools' ? 'active' : '' ?>">
 
     <div class="rv-controls">
-        <input type="text" id="searchTools" class="rv-search" placeholder="Search tools…">
+        <div class="rv-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchTools" class="rv-search" placeholder="Search tools…">
+        </div>
         <button type="button" class="rv-btn rv-btn-filter" id="toolsFilterToggle">
             <span class="material-symbols-outlined">tune</span>
             Filter<?php if ($toolsActiveCount > 0): ?><span class="rv-filter-badge"><?= $toolsActiveCount ?></span><?php endif; ?>
@@ -474,7 +483,10 @@
 <div id="panel-manpower" class="rv-panel <?= $activeTab === 'manpower' ? 'active' : '' ?>">
 
     <div class="rv-controls">
-        <input type="text" id="searchManpower" class="rv-search" placeholder="Search manpower…">
+        <div class="rv-search-wrap">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="searchManpower" class="rv-search" placeholder="Search manpower…">
+        </div>
         <button type="button" class="rv-btn rv-btn-filter" id="mpFilterToggle">
             <span class="material-symbols-outlined">tune</span>
             Filter<?php if ($mpActiveCount > 0): ?><span class="rv-filter-badge"><?= $mpActiveCount ?></span><?php endif; ?>

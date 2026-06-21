@@ -601,6 +601,100 @@ class Projects extends BaseController
         }
     }
 
+    // ── Project Schedule / Milestone Management ───────────────────────────
+
+    public function schedule(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return redirect()->to('auth/login');
+        }
+        if (!pz_can('manage_milestones')) {
+            return redirect()->to('projects')->with('error', 'You do not have permission to manage the schedule.');
+        }
+
+        try {
+            $project = $this->getProjectById($id);
+            if (!$project) {
+                return redirect()->to('projects')->with('error', 'Project not found.');
+            }
+
+            if ($this->request->getMethod() === 'post') {
+                // Preserve status / actualCompletionDate from existing milestones (matched by order)
+                $existing       = $this->getMilestonesOrdered($id);
+                $existByOrder   = [];
+                foreach ($existing as $m) {
+                    $existByOrder[(int)($m['order'] ?? 0)] = $m;
+                }
+
+                $rawMs      = $this->request->getPost('milestones') ?? [];
+                $milestones = [];
+                $order      = 1;
+
+                foreach ($rawMs as $m) {
+                    $name = trim((string)($m['name'] ?? ''));
+                    if ($name === '') continue;
+                    $ex = $existByOrder[$order] ?? [];
+                    $milestones[] = [
+                        'name'                 => $name,
+                        'order'                => $order,
+                        'weight'               => (float)($m['weight'] ?? 0),
+                        'qty'                  => max(1, (int)($m['qty'] ?? 1)),
+                        'unit'                 => trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs',
+                        'targetDate'           => trim((string)($m['target_date'] ?? '')) ?: null,
+                        'actualCompletionDate' => $ex['actualCompletionDate'] ?? null,
+                        'status'               => $ex['status'] ?? 'Pending',
+                    ];
+                    $order++;
+                }
+
+                if (!empty($milestones)) {
+                    $total = round(array_sum(array_column($milestones, 'weight')), 1);
+                    if (abs($total - 100.0) > 0.5) {
+                        return redirect()->back()->withInput()
+                            ->with('error', 'Milestone weights must sum to 100 %. Current total: ' . number_format($total, 1) . ' %.');
+                    }
+                }
+
+                $ref = $this->firestore->getDb()
+                    ->collection('project')->document($id)->collection('milestones');
+                foreach ($ref->documents() as $doc) {
+                    if ($doc->exists()) $ref->document($doc->id())->delete();
+                }
+                foreach ($milestones as $m) {
+                    $ref->document(bin2hex(random_bytes(8)))->set($m);
+                }
+
+                return redirect()->to("projects/{$id}/schedule")->with('success', 'Schedule saved successfully.');
+            }
+
+            $milestones    = $this->getMilestonesOrdered($id);
+            $startDate     = (string)($project['start_date_value'] ?? '');
+            $endDate       = (string)($project['end_date_value']   ?? '');
+            $weeklyTargets = [];
+
+            if (!empty($milestones) && $startDate !== '') {
+                $svc           = new MilestoneProgressService();
+                $curve         = $svc->computeCurve($milestones, $startDate, $endDate ?: null);
+                $weeklyTargets = $svc->weeklyTargets($curve['controlPoints'], $startDate, date('Y-m-d'));
+            }
+
+            return view('projects/project_schedule', [
+                'pageTitle'     => 'Project Schedule',
+                'activePage'    => 'projects',
+                'project'       => $project,
+                'projectId'     => $id,
+                'milestones'    => $milestones,
+                'weeklyTargets' => $weeklyTargets,
+                'startDate'     => $startDate,
+                'endDate'       => $endDate,
+            ]);
+
+        } catch (\Exception $e) {
+            log_message('error', 'Projects::schedule - ' . $e->getMessage());
+            return redirect()->to('projects')->with('error', 'Unable to load project schedule.');
+        }
+    }
+
     private function psTsToDate(mixed $value): ?string
     {
         if ($value === null) return null;

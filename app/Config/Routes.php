@@ -45,6 +45,10 @@ $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 // Project Progress Summary JSON (for modal Weekly / Overall buttons)
 $routes->get('projects/(:segment)/progress-summary', 'Projects::progressSummaryJson/$1');
 
+// Project Schedule / Milestone Management
+$routes->get('projects/(:segment)/schedule',  'Projects::schedule/$1');
+$routes->post('projects/(:segment)/schedule', 'Projects::schedule/$1');
+
 // Project Resource Assignment
 $routes->get('projects/(:segment)/resources',                      'Projects::resources/$1');
 $routes->post('projects/(:segment)/resources/assign',              'Projects::assignResource/$1');
@@ -141,6 +145,7 @@ $routes->post('notifications/mark-all-read','Notifications::markAllRead');
 // Messages
 $routes->get('messages',                          'Messages::index');
 $routes->get('messages/json',                     'Messages::chatsJson');
+$routes->get('messages/unread-count',             'Messages::unreadCount');
 $routes->get('messages/project/(:segment)',       'Messages::projectChat/$1');
 $routes->get('messages/(:segment)',               'Messages::show/$1');
 $routes->get('messages/(:segment)/json',          'Messages::messagesJson/$1');

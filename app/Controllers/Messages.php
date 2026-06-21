@@ -6,6 +6,7 @@ use App\Libraries\FirestoreService;
 use App\Models\Model_Users;
 use App\Services\NotificationService;
 use Google\Cloud\Core\Timestamp;
+use Google\Cloud\Firestore\FieldValue;
 
 class Messages extends BaseController
 {
@@ -35,13 +36,16 @@ class Messages extends BaseController
         $uid = (string)(session()->get('userId') ?? '');
 
         try {
-            $snap = $this->db->collection('chats')->document($chatId)->snapshot();
+            $chatRef = $this->db->collection('chats')->document($chatId);
+            $snap    = $chatRef->snapshot();
             if (!$snap->exists()) {
                 return redirect()->to('messages')->with('error', 'Chat not found.');
             }
             if (!in_array($uid, (array)($snap->data()['members'] ?? []), true)) {
                 return redirect()->to('messages')->with('error', 'You are not a member of this chat.');
             }
+            // Reset this user's unread count for the chat
+            $chatRef->update([['path' => 'unread_counts.' . $uid, 'value' => 0]]);
         } catch (\Throwable $e) {
             log_message('error', 'Messages::show - ' . $e->getMessage());
             return redirect()->to('messages')->with('error', 'Failed to load chat.');
@@ -69,6 +73,32 @@ class Messages extends BaseController
         return redirect()->to('messages/' . $chatId);
     }
 
+    // GET /messages/unread-count — lightweight badge endpoint
+    public function unreadCount()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setJSON(['count' => 0]);
+        }
+        $uid = (string)(session()->get('userId') ?? '');
+        if (!$uid) return $this->response->setJSON(['count' => 0]);
+
+        try {
+            $docs  = $this->db->collection('chats')
+                ->where('members', 'array-contains', $uid)
+                ->documents();
+            $total = 0;
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $counts = $doc->data()['unread_counts'] ?? [];
+                $total += (int)($counts[$uid] ?? 0);
+            }
+            return $this->response->setJSON(['count' => $total]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Messages::unreadCount - ' . $e->getMessage());
+            return $this->response->setJSON(['count' => 0]);
+        }
+    }
+
     // GET /messages/json
     public function chatsJson()
     {
@@ -84,20 +114,44 @@ class Messages extends BaseController
                 ->where('members', 'array-contains', $uid)
                 ->documents();
 
-            $chats = [];
+            $chats   = [];
+            $allUids = [];
+
             foreach ($docs as $doc) {
                 if (!$doc->exists()) continue;
-                $d = $doc->data();
+                $d       = $doc->data();
+                $members = array_values((array)($d['members'] ?? []));
+                foreach ($members as $mUid) {
+                    $allUids[(string)$mUid] = true;
+                }
                 $chats[] = [
                     'id'           => $doc->id(),
                     'project_id'   => $d['project_id']   ?? null,
                     'project_name' => $d['project_name'] ?? null,
-                    'member_names' => $d['member_names'] ?? [],
-                    'members'      => $d['members']      ?? [],
+                    'members'      => $members,
                     'last_message' => $this->serializeLastMessage($d['last_message'] ?? null),
                     'created_at'   => $this->tsToIso($d['created_at'] ?? null),
                 ];
             }
+
+            // Resolve real names live from Firestore users collection so stale
+            // member_names (which old chats stored as emails) are always correct.
+            $nameMap = [];
+            foreach (array_keys($allUids) as $mUid) {
+                $snap = $this->db->collection('users')->document($mUid)->snapshot();
+                $nameMap[$mUid] = $snap->exists()
+                    ? $this->buildFullName($snap->data())
+                    : (string)$mUid;
+            }
+
+            foreach ($chats as &$chat) {
+                $resolved = [];
+                foreach ($chat['members'] as $mUid) {
+                    $resolved[$mUid] = $nameMap[(string)$mUid] ?? (string)$mUid;
+                }
+                $chat['member_names'] = $resolved;
+            }
+            unset($chat);
 
             usort($chats, function ($a, $b) {
                 $ta = $a['last_message']['sent_at'] ?? $a['created_at'] ?? '';
@@ -153,13 +207,23 @@ class Messages extends BaseController
                 ];
             }
 
+            // Resolve real names from Firestore users so stale stored member_names are corrected
+            $memberIds    = array_values((array)($chatData['members'] ?? []));
+            $resolvedNames = [];
+            foreach ($memberIds as $mUid) {
+                $snap = $this->db->collection('users')->document((string)$mUid)->snapshot();
+                $resolvedNames[(string)$mUid] = $snap->exists()
+                    ? $this->buildFullName($snap->data())
+                    : (string)$mUid;
+            }
+
             return $this->response->setJSON([
                 'messages' => $messages,
                 'chat' => [
                     'id'           => $chatSnap->id(),
                     'project_id'   => $chatData['project_id']   ?? null,
                     'project_name' => $chatData['project_name'] ?? null,
-                    'member_names' => $chatData['member_names'] ?? [],
+                    'member_names' => $resolvedNames,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -169,27 +233,41 @@ class Messages extends BaseController
     }
 
     // POST /messages/{chatId}/send
-    // Accepts multipart (with optional file) or JSON (text only).
+    // Accepts multipart (with file) or JSON (text only). JS sends one file per request.
     public function sendMessage(string $chatId)
     {
         if (!session()->get('isLoggedIn')) {
             return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthorized']);
         }
 
-        $uid      = (string)(session()->get('userId')   ?? '');
-        $userName = (string)(session()->get('userName') ?? '');
-
-        // Support both JSON body and multipart form
-        $jsonBody = $this->request->getJSON(true) ?: [];
-        $text     = trim((string)($this->request->getPost('text') ?? $jsonBody['text'] ?? ''));
-        $file     = $this->request->getFile('file');
-        $hasFile  = $file && $file->isValid() && !$file->hasMoved();
-
-        if ($text === '' && !$hasFile) {
-            return $this->response->setStatusCode(400)->setJSON(['error' => 'Empty message']);
-        }
-
         try {
+            $uid      = (string)(session()->get('userId')   ?? '');
+            $userName = (string)(session()->get('userName') ?? '');
+
+            // Support both JSON body (text-only) and multipart form (file upload).
+            // Only call getJSON() for application/json requests: calling it on multipart bodies
+            // runs json_decode() which sets json_last_error() = JSON_ERROR_SYNTAX and can
+            // cause CI4's JSONFormatter to throw FormatException when encoding the response.
+            $isJsonRequest = str_contains(
+                $this->request->getHeaderLine('Content-Type'),
+                'application/json'
+            );
+            $jsonBody = $isJsonRequest ? ($this->request->getJSON(true) ?: []) : [];
+            $text     = trim((string)($this->request->getPost('text') ?? $jsonBody['text'] ?? ''));
+
+            // Single file upload — JS always sends exactly one file per request via 'file' field
+            $uploadedFile = $this->request->getFile('file');
+            $hasFile = $uploadedFile instanceof \CodeIgniter\HTTP\Files\UploadedFile
+                    && $uploadedFile->isValid()
+                    && !$uploadedFile->hasMoved();
+
+            if (ENVIRONMENT === 'development' && $uploadedFile && !$hasFile) {
+                log_message('debug', 'Messages::sendMessage - file invalid, error=' . $uploadedFile->getError() . ' name=' . $uploadedFile->getName());
+            }
+
+            if ($text === '' && !$hasFile) {
+                return $this->response->setStatusCode(400)->setJSON(['error' => 'Empty message']);
+            }
             $chatRef  = $this->db->collection('chats')->document($chatId);
             $chatSnap = $chatRef->snapshot();
             if (!$chatSnap->exists()) {
@@ -217,7 +295,7 @@ class Messages extends BaseController
             ];
 
             if ($hasFile) {
-                $info = $this->uploadFileLocally($file, $chatId, $msgId);
+                $info = $this->uploadFileLocally($uploadedFile, $chatId, $msgId);
                 $msgData['type']      = $info['type'];
                 $msgData['file_name'] = $info['file_name'];
                 $msgData['file_url']  = $info['file_url'];
@@ -230,18 +308,26 @@ class Messages extends BaseController
                 ? mb_strimwidth($text, 0, 80, '…')
                 : ($msgData['file_name'] ?? '[File]');
 
-            $chatRef->update([['path' => 'last_message', 'value' => [
+            // Build the batch update: last_message + increment unread count for each recipient
+            $updates = [['path' => 'last_message', 'value' => [
                 'text'        => $preview,
                 'sender_name' => $userName,
                 'sent_at'     => $now,
-            ]]]);
+            ]]];
+            foreach ($members as $mUid) {
+                if ((string)$mUid !== $uid) {
+                    $updates[] = ['path' => 'unread_counts.' . $mUid, 'value' => FieldValue::increment(1)];
+                }
+            }
+            $chatRef->update($updates);
 
             $this->notifyMembers($members, $uid, $chatId, $userName, $preview, $chatData);
 
             return $this->response->setJSON(['success' => true, 'id' => $msgId]);
         } catch (\Throwable $e) {
-            log_message('error', 'Messages::sendMessage - ' . $e->getMessage());
-            return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
+            log_message('error', 'Messages::sendMessage - ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            $detail = ENVIRONMENT === 'development' ? $e->getMessage() : 'Server error';
+            return $this->response->setStatusCode(500)->setJSON(['error' => $detail]);
         }
     }
 
@@ -290,7 +376,7 @@ class Messages extends BaseController
      * Compute member IDs and names for a project chat:
      * all Administrators + Operations Managers + project PM + project SE.
      */
-    private function computeMembers(string $projectId, array $pd): array
+    private function computeMembers(string $_projectId, array $pd): array
     {
         $ids   = [];
         $names = [];
@@ -302,7 +388,7 @@ class Messages extends BaseController
             $uid = (string)($u['id'] ?? '');
             if (!$uid || in_array($uid, $ids, true)) continue;
             $ids[]       = $uid;
-            $names[$uid] = (string)($u['name'] ?? $u['display_name'] ?? $u['email'] ?? $uid);
+            $names[$uid] = $this->buildFullName($u);
         }
 
         // Project manager
@@ -311,9 +397,7 @@ class Messages extends BaseController
         if ($pmUid && !in_array($pmUid, $ids, true)) {
             $ids[] = $pmUid;
             $u = $uModel->getUserById($pmUid);
-            $names[$pmUid] = $u
-                ? (string)($u['data']['name'] ?? $u['data']['display_name'] ?? $u['data']['email'] ?? $pmUid)
-                : $pmUid;
+            $names[$pmUid] = $u ? $this->buildFullName($u['data']) : $pmUid;
         }
 
         // Site engineer
@@ -322,12 +406,19 @@ class Messages extends BaseController
         if ($seUid && !in_array($seUid, $ids, true)) {
             $ids[] = $seUid;
             $u = $uModel->getUserById($seUid);
-            $names[$seUid] = $u
-                ? (string)($u['data']['name'] ?? $u['data']['display_name'] ?? $u['data']['email'] ?? $seUid)
-                : $seUid;
+            $names[$seUid] = $u ? $this->buildFullName($u['data']) : $seUid;
         }
 
         return ['ids' => $ids, 'names' => $names];
+    }
+
+    /** Build display name from Firestore user data using first_name / last_name (schema-correct). */
+    private function buildFullName(array $u): string
+    {
+        $fn = trim((string)($u['first_name'] ?? ''));
+        $ln = trim((string)($u['last_name']  ?? ''));
+        $full = trim("$fn $ln");
+        return $full ?: trim((string)($u['email'] ?? '')) ?: 'Unknown';
     }
 
     /** Normalize a Firestore DocumentReference, path string, or bare UID to just the UID. */
@@ -344,13 +435,29 @@ class Messages extends BaseController
 
     private function uploadFileLocally(\CodeIgniter\HTTP\Files\UploadedFile $file, string $chatId, string $msgId): array
     {
-        $originalName = (string)$file->getClientFilename();
-        $safeName     = $msgId . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName);
-        $mimeType     = (string)$file->getMimeType();
-        $type         = str_starts_with($mimeType, 'image/') ? 'image' : 'file';
+        // getClientName() returns the browser-supplied filename; getName() is the same before move().
+        $originalName = (string)($file->getClientName() ?: $file->getName() ?: '');
+        if ($originalName === '') $originalName = 'upload_' . $msgId;
 
-        $dir = FCPATH . 'uploads/messages/' . $chatId . '/';
-        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        $ext      = pathinfo($originalName, PATHINFO_EXTENSION);
+        $safeName = $msgId . ($ext ? '.' . preg_replace('/[^a-zA-Z0-9]/', '', $ext) : '');
+
+        $mimeType = (string)$file->getClientMimeType();
+        if (!$mimeType) $mimeType = (string)$file->getMimeType();
+        $type = str_starts_with($mimeType, 'image/') ? 'image' : 'file';
+
+        // Ensure the destination directory exists (Windows-safe)
+        $dir = rtrim(FCPATH, '/\\')
+             . DIRECTORY_SEPARATOR . 'uploads'
+             . DIRECTORY_SEPARATOR . 'messages'
+             . DIRECTORY_SEPARATOR . $chatId
+             . DIRECTORY_SEPARATOR;
+
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
+                throw new \RuntimeException("Cannot create upload directory: {$dir}");
+            }
+        }
 
         $file->move($dir, $safeName);
 
@@ -367,7 +474,7 @@ class Messages extends BaseController
         string $chatId,
         string $senderName,
         string $preview,
-        array  $chatData
+        array  $_chatData
     ): void {
         try {
             $svc   = new NotificationService();

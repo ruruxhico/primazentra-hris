@@ -458,7 +458,7 @@
             <span class="material-symbols-outlined">inventory_2</span>
             Resources
         </a>
-        <a href="<?= base_url('projects/update/' . $projectId) ?>#schedule" class="pd-action-btn pd-btn-schedule">
+        <a href="<?= base_url('projects/' . $projectId . '/schedule') ?>" class="pd-action-btn pd-btn-schedule">
             <span class="material-symbols-outlined">calendar_month</span>
             Schedule
         </a>

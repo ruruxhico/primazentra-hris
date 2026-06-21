@@ -33,9 +33,11 @@
 
 <style>
 /* ── Controls bar ── */
-.rv-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:0.9rem; }
-.rv-search { flex:1; min-width:160px; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:0.87rem; font-family:inherit; outline:none; }
-.rv-search:focus { border-color:#C47A0F; box-shadow:0 0 0 2px rgba(196,122,15,.12); }
+.rv-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin: 0 2rem 0.9rem; }
+.rv-search-wrap { position:relative; flex:1; min-width:200px; }
+.rv-search-wrap .material-symbols-outlined { position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:18px; color:#aaa; pointer-events:none; }
+.rv-search { width:100%; padding:8px 14px 8px 38px; border:1.5px solid #ddd; border-radius:999px; font-size:0.87rem; font-family:inherit; outline:none; box-sizing:border-box; }
+.rv-search:focus { border-color:#C47A0F; box-shadow:0 0 0 3px rgba(196,122,15,.1); }
 .rv-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:8px; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; cursor:pointer; border:1.5px solid transparent; font-family:inherit; white-space:nowrap; font-variation-settings:'FILL' 0,'wght' 400; text-decoration:none; }
 .rv-btn .material-symbols-outlined { font-size:16px; }
 .rv-btn-filter { background:#fff; border-color:#ddd; color:#555; }
@@ -47,7 +49,7 @@
 .rv-btn-export { background:#fff; border-color:#adb5bd; color:#495057; }
 .rv-btn-export:hover { border-color:#8C701C; color:#8C701C; }
 
-.filter-panel { background:#fafafa; border:1px solid #e0e0e0; border-radius:6px; padding:16px 20px 12px; margin-bottom:12px; }
+.filter-panel { background:#fff; border:1px solid #e0d4b0; border-radius:8px; padding:16px 20px 12px; margin: 0 2rem 12px; box-shadow:0 2px 8px rgba(0,0,0,0.07); }
 .filter-rows  { display:flex; flex-direction:column; gap:12px; }
 .filter-row   { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .filter-row label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; min-width:80px; }
@@ -110,7 +112,10 @@
 
 <div class="page-module">
 <div class="rv-controls">
-    <input type="text" id="searchStaff" placeholder="Search staff…" class="rv-search">
+    <div class="rv-search-wrap">
+        <span class="material-symbols-outlined">search</span>
+        <input type="text" id="searchStaff" placeholder="Search staff…" class="rv-search">
+    </div>
 
     <button type="button" class="rv-btn rv-btn-filter" id="filterToggleBtn">
         <span class="material-symbols-outlined">tune</span>

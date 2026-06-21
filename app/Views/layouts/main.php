@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?php $pageTitle = isset($pageTitle) && is_string($pageTitle) ? $pageTitle : 'Dashboard'; ?>
-    <?php $userName = isset($userName) && is_string($userName) ? $userName : 'User'; ?>
+    <?php $userName = (isset($userName) && is_string($userName) && $userName !== '') ? $userName : (session()->get('userName') ?: 'User'); ?>
     <?php $roleLabel = isset($role) && is_scalar($role) ? (string) $role : 'USER'; ?>
     <title>PrimaZentra | <?= htmlspecialchars(is_array($pageTitle) ? 'Dashboard' : (string) $pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="icon" type="image/x-icon" href="<?= asset_url('favicon.ico') ?>?v=3">
@@ -45,9 +45,12 @@
               </div>
             </div>
             <!-- Messages shortcut -->
-            <a href="<?= base_url('messages') ?>" class="pz-msg-btn" title="Messages" aria-label="Messages">
-              <span class="material-symbols-outlined">chat</span>
-            </a>
+            <div class="pz-msg-wrap" id="pzMsgWrap">
+              <a href="<?= base_url('messages') ?>" class="pz-msg-btn" title="Messages" aria-label="Messages">
+                <span class="material-symbols-outlined">chat</span>
+                <span class="pz-msg-badge" id="pzMsgBadge" style="display:none"></span>
+              </a>
+            </div>
             <?php
               $hdrPic = (string)(session()->get('profilePicture') ?? '');
               $hdrPicValid = $hdrPic !== '' && file_exists(FCPATH . $hdrPic);
@@ -61,7 +64,7 @@
                 <?php endif; ?>
               </span>
               <div>
-                <strong><?= htmlspecialchars(is_array($userName) ? 'User' : (string) $userName, ENT_QUOTES, 'UTF-8') ?></strong><br>
+                <strong><?= htmlspecialchars((is_array($userName) || (string)$userName === '') ? 'User' : (string) $userName, ENT_QUOTES, 'UTF-8') ?></strong><br>
                 <small><?= strtoupper($roleLabel) ?></small>
               </div>
             </a>
@@ -88,7 +91,7 @@
     transition:background .15s;
   }
   .pz-notif-btn:hover { background:rgba(255,255,255,.15); }
-  .pz-notif-btn .material-symbols-outlined { font-size:22px; color:#ffd740; }
+  .pz-notif-btn .material-symbols-outlined { font-size:22px; color:#ffd740; font-variation-settings:'FILL' 1,'wght' 400; }
   .pz-notif-badge {
     position:absolute; top:3px; right:3px;
     background:#e53935; color:#fff; font-size:10px; font-weight:700;
@@ -142,13 +145,21 @@
     transition:background .12s;
   }
   .pz-notif-view-all:hover { background:#fdf8e1; }
+  .pz-msg-wrap { position:relative; }
+  .pz-msg-badge {
+    position:absolute; top:3px; right:3px;
+    background:#e53935; color:#fff; font-size:10px; font-weight:700;
+    min-width:16px; height:16px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    padding:0 3px; pointer-events:none; line-height:1;
+  }
   .pz-msg-btn {
     background:none; border:none; cursor:pointer; padding:6px;
     display:flex; align-items:center; justify-content:center;
-    border-radius:50%; transition:background .15s; text-decoration:none;
+    border-radius:50%; transition:background .15s; text-decoration:none; position:relative;
   }
   .pz-msg-btn:hover { background:rgba(255,255,255,.15); }
-  .pz-msg-btn .material-symbols-outlined { font-size:22px; color:#90caf9; }
+  .pz-msg-btn .material-symbols-outlined { font-size:22px; color:#90caf9; font-variation-settings:'FILL' 1,'wght' 400; }
   </style>
   <script>
   (function () {
@@ -294,6 +305,25 @@
     // initial load + poll every 30 s
     load();
     setInterval(load, 30000);
+
+    // ── Message unread badge ──────────────────────────────────────────────
+    var msgBadge = document.getElementById('pzMsgBadge');
+    function updateMsgBadge(n) {
+      if (n > 0) {
+        msgBadge.textContent = n > 99 ? '99+' : n;
+        msgBadge.style.display = 'flex';
+      } else {
+        msgBadge.style.display = 'none';
+      }
+    }
+    function loadMsgCount() {
+      fetch(_base + 'messages/unread-count', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { updateMsgBadge(d.count || 0); })
+        .catch(function () {});
+    }
+    loadMsgCount();
+    setInterval(loadMsgCount, 30000);
   }());
   </script>
 
@@ -643,6 +673,28 @@
       });
     });
   }());
+  </script>
+
+  <!-- ── Global ESC to close any open modal ── -->
+  <script>
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+
+    // 1. .open-class modals (pres-modal-overlay, reportModal, dndConfirmOverlay, etc.)
+    document.querySelectorAll('.pres-modal-overlay.open, #reportModal.open, #dndConfirmOverlay.open').forEach(function (el) {
+      el.classList.remove('open');
+    });
+
+    // 2. display:block modals (#addItemModal and any other legacy style.display modal)
+    document.querySelectorAll('.modal-overlay, #addItemModal').forEach(function (el) {
+      if (el.style.display && el.style.display !== 'none') {
+        el.style.display = 'none';
+      }
+    });
+
+    // 3. Page-specific close hooks (optional override per page)
+    if (typeof window.pzEscClose === 'function') window.pzEscClose();
+  });
   </script>
 </body>
 </html>

@@ -234,21 +234,6 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
 .db-icon-chat {
     font-variation-settings:'FILL' 1,'wght' 600 !important;
 }
-/* View project pill link (monitor cards only) */
-.db-view-project-link {
-    display:block; width:100%;
-    border:1.5px solid #C47A0F; border-radius:20px;
-    padding:5px 12px; margin-bottom:8px;
-    text-align:center; text-decoration:none;
-    color:#3a2a0a; font-size:0.72rem; font-weight:600; letter-spacing:0.04em;
-    display:flex; align-items:center; justify-content:center; gap:4px;
-    transition:background .15s, color .15s;
-}
-.db-view-project-link:hover { background:#f5edda; color:#6e570f; text-decoration:none; }
-.db-view-project-link .material-symbols-outlined {
-    font-size:13px; font-variation-settings:'FILL' 0,'wght' 400;
-    opacity:0.7;
-}
 </style>
 <?= $this->endSection() ?>
 
@@ -558,14 +543,13 @@ function db_render_card(array $p, string $context = 'summary'): string
     <div class="db-project-card" id="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>" data-pname="<?= esc(strtoupper($p['project_name'] ?? '')) ?>">
 
         <!-- Project name -->
-        <div class="db-project-name-box"><?= $name ?></div>
-
         <?php if ($context === 'monitor'): ?>
-        <!-- View project link -->
-        <a href="<?= base_url('projects/show/' . esc($p['id'] ?? '')) ?>" class="db-view-project-link">
+        <a href="<?= base_url('projects/show/' . esc($p['id'] ?? '')) ?>" class="db-project-name-box db-project-name-link">
             <?= $name ?>
             <span class="material-symbols-outlined">open_in_new</span>
         </a>
+        <?php else: ?>
+        <div class="db-project-name-box"><?= $name ?></div>
         <?php endif; ?>
 
         <!-- Progress bar -->
@@ -654,6 +638,10 @@ function db_render_card(array $p, string $context = 'summary'): string
                     title="Progress Reports">
                 <span class="material-symbols-outlined">description</span>
             </button>
+            <a href="<?= base_url('projects/' . esc($p['id'] ?? '') . '/schedule') ?>"
+               class="db-icon-btn" title="Milestone Schedule" style="text-decoration:none">
+                <span class="material-symbols-outlined">calendar_month</span>
+            </a>
             <button class="db-btn-locate"
                     data-lat="<?= $lat !== null ? (float)$lat : '' ?>"
                     data-lng="<?= $lng !== null ? (float)$lng : '' ?>"
