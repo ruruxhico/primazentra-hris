@@ -11,7 +11,7 @@ class VerifyAccount extends BaseController
 
     public function __construct()
     {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     public function showForm(string $uid)

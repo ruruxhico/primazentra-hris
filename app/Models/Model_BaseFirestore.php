@@ -12,7 +12,7 @@ class Model_BaseFirestore
     public function __construct() 
     {
         // One place to initialize the service
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
     public function getFirestoreInstance() {
     return $this->firestore;

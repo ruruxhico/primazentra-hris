@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 <?php
@@ -15,252 +15,6 @@
     $mpSpecs = ['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'];
 ?>
 
-<style>
-/* ── Shell ───────────────────────────────────────────────────────── */
-.pres-shell { padding-bottom: 2rem; }
-
-/* ── Header ──────────────────────────────────────────────────────── */
-.pres-header {
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 1.4rem;
-}
-.pres-back {
-    display: inline-flex; align-items: center;
-    color: #8C701C; text-decoration: none; line-height: 1;
-}
-.pres-back:hover { color: #5c3d11; text-decoration: none; }
-.pres-back .material-symbols-outlined { font-size: 22px; }
-.pres-title { font-size: 1.15rem; font-weight: 800; color: #2c1f07; margin: 0; }
-
-/* ── Sections ────────────────────────────────────────────────────── */
-.pres-section-label {
-    font-size: 1rem; font-weight: 700; color: #8C701C;
-    margin: 0 0 0.9rem; letter-spacing: 0.01em;
-}
-.pres-divider { border: none; border-top: 1px solid #e5e0d0; margin: 1.5rem 0; }
-.pres-empty { font-size: 0.85rem; color: #aaa; margin: 0; }
-
-/* ── Assigned resources list ─────────────────────────────────────── */
-.pres-assigned-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 10px; margin-bottom: 4px;
-}
-.pres-assigned-card {
-    background: #fff; border: 1px solid #ddd6c8; border-radius: 10px;
-    padding: 14px 18px; margin-bottom: 0;
-    display: flex; align-items: center; gap: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-}
-.pres-assigned-icon { color: #C47A0F; font-size: 1.2rem;
-    font-variation-settings: 'FILL' 1, 'wght' 600; }
-.pres-assigned-name { font-size: 0.9rem; font-weight: 700; color: #2c1f07; }
-.pres-assigned-meta { font-size: 0.76rem; color: #999; margin-top: 2px; }
-
-/* ── Tabs ─────────────────────────────────────────────────────────── */
-.pres-tabs {
-    display: flex; border-bottom: 2px solid #e5e0d0; margin-bottom: 1rem;
-}
-.pres-tab {
-    background: none; border: none; padding: 8px 18px;
-    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em;
-    color: #bbb; cursor: pointer; border-bottom: 2px solid transparent;
-    margin-bottom: -2px; font-family: inherit;
-}
-.pres-tab.active { color: #8C701C; border-bottom-color: #C47A0F; }
-.pres-tab:hover { color: #8C701C; }
-.pres-tab-panel { display: none; }
-.pres-tab-panel.active { display: block; }
-
-/* ── Manpower tab header ─────────────────────────────────────────── */
-.pres-mp-header {
-    display: flex; justify-content: flex-start; margin-bottom: 1rem;
-}
-.pres-btn-bulk-assign {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: #3a2a0a; color: #fff; border: none; border-radius: 8px;
-    padding: 9px 18px; font-size: 0.82rem; font-weight: 700;
-    letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
-    font-variation-settings: 'FILL' 1, 'wght' 600;
-}
-.pres-btn-bulk-assign:hover { background: #5c3d11; }
-.pres-btn-bulk-assign .material-symbols-outlined { font-size: 17px; }
-
-/* ── Resource card grid ──────────────────────────────────────────── */
-.pres-res-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 10px;
-}
-
-/* Base card — horizontal (manpower) */
-.pres-res-card {
-    background: #fff; border: 1px solid #ddd6c8; border-radius: 12px;
-    padding: 16px 18px; margin-bottom: 0;
-    display: flex; align-items: center; gap: 14px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.07);
-    transition: border-color .15s, box-shadow .15s;
-}
-.pres-res-card:hover { border-color: #d4c185; box-shadow: 0 2px 8px rgba(140,112,28,.08); }
-.pres-res-info { flex: 1; min-width: 0; }
-.pres-res-name { font-size: 0.95rem; font-weight: 800; color: #2c1f07; }
-.pres-res-sub  { font-size: 0.78rem; color: #666; margin-top: 3px; }
-.pres-res-avail { color: #5a8a3c; }
-.pres-res-site { font-size: 0.75rem; color: #888; margin-top: 3px; }
-.pres-res-site-here { color: #8C701C; font-weight: 600; }
-
-/* Role badges */
-.pres-role-badge {
-    display: inline-block; font-size: 0.7rem; font-weight: 700;
-    letter-spacing: 0.05em; border-radius: 20px; white-space: nowrap;
-    padding: 2px 9px; margin-top: 4px;
-}
-.pres-role-field-worker { background: #dbeafe; color: #1e40af; }
-.pres-role-foreman      { background: #fef3c7; color: #7c4a00; }
-
-/* Role filter chips */
-.pres-role-filter {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 0.9rem; flex-wrap: wrap;
-}
-.pres-role-chip {
-    padding: 5px 14px; border: 1.5px solid #ddd; border-radius: 20px;
-    font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em;
-    cursor: pointer; background: #fff; color: #666;
-    transition: background .12s, border-color .12s, color .12s;
-    font-family: inherit;
-}
-.pres-role-chip:hover { border-color: #b8960c; color: #7a5c00; }
-.pres-role-chip.active { background: #3a2a0a; border-color: #3a2a0a; color: #fff; }
-.pres-role-chip.active-fw { background: #1e40af; border-color: #1e40af; color: #fff; }
-.pres-role-chip.active-fm { background: #7c4a00; border-color: #7c4a00; color: #fff; }
-.pres-res-actions { display: flex; gap: 8px; flex-shrink: 0; }
-
-/* Column variant — vertical (equipment / tools) */
-.pres-res-card-col {
-    flex-direction: column;
-    align-items: stretch;
-}
-.pres-res-card-col .pres-res-info { flex: none; }
-.pres-res-card-col .pres-res-actions {
-    display: flex; gap: 8px;
-    margin-top: 14px; padding-top: 12px;
-    border-top: 1px solid #f0ebe0;
-    justify-content: flex-end;
-}
-
-/* ── Status buttons ──────────────────────────────────────────────── */
-.pres-btn {
-    border: none; border-radius: 20px; padding: 6px 14px;
-    font-size: 0.75rem; font-weight: 700; cursor: pointer; font-family: inherit;
-    white-space: nowrap; letter-spacing: 0.04em;
-}
-.pres-btn:disabled { cursor: not-allowed; opacity: 0.55; }
-.pres-btn-assign  { background: #8C701C; color: #fff; }
-.pres-btn-assign:hover:not(:disabled)  { background: #6e570f; }
-.pres-btn-remove  { background: #c62828; color: #fff; }
-.pres-btn-remove:hover:not(:disabled)  { background: #7f0000; }
-.pres-btn-unavail { background: #f0ede6; color: #bbb; border: 1px solid #e0dbd0; }
-.pres-btn-view    { background: #3a2a0a; color: #fff; }
-.pres-btn-view:hover { background: #5c3d11; }
-.pres-btn-bulk    {
-    background: none; color: #8C701C; border: 1.5px solid #C47A0F;
-    border-radius: 20px; padding: 5px 14px;
-    font-size: 0.75rem; font-weight: 700; cursor: pointer; font-family: inherit;
-    white-space: nowrap; letter-spacing: 0.04em;
-}
-.pres-btn-bulk:hover { background: #fdf8ee; }
-
-/* ── Toast ───────────────────────────────────────────────────────── */
-.pres-toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(60px);
-    background: #e65100; color: #fff; padding: 10px 20px; border-radius: 8px;
-    font-size: 0.85rem; font-weight: 600; z-index: 9999;
-    transition: transform 0.25s ease, opacity 0.25s ease; opacity: 0; pointer-events: none;
-    white-space: nowrap; max-width: 90vw;
-}
-.pres-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
-.pres-toast.success { background: #2e7d32; }
-
-/* ── Modals ──────────────────────────────────────────────────────── */
-.pres-modal-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.45); z-index: 1050;
-    align-items: center; justify-content: center;
-    padding: 1rem;
-}
-.pres-modal-overlay.open { display: flex; }
-.pres-modal {
-    background: #fff; border-radius: 16px; width: 100%; max-width: 540px;
-    padding: 1.8rem 2rem 2rem; max-height: 88vh; overflow-y: auto;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.22);
-    animation: presModalIn .2s ease;
-}
-@keyframes presModalIn {
-    from { opacity: 0; transform: scale(0.95) translateY(-12px); }
-    to   { opacity: 1; transform: scale(1)    translateY(0); }
-}
-.pres-modal-hdr {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 0.3rem;
-}
-.pres-modal-title { font-size: 1rem; font-weight: 800; color: #2c1f07; margin: 0; }
-.pres-modal-close {
-    background: none; border: none; font-size: 1.4rem; cursor: pointer;
-    color: #aaa; line-height: 1; padding: 4px;
-}
-.pres-modal-close:hover { color: #555; }
-.pres-modal-sub { font-size: 0.8rem; color: #999; margin: 0 0 1rem; }
-
-/* Units modal list */
-.pres-unit-card {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    background: #fdf8ee; border: 1px solid #e8d9a8; border-radius: 8px;
-    padding: 10px 14px; margin-bottom: 8px;
-}
-.pres-unit-serial { font-size: 0.88rem; font-weight: 700; }
-.pres-unit-status { font-size: 0.75rem; color: #999; margin-top: 2px; }
-
-/* Bulk Assign Manpower modal */
-.pres-bulk-field { margin-bottom: 1rem; }
-.pres-bulk-field label {
-    display: block; font-size: 0.78rem; font-weight: 700; color: #666;
-    text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
-}
-.pres-bulk-select {
-    width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
-    font-size: 0.9rem; font-family: inherit; background: #fff;
-    appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M0 0l6 8 6-8z' fill='%23aaa'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 12px center;
-}
-.pres-bulk-input {
-    width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
-    font-size: 0.9rem; font-family: inherit; background: #fff; box-sizing: border-box;
-    outline: none;
-}
-.pres-bulk-input:focus { border-color: #C47A0F; }
-.pres-qty-row {
-    display: flex; align-items: center; justify-content: center; gap: 20px;
-    margin: 1rem 0 1.4rem;
-}
-.pres-qty-btn {
-    width: 34px; height: 34px; border-radius: 50%;
-    border: 1.5px solid #e0dbd0; background: #fff; font-size: 1.2rem;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: #8C701C; font-weight: 700;
-}
-.pres-qty-btn:hover { background: #fdf8ee; }
-.pres-qty-val { font-size: 1.2rem; font-weight: 700; min-width: 2ch; text-align: center; }
-.pres-modal-actions { display: flex; gap: 10px; }
-.pres-modal-btn {
-    flex: 1; padding: 12px; border-radius: 8px; border: none;
-    font-size: 0.9rem; font-weight: 700; cursor: pointer; font-family: inherit;
-}
-.pres-modal-btn-cancel { background: #f0ede6; color: #5c3d11; border: 1.5px solid #e0dbd0; }
-.pres-modal-btn-cancel:hover { background: #e5e0d0; }
-.pres-modal-btn-confirm { background: #3a2a0a; color: #fff; }
-.pres-modal-btn-confirm:hover { background: #5c3d11; }
-</style>
 
 <div class="pres-shell">
 
@@ -329,7 +83,7 @@
         <?php if (empty($allManpower)): ?>
         <p class="pres-empty">No manpower records found.</p>
         <?php else: ?>
-        <div class="pres-res-grid" id="mpGrid">
+        <div class="pres-res-grid pres-paged-grid" id="mpGrid">
         <?php foreach ($allManpower as $m):
             $mpId         = $m['id'];
             $mpName       = strtoupper($m['name'] ?: 'UNNAMED');
@@ -368,6 +122,7 @@
         </div>
         <?php endforeach; ?>
         </div>
+        <div class="pres-pager-wrap" id="mpPager"></div>
         <?php endif; ?>
     </div>
 
@@ -376,7 +131,7 @@
         <?php if (empty($allEquipment)): ?>
         <p class="pres-empty">No equipment found.</p>
         <?php else: ?>
-        <div class="pres-res-grid">
+        <div class="pres-res-grid pres-paged-grid" id="eqGrid">
         <?php foreach ($allEquipment as $eq):
             $eqId      = $eq['id'];
             $eqName    = strtoupper($eq['name'] ?? '');
@@ -403,6 +158,7 @@
         </div>
         <?php endforeach; ?>
         </div>
+        <div class="pres-pager-wrap" id="eqPager"></div>
         <?php endif; ?>
     </div>
 
@@ -411,7 +167,7 @@
         <?php if (empty($allTools)): ?>
         <p class="pres-empty">No tools found.</p>
         <?php else: ?>
-        <div class="pres-res-grid">
+        <div class="pres-res-grid pres-paged-grid" id="toolsGrid">
         <?php foreach ($allTools as $tool):
             $toolId    = $tool['id'];
             $toolName  = strtoupper($tool['name'] ?? '');
@@ -438,6 +194,7 @@
         </div>
         <?php endforeach; ?>
         </div>
+        <div class="pres-pager-wrap" id="toolsPager"></div>
         <?php endif; ?>
     </div>
 
@@ -545,10 +302,72 @@
     var CSRF_V   = '<?= csrf_hash() ?>';
     var BASE     = '<?= base_url() ?>';
 
+    /* ── Client-side grid pager ── */
+    var mpPager, eqPager, toolsPager;
+    (function () {
+        var PER_PAGE = 20;
+
+        function makePager(gridId, pagerId) {
+            var grid = document.getElementById(gridId);
+            var wrap = document.getElementById(pagerId);
+            if (!grid || !wrap) return null;
+            var state = { page: 1 };
+
+            function render() {
+                var cards   = Array.from(grid.querySelectorAll('.pres-res-card'));
+                var visible = cards.filter(function (c) { return !c.classList.contains('role-hidden'); });
+                var total   = visible.length;
+                var totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+                if (state.page > totalPages) state.page = 1;
+
+                var start = (state.page - 1) * PER_PAGE;
+                var end   = start + PER_PAGE;
+
+                visible.forEach(function (c, i) {
+                    c.classList.toggle('pager-hidden', i < start || i >= end);
+                });
+
+                var from = total === 0 ? 0 : start + 1;
+                var to   = Math.min(end, total);
+                var html = '<span class="pager-info">Showing ' + from + '–' + to + ' of ' + total + ' records</span>';
+                html += '<ul class="pager-list">';
+                if (state.page > 1) {
+                    html += '<li class="pager-item"><a class="pager-link" data-go="1">«</a></li>';
+                    html += '<li class="pager-item"><a class="pager-link" data-go="' + (state.page - 1) + '">‹</a></li>';
+                }
+                for (var p = 1; p <= totalPages; p++) {
+                    if (p === 1 || p === totalPages || Math.abs(p - state.page) <= 2) {
+                        html += '<li class="pager-item"><a class="' + (p === state.page ? 'pager-active' : 'pager-link') + '" data-go="' + p + '">' + p + '</a></li>';
+                    }
+                }
+                if (state.page < totalPages) {
+                    html += '<li class="pager-item"><a class="pager-link" data-go="' + (state.page + 1) + '">›</a></li>';
+                    html += '<li class="pager-item"><a class="pager-link" data-go="' + totalPages + '">»</a></li>';
+                }
+                html += '</ul>';
+                wrap.innerHTML = html;
+                wrap.querySelectorAll('[data-go]').forEach(function (a) {
+                    a.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        state.page = parseInt(a.dataset.go, 10);
+                        render();
+                    });
+                });
+            }
+
+            render();
+            return { render: render, reset: function () { state.page = 1; render(); } };
+        }
+
+        mpPager    = makePager('mpGrid',    'mpPager');
+        eqPager    = makePager('eqGrid',    'eqPager');
+        toolsPager = makePager('toolsGrid', 'toolsPager');
+    }());
+
     /* ── Role filter ── */
     (function () {
-        var chips    = document.querySelectorAll('.pres-role-chip');
-        var grid     = document.getElementById('mpGrid');
+        var chips      = document.querySelectorAll('.pres-role-chip');
+        var grid       = document.getElementById('mpGrid');
         var activeRole = '';
 
         chips.forEach(function (chip) {
@@ -566,8 +385,9 @@
                 }
                 if (!grid) return;
                 grid.querySelectorAll('.pres-res-card').forEach(function (card) {
-                    card.style.display = (!activeRole || card.dataset.role === activeRole) ? '' : 'none';
+                    card.classList.toggle('role-hidden', !(!activeRole || card.dataset.role === activeRole));
                 });
+                if (mpPager) mpPager.reset();
             });
         });
     }());

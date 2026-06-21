@@ -58,8 +58,9 @@ class Model_ResourceRequests extends Model_BaseFirestore
         if (!$doc->exists()) return null;
         $data = $doc->data();
         $data['id'] = $doc->id();
-        $data['created_at_fmt'] = $this->fmtTs($data['created_at'] ?? null);
-        $data['approved_at_fmt'] = $this->fmtTs($data['approved_at'] ?? null);
+        $data['created_at_fmt']           = $this->fmtTs($data['created_at'] ?? null);
+        $data['approved_at_fmt']           = $this->fmtTs($data['approved_at'] ?? null);
+        $data['secondary_approved_at_fmt'] = $this->fmtTs($data['secondary_approved_at'] ?? null);
         return $data;
     }
 

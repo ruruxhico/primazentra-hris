@@ -19,18 +19,21 @@ $createdAt = $req['created_at_fmt'] ?? '—';
 $reserved  = is_array($req['reserved_resources'] ?? null) ? $req['reserved_resources'] : [];
 
 $badgeMap = [
-    'pending'           => 'pz-badge-pending',
-    'pending secondary' => 'pz-badge-pending-secondary',
-    'approved'          => 'pz-badge-approved',
-    'rejected'          => 'pz-badge-rejected',
-    'completed'         => 'pz-badge-completed',
+    'pending'                    => 'pz-badge-pending',
+    'pending secondary'          => 'pz-badge-pending-secondary',
+    'pending secondary approval' => 'pz-badge-pending-secondary',
+    'approved'                   => 'pz-badge-approved',
+    'rejected'                   => 'pz-badge-rejected',
+    'completed'                  => 'pz-badge-completed',
 ];
 $badgeCls = $badgeMap[strtolower($status)] ?? 'pz-badge-pending';
 
-$canApprove         = in_array($role, ['Admin', 'Operations Manager', 'Project Manager']);
-$isPending          = strtolower($status) === 'pending';
-$isPendingSecondary = strtolower($status) === 'pending secondary';
-$sourceKnown        = !empty($req['source_project_id']);
+$canApprove          = in_array($role, ['Administrator', 'Operations Manager', 'Project Manager']);
+$isPending           = strtolower($status) === 'pending';
+$isPendingSecondary  = in_array(strtolower($status), ['pending secondary', 'pending secondary approval']);
+$sourceKnown         = !empty($req['source_project_id']);
+$primaryApproverRole = $req['approved_by_role'] ?? '';
+$sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === $primaryApproverRole;
 ?>
 
 <a href="<?= base_url('requests') ?>" class="pz-back-link">
@@ -97,8 +100,21 @@ $sourceKnown        = !empty($req['source_project_id']);
 
         <?php if (!empty($req['approved_by_name'])): ?>
         <div class="pz-info-divider"></div>
-        <span class="pz-info-label">Approved by</span>
-        <span class="pz-info-value"><?= esc($req['approved_by_name']) ?><?= $req['approved_at_fmt'] ? ' · ' . esc($req['approved_at_fmt']) : '' ?></span>
+        <span class="pz-info-label">1st Approval</span>
+        <span class="pz-info-value">
+            <?= esc($req['approved_by_name']) ?>
+            <?php if (!empty($req['approved_by_role'])): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($req['approved_by_role']) ?></span><?php endif; ?>
+            <?= !empty($req['approved_at_fmt']) ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($req['approved_at_fmt']) . '</span>' : '' ?>
+        </span>
+        <?php endif; ?>
+
+        <?php if (!empty($req['secondary_approved_by_name'])): ?>
+        <span class="pz-info-label">2nd Approval</span>
+        <span class="pz-info-value">
+            <?= esc($req['secondary_approved_by_name']) ?>
+            <?php if (!empty($req['secondary_approved_by_role'])): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($req['secondary_approved_by_role']) ?></span><?php endif; ?>
+            <?= !empty($req['secondary_approved_at_fmt']) ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($req['secondary_approved_at_fmt']) . '</span>' : '' ?>
+        </span>
         <?php endif; ?>
     </div>
 </div>
@@ -129,24 +145,48 @@ $sourceKnown        = !empty($req['source_project_id']);
     <p class="pz-card-section">Approval</p>
 
     <?php if ($isPendingSecondary): ?>
-        <p style="font-size:1rem; color:#5a4020; margin-bottom:.85rem">
-            Primary approval done — awaiting secondary approval.
-            Approved source: <strong><?= esc($req['approved_source_project_name'] ?? '—') ?></strong>
-        </p>
-        <div style="display:flex; gap:.55rem; flex-wrap:wrap">
-            <form method="POST" action="<?= base_url('requests/approve-secondary/' . $req['id']) ?>">
-                <?= csrf_field() ?>
-                <button type="submit" class="pz-btn pz-btn-success">
-                    <span class="material-symbols-outlined">check_circle</span> Approve Final
-                </button>
-            </form>
+        <!-- Primary approval info -->
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:.7rem 1rem;margin-bottom:.85rem;font-size:0.92rem;color:#0c4a6e;">
+            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;margin-right:.3rem;">verified</span>
+            <strong>1st approval:</strong> <?= esc($req['approved_by_name'] ?? '—') ?>
+            <?php if ($primaryApproverRole): ?><span style="opacity:.7"> · <?= esc($primaryApproverRole) ?></span><?php endif; ?>
+            <?php if (!empty($req['approved_at_fmt'])): ?><span style="opacity:.7"> · <?= esc($req['approved_at_fmt']) ?></span><?php endif; ?>
+            <br><span style="opacity:.8">Approved source:</span> <strong><?= esc($req['approved_source_project_name'] ?? '—') ?></strong>
+        </div>
+
+        <?php if ($sameRoleBlocked): ?>
+            <!-- Same role — cannot approve secondary -->
+            <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:.7rem 1rem;margin-bottom:.85rem;font-size:0.92rem;color:#78350f;display:flex;align-items:center;gap:.5rem;">
+                <span class="material-symbols-outlined" style="font-size:1.1rem;">block</span>
+                A <strong><?= esc($role) ?></strong> already provided the first approval. The secondary approval must come from a different role.
+            </div>
+            <!-- Still allow rejection -->
             <form method="POST" action="<?= base_url('requests/reject/' . $req['id']) ?>">
                 <?= csrf_field() ?>
                 <button type="submit" class="pz-btn pz-btn-danger-outline" onclick="return confirm('Reject this request?')">
                     <span class="material-symbols-outlined">cancel</span> Reject
                 </button>
             </form>
-        </div>
+        <?php else: ?>
+            <p style="font-size:0.92rem; color:#5a4020; margin-bottom:.85rem">
+                Awaiting 2nd approval from a different role.
+            </p>
+            <div style="display:flex; gap:.55rem; flex-wrap:wrap">
+                <form method="POST" action="<?= base_url('requests/approve-secondary/' . $req['id']) ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="pz-btn pz-btn-success">
+                        <span class="material-symbols-outlined">check_circle</span> Approve Final
+                    </button>
+                </form>
+                <form method="POST" action="<?= base_url('requests/reject/' . $req['id']) ?>">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="pz-btn pz-btn-danger-outline" onclick="return confirm('Reject this request?')">
+                        <span class="material-symbols-outlined">cancel</span> Reject
+                    </button>
+                </form>
+            </div>
+        <?php endif; ?>
+
     <?php else: ?>
         <form method="POST" action="<?= base_url('requests/approve/' . $req['id']) ?>">
             <?= csrf_field() ?>
@@ -169,10 +209,10 @@ $sourceKnown        = !empty($req['source_project_id']);
             </div>
             <?php endif; ?>
 
-            <?php if ($role === 'Admin'): ?>
-            <label style="display:flex; align-items:center; gap:.5rem; font-size:1rem; color:#7a6040; margin-bottom:.85rem; cursor:pointer">
+            <?php if ($role === 'Administrator'): ?>
+            <label style="display:flex; align-items:center; gap:.5rem; font-size:0.92rem; color:#7a6040; margin-bottom:.85rem; cursor:pointer; background:#fef3c7; border:1px solid #f59e0b; border-radius:7px; padding:.5rem .75rem;">
                 <input type="checkbox" name="bypass_secondary" value="1">
-                Admin bypasses secondary approval and approves immediately
+                <span><strong>Admin bypass</strong> — approve immediately without requiring a second approval</span>
             </label>
             <?php endif; ?>
 

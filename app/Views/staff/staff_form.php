@@ -1,15 +1,8 @@
-
+﻿
 <?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/css/intlTelInput.css">
-<style>
-.avatar-upload-wrap{display:flex;align-items:center;gap:24px;padding:6px 0}
-.avatar-circle{width:96px;height:96px;border-radius:50%;overflow:hidden;background:#e8eef5;border:3px solid #d0dce8;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#1a3c5e;text-transform:uppercase}
-.avatar-circle img{width:100%;height:100%;object-fit:cover}
-.avatar-upload-controls{display:flex;flex-direction:column;gap:8px}
-.avatar-upload-controls small{color:#888;font-size:11px}
-</style>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -83,6 +76,18 @@
                     <input type="email" name="email" value="<?= esc((string)($staff['email'] ?? '')) ?>" required placeholder="email@example.com">
                 </div>
                 <div class="pz-form-group">
+                    <label>Role *</label>
+                    <select name="role" required>
+                        <option value="">Select Role</option>
+                        <option value="Administrator"     <?= ($staff['role'] ?? '') === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
+                        <option value="Operations Manager"<?= ($staff['role'] ?? '') === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
+                        <option value="Project Manager"   <?= ($staff['role'] ?? '') === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
+                        <option value="Site Engineer"     <?= ($staff['role'] ?? '') === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>
+                    </select>
+                </div>
+            </div>
+            <div class="pz-form-row full" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label>Contact No</label>
                     <div class="phone-input-group">
                         <input type="tel" id="staffContact" name="contact_no_display"
@@ -93,19 +98,6 @@
                     <input type="hidden" name="contact_no" id="staffContactFull" value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
                     <small class="phone-hint" id="staffPhoneHint">Include an active mobile number.</small>
                     <small class="phone-error" id="staffPhoneError" hidden>Please enter a valid phone number.</small>
-                </div>
-            </div>
-
-            <div class="pz-form-row" style="max-width:280px; margin-top:.65rem">
-                <div class="pz-form-group">
-                    <label>Role *</label>
-                    <select name="role" required>
-                        <option value="">Select Role</option>
-                        <option value="Administrator"     <?= ($staff['role'] ?? '') === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
-                        <option value="Operations Manager"<?= ($staff['role'] ?? '') === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
-                        <option value="Project Manager"   <?= ($staff['role'] ?? '') === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
-                        <option value="Site Engineer"     <?= ($staff['role'] ?? '') === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>
-                    </select>
                 </div>
             </div>
         </div>
@@ -121,7 +113,7 @@
                 <span class="material-symbols-outlined">save</span>
                 <?= isset($staffId) ? 'Update Staff' : 'Create Staff' ?>
             </button>
-            <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-outline">Cancel</a>
+            <a href="<?= base_url('staff') ?>" class="pz-btn pz-btn-cancel">Cancel</a>
         </div>
     </form>
 </div>

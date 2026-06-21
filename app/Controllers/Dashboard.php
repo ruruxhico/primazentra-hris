@@ -2,11 +2,13 @@
 
 namespace App\Controllers;
 
+use App\Libraries\MLServiceClient;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
 use App\Models\Model_Users;
 use App\Models\Model_Manpower;
 use App\Models\Model_ResourceRequests;
+use Config\Services;
 
 class Dashboard extends BaseController
 {
@@ -43,7 +45,7 @@ class Dashboard extends BaseController
             $pendingNameMap = []; // "pid::lower(name)"  => reqId
             try {
                 foreach ($this->requestModel->getAll([]) as $r) {
-                    if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary'])) continue;
+                    if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary', 'Pending Secondary Approval'])) continue;
                     $srcPid = $r['source_project_id'] ?? '';
                     if (!$srcPid) continue;
                     $rid   = $r['resource_id'] ?? '';
@@ -56,11 +58,12 @@ class Dashboard extends BaseController
                 log_message('warning', 'Dashboard: pending requests - ' . $e->getMessage());
             }
 
-            // ── Resources ───────────────────────────────────────────
-            $totalResources     = $this->resourceModel->countResources();
-            $availableResources = $this->resourceModel->getAvailableResources();
-            $deployedResources  = $this->resourceModel->getDeployedResources();
-            $availableTools     = $this->resourceModel->getAvailableResources();
+            // ── Resources — single fetch, derive everything in PHP ───
+            $allResources       = $this->resourceModel->getAllResources();
+            $totalResources     = count($allResources);
+            $availableResources = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Available'));
+            $deployedResources  = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Deployed'));
+            $availableTools     = $availableResources; // same data, no extra call
 
             // ── Manpower ─────────────────────────────────────────────
             $allManpower = [];
@@ -88,11 +91,11 @@ class Dashboard extends BaseController
                 $manpowerByProject[$apid][] = ['name' => $name, 'id' => $m['id'], 'unit_id' => ''];
             }
 
-            // Equipment + Tools: assigned_project_id on the items subcollection
+            // Equipment + Tools: reuse $allResources — no second getAllResources() call
             $equipmentByProject = [];
             $toolsByProject     = [];
             try {
-                foreach ($this->resourceModel->getAllResources() as $res) {
+                foreach ($allResources as $res) {
                     $resId    = $res['id'];
                     $resName  = strtoupper(trim((string)($res['name'] ?? '')));
                     $category = $res['category'] ?? '';
@@ -168,6 +171,147 @@ class Dashboard extends BaseController
                 return ($p['_progress'] < 30) || (($p['status'] ?? '') === 'Halted');
             }));
 
+            // ── ML Predicted Blockers & Delays ───────────────────────
+            // Single batch call replaces per-project loop to avoid N×timeout penalty.
+            $mlBlockers  = [];
+            $mlAvailable = true;
+            try {
+                $mlService = new MLServiceClient();
+                // Probe availability with first project only; skip rest if service is down.
+                foreach ($activeProjects as $p) {
+                    if (!$mlAvailable) break;
+                    try {
+                        $features = [
+                            'project_id'              => (string)($p['id'] ?? ''),
+                            'progress_percent'        => (float)($p['_progress'] ?? 0),
+                            'planned_progress_percent'=> (float)($p['planned_progress'] ?? 50),
+                            'days_elapsed'            => (int)($p['days_elapsed'] ?? 0),
+                            'days_remaining'          => (int)($p['days_remaining'] ?? 0),
+                            'workers_present'         => (int)($p['workers_present'] ?? 0),
+                            'workers_planned'         => (int)($p['workers_planned'] ?? 1),
+                            'equipment_utilization'   => (float)($p['equipment_utilization'] ?? 1.0),
+                            'weather_severity'        => (int)($p['weather_severity'] ?? 0),
+                            'site_access_issues'      => (int)($p['site_access_issues'] ?? 0),
+                            'avg_progress_3d'         => (float)($p['avg_progress_3d'] ?? 0),
+                            'progress_trend_3d'       => (float)($p['progress_trend_3d'] ?? 0),
+                            'consecutive_low_days'    => (int)($p['consecutive_low_days'] ?? 0),
+                            'budget_utilization'      => (float)($p['budget_utilization'] ?? 0),
+                            'cost_variance_ratio'     => (float)($p['cost_variance_ratio'] ?? 0),
+                            'active_blocker_count'    => (int)($p['active_blocker_count'] ?? 0),
+                            'days_since_last_blocker' => (int)($p['days_since_last_blocker'] ?? 999),
+                        ];
+
+                        $blockerPrediction = $mlService->predictBlockers($features);
+
+                        // If we got an error response, stop trying subsequent projects
+                        if (isset($blockerPrediction['error'])) {
+                            $mlAvailable = false;
+                            break;
+                        }
+
+                        $delayPrediction = method_exists($mlService, 'predictDelay')
+                            ? $mlService->predictDelay($features)
+                            : null;
+
+                        $rawBlocker       = $blockerPrediction['blocker_type'] ?? $blockerPrediction['predicted_blocker'] ?? $blockerPrediction['prediction'] ?? 'No Blocker';
+                        $predictedBlocker = ($rawBlocker === 'Unknown') ? 'No Blocker' : $rawBlocker;
+
+                        $estimatedDelay = 0;
+                        if ($delayPrediction && !isset($delayPrediction['error'])) {
+                            $estimatedDelay = $delayPrediction['predicted_delay_days'] ?? $delayPrediction['delay_days'] ?? $delayPrediction['prediction'] ?? 0;
+                        } elseif ($blockerPrediction) {
+                            $estimatedDelay = $blockerPrediction['predicted_delay_days'] ?? $blockerPrediction['delay_days'] ?? 0;
+                        }
+
+                        $mlBlockers[] = [
+                            'project_name'         => $p['project_name'] ?? 'Unknown Project',
+                            'predicted'            => $predictedBlocker,
+                            'estimated_delay_days' => (int) round((float) $estimatedDelay),
+                        ];
+                    } catch (\Throwable $e) {
+                        // First failure means service is down — abort all remaining calls
+                        $mlAvailable = false;
+                        log_message('warning', 'Dashboard: ML unavailable, skipping remaining projects - ' . $e->getMessage());
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: ML service init failed - ' . $e->getMessage());
+            }
+
+            // ── FastAPI MCDA Tool Availability (optional, falls back to Firestore data) ──
+            $availableToolsMcda = [];
+            try {
+                // Use first geolocated project as the reference site; fall back to PH centre
+                $siteLat = 14.5995;
+                $siteLng = 120.9842;
+                foreach ($activeProjects as $_ap) {
+                    if ($_ap['_lat'] !== null && $_ap['_lng'] !== null) {
+                        $siteLat = (float)$_ap['_lat'];
+                        $siteLng = (float)$_ap['_lng'];
+                        break;
+                    }
+                }
+
+                $releasedToolsPayload = [];
+                foreach ($activeProjects as $p) {
+                    $toolCount = count($p['_tools'] ?? []);
+                    if ($p['_lat'] !== null && $p['_lng'] !== null && $toolCount >= 1) {
+                        $releasedToolsPayload[] = [
+                            'project_id'    => (string)($p['id'] ?? ''),
+                            'project_name'  => $p['project_name'] ?? 'Unknown',
+                            'lat'           => (float)$p['_lat'],
+                            'lng'           => (float)$p['_lng'],
+                            'tool_category' => 'Construction Equipment',
+                            'units_released'=> $toolCount,
+                        ];
+                    }
+                }
+
+                $mcdaPayload = [
+                    'tool_category'  => 'Construction Equipment',
+                    'site_lat'       => $siteLat,
+                    'site_lng'       => $siteLng,
+                    'radius_km'      => 50,
+                    'weights'        => null,
+                    'released_tools' => !empty($releasedToolsPayload) ? $releasedToolsPayload : null,
+                ];
+
+                $fastApiResp = Services::curlrequest()->request('POST', 'http://127.0.0.1:8000/predict/tool-availability', [
+                    'headers'         => ['Content-Type' => 'application/json', 'Accept' => 'application/json'],
+                    'json'            => $mcdaPayload,
+                    'timeout'         => 2,
+                    'connect_timeout' => 1,
+                ]);
+
+                if ($fastApiResp->getStatusCode() === 200) {
+                    $apiData   = json_decode($fastApiResp->getBody(), true);
+                    $toolsList = $apiData['optimized_tools'] ?? $apiData['tools'] ?? $apiData['predictions'] ?? [];
+                    if (is_array($toolsList)) {
+                        // Urgency-based next deployment: project with lowest progress gets tools first
+                        $nextDeploymentSite = 'Unassigned Depot';
+                        $highestUrgency     = -1;
+                        foreach ($activeProjects as $proj) {
+                            $urgency = 100 - $proj['_progress'];
+                            if ($urgency > $highestUrgency) {
+                                $highestUrgency     = $urgency;
+                                $nextDeploymentSite = $proj['project_name'] ?? 'Unknown';
+                            }
+                        }
+                        foreach ($toolsList as $key => $value) {
+                            $toolName = isset($value['name']) ? $value['name'] : (!is_array($value) ? $key : 'UNKNOWN');
+                            $qty      = isset($value['qty'])  ? (int)$value['qty']  : (!is_array($value) ? (int)$value : 0);
+                            $availableToolsMcda[] = [
+                                'name'            => strtoupper(str_replace('_', ' ', $toolName)),
+                                'qty'             => $qty,
+                                'next_deployment' => $nextDeploymentSite,
+                            ];
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: MCDA tool availability failed - ' . $e->getMessage());
+            }
+
             // ── Staff ────────────────────────────────────────────────
             $staffCount = $this->userModel->countStaff();
 
@@ -198,7 +342,9 @@ class Dashboard extends BaseController
                 'projectsByRegion'    => $projectsByRegion,
                 'projectLocations'    => $projectLocations,
                 'blockers'            => $blockers,
+                'mlBlockers'          => $mlBlockers,
                 'availableTools'      => $availableTools,
+                'availableToolsMcda'  => $availableToolsMcda,
                 'availableResources'  => $availableResources,
                 'deployedResources'   => $deployedResources,
                 'availableManpower'   => $availableManpower,
@@ -220,12 +366,14 @@ class Dashboard extends BaseController
                 'staffCount'       => 0,
                 'activeProjects'   => [],
                 'projectsByRegion' => [],
-                'blockers'         => [],
-                'availableTools'   => [],
+                'blockers'            => [],
+                'mlBlockers'          => [],
+                'availableTools'      => [],
+                'availableToolsMcda'  => [],
                 'availableResources'  => [],
                 'deployedResources'   => [],
                 'availableManpower'   => [],
-                'errorMessage'     => 'Unable to load dashboard right now.',
+                'errorMessage'        => 'Unable to load dashboard right now.',
             ]);
         }
     }

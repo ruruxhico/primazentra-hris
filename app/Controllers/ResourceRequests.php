@@ -2,6 +2,9 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ArchiveService;
+use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
 use App\Models\Model_ResourceRequests;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
@@ -17,8 +20,11 @@ class ResourceRequests extends BaseController
     protected $resourceModel;
     protected $manpowerModel;
 
+    protected FirestoreService $firestore;
+
     public function __construct()
     {
+        $this->firestore     = FirestoreService::getInstance();
         $this->requestModel  = new Model_ResourceRequests();
         $this->projectModel  = new Model_Projects();
         $this->resourceModel = new Model_Resources();
@@ -219,10 +225,16 @@ class ResourceRequests extends BaseController
         $uid  = session()->get('userId')   ?? '';
         $user = session()->get('userName') ?? '';
 
+        // Admin bypass only allowed for Administrator role
+        if ($bypassSecond && $role !== 'Administrator') {
+            $bypassSecond = false;
+        }
+
         $updates = [
             'status'                       => $bypassSecond ? 'Approved' : 'Pending Secondary',
             'approved_by'                  => $uid,
             'approved_by_name'             => $user,
+            'approved_by_role'             => $role,
             'approved_at'                  => new Timestamp(new \DateTime()),
             'bypass_secondary'             => $bypassSecond,
             'approved_source_project_id'   => $sourcePid ?: ($req['source_project_id'] ?? ''),
@@ -246,7 +258,9 @@ class ResourceRequests extends BaseController
             $svc = new NotificationService();
 
             if ($bypassSecond) {
-                // Admin bypass — fully approved in one step
+                // Admin bypass — fully approved in one step; move the resource immediately
+                $this->_finalizeTransfer(array_merge($req, $updates));
+
                 if ($requesterUid) {
                     $svc->send(
                         $requesterUid,
@@ -325,18 +339,33 @@ class ResourceRequests extends BaseController
     {
         if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
 
+        $currentRole = session()->get('role') ?? '';
+        $allowed = ['Administrator', 'Operations Manager', 'Project Manager'];
+        if (!in_array($currentRole, $allowed)) {
+            return redirect()->to('requests/' . $id)->with('error', 'You do not have permission to approve requests.');
+        }
+
         $req = $this->requestModel->getById($id);
         if (!$req || $req['status'] !== 'Pending Secondary') {
             return redirect()->to('requests/' . $id)->with('error', 'Request is not awaiting secondary approval.');
         }
 
+        $primaryRole = $req['approved_by_role'] ?? '';
+        if ($primaryRole && $currentRole === $primaryRole) {
+            return redirect()->to('requests/' . $id)->with('error', "A {$primaryRole} already approved this request. A different role must provide the secondary approval.");
+        }
+
         try {
             $this->requestModel->update($id, [
-                'status'                    => 'Approved',
-                'secondary_approved_by'     => session()->get('userId') ?? '',
-                'secondary_approved_by_name'=> session()->get('userName') ?? '',
-                'secondary_approved_at'     => new Timestamp(new \DateTime()),
+                'status'                      => 'Approved',
+                'secondary_approved_by'       => session()->get('userId') ?? '',
+                'secondary_approved_by_name'  => session()->get('userName') ?? '',
+                'secondary_approved_by_role'  => $currentRole,
+                'secondary_approved_at'       => new Timestamp(new \DateTime()),
             ]);
+
+            // Move the resource to the destination project now that it's fully approved
+            $this->_finalizeTransfer($req);
 
             $requesterUid = (string)($req['requested_by'] ?? '');
             if ($requesterUid) {
@@ -372,7 +401,7 @@ class ResourceRequests extends BaseController
 
         $result = [];
         foreach ($all as $r) {
-            if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary'])) continue;
+            if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary', 'Pending Secondary Approval'])) continue;
             $result[] = [
                 'id'            => $r['id'],
                 'status'        => $r['status'],
@@ -418,5 +447,108 @@ class ResourceRequests extends BaseController
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::notifyUsersWithRoles - ' . $e->getMessage());
         }
+    }
+
+    /**
+     * After final approval, update the resource's assigned_project_id and status
+     * so the dashboard immediately reflects the transfer.
+     */
+    private function _finalizeTransfer(array $req): void
+    {
+        $category = strtolower(trim($req['category'] ?? ''));
+        $resId    = trim($req['resource_id'] ?? '');
+        $unitId   = trim($req['unit_id']     ?? '');
+        $destPid  = trim($req['destination_project_id'] ?? '');
+        $destName = trim($req['destination_site_name']  ?? '');
+
+        if (!$resId || !$destPid) return;
+
+        $db  = $this->firestore->getDb();
+        $now = new Timestamp(new \DateTime());
+
+        try {
+            if ($category === 'manpower') {
+                $db->collection('manpower')->document($resId)->update([
+                    ['path' => 'assigned_project_id', 'value' => $destPid],
+                    ['path' => 'status',              'value' => 'DEPLOYED'],
+                    ['path' => 'location',            'value' => [
+                        'address' => strtoupper($destName),
+                        'type'    => 'PROJECT SITE',
+                    ]],
+                    ['path' => 'updated_at', 'value' => $now],
+                ]);
+            } elseif (in_array($category, ['equipment', 'tools'])) {
+                $itemsRef = $db->collection('resource')->document($resId)->collection('items');
+
+                if ($unitId !== '') {
+                    // Single specific unit
+                    $itemsRef->document($unitId)->update([
+                        ['path' => 'assigned_project_id', 'value' => $destPid],
+                        ['path' => 'status',              'value' => 'In-Use'],
+                        ['path' => 'location',            'value' => [
+                            'address' => $destName,
+                            'type'    => 'Project Site',
+                        ]],
+                        ['path' => 'transfer_locked',     'value' => false],
+                        ['path' => 'updated_at',          'value' => $now],
+                    ]);
+                } else {
+                    // Bulk: move $qty In-Storage items to the destination
+                    $qty   = max(1, (int)($req['quantity'] ?? 1));
+                    $moved = 0;
+                    foreach ($itemsRef->documents() as $itemDoc) {
+                        if (!$itemDoc->exists() || $moved >= $qty) break;
+                        $itemStatus = (string)($itemDoc->data()['status'] ?? '');
+                        if ($itemStatus === 'In-Storage') {
+                            $itemDoc->reference()->update([
+                                ['path' => 'assigned_project_id', 'value' => $destPid],
+                                ['path' => 'status',              'value' => 'In-Use'],
+                                ['path' => 'location',            'value' => [
+                                    'address' => $destName,
+                                    'type'    => 'Project Site',
+                                ]],
+                                ['path' => 'transfer_locked', 'value' => false],
+                                ['path' => 'updated_at',      'value' => $now],
+                            ]);
+                            $moved++;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::_finalizeTransfer - ' . $e->getMessage());
+        }
+    }
+
+    public function deleted(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new TrashService($this->firestore))->getTrashItems('request');
+        return view('shared/module_deleted', [
+            'pageTitle'  => 'Deleted Requests',
+            'activePage' => 'requests',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'request',
+            'title'      => 'Deleted Requests',
+            'backUrl'    => base_url('requests'),
+            'items'      => $items,
+        ]);
+    }
+
+    public function archived(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new ArchiveService($this->firestore))->getArchivedItems('request');
+        return view('shared/module_archived', [
+            'pageTitle'  => 'Archived Requests',
+            'activePage' => 'requests',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'request',
+            'title'      => 'Archived Requests',
+            'backUrl'    => base_url('requests'),
+            'items'      => $items,
+        ]);
     }
 }

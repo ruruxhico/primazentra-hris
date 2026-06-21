@@ -31,11 +31,15 @@ class Import extends BaseController
             'headers' => ['First Name*', 'Middle Name', 'Last Name*', 'Role*', 'Specialization', 'Skills (semicolon-separated)', 'Status*'],
             'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'FIELD WORKER / FOREMAN', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'e.g. Welding; Masonry', 'AVAILABLE / DEPLOYED / ON-LEAVE'],
         ],
+        'resource_units' => [
+            'headers' => ['Serial Number', 'Brand', 'Model Number', 'Condition'],
+            'notes'   => ['Optional — auto-generated if blank', 'Optional, e.g. Makita', 'Optional, e.g. DP4011', 'New / Functional / Worn / Broken (defaults to New if blank)'],
+        ],
     ];
 
     public function __construct()
     {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     // GET /import/template?module=projects
@@ -146,11 +150,15 @@ class Import extends BaseController
         $dataRows = array_slice($rows, $headerRowIdx + 1);
 
         [$imported, $skipped, $error] = match ($module) {
-            'projects'  => $this->importProjects($dataRows),
-            'equipment' => $this->importResources($dataRows, 'Equipment'),
-            'tools'     => $this->importResources($dataRows, 'Tools'),
-            'manpower'  => $this->importManpower($dataRows),
-            default     => [0, 0, 'Unknown module'],
+            'projects'       => $this->importProjects($dataRows),
+            'equipment'      => $this->importResources($dataRows, 'Equipment'),
+            'tools'          => $this->importResources($dataRows, 'Tools'),
+            'manpower'       => $this->importManpower($dataRows),
+            'resource_units' => $this->importResourceUnits(
+                $dataRows,
+                trim((string)($this->request->getPost('resource_id') ?? ''))
+            ),
+            default          => [0, 0, 'Unknown module'],
         };
 
         if ($error) {
@@ -224,6 +232,60 @@ class Import extends BaseController
                 'region'     => $region,
                 'created_at' => $now,
                 'updated_at' => $now,
+            ]);
+            $imported++;
+        }
+
+        return [$imported, $skipped, null];
+    }
+
+    // Columns (0-indexed): 0:Serial Number | 1:Brand | 2:Model Number | 3:Condition
+    private function importResourceUnits(array $rows, string $resourceId): array
+    {
+        if ($resourceId === '') return [0, 0, 'No resource ID provided.'];
+
+        $db = $this->firestore->getDb();
+
+        $parentSnap = $db->collection('resource')->document($resourceId)->snapshot();
+        if (!$parentSnap->exists()) return [0, 0, 'Resource not found.'];
+
+        $imported = 0;
+        $skipped  = 0;
+        $now = time();
+
+        foreach ($rows as $row) {
+            $serial    = trim((string)($row[0] ?? ''));
+            $brand     = trim((string)($row[1] ?? ''));
+            $modelNo   = trim((string)($row[2] ?? ''));
+            $condition = trim((string)($row[3] ?? ''));
+
+            if ($serial === '' && $brand === '' && $modelNo === '' && $condition === '') {
+                $skipped++;
+                continue;
+            }
+
+            if ($serial === '') {
+                try {
+                    $serial = 'SN-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+                } catch (\Exception $e) {
+                    $serial = 'SN-' . strtoupper(substr(md5(uniqid()), 0, 8));
+                }
+            }
+
+            $validConditions = ['New', 'Functional', 'Worn', 'Broken'];
+            if ($condition === '' || !in_array($condition, $validConditions, true)) {
+                $condition = 'New';
+            }
+
+            $db->collection('resource')->document($resourceId)->collection('items')->newDocument()->set([
+                'serial_number' => $serial,
+                'brand'         => $brand,
+                'model_number'  => $modelNo,
+                'condition'     => $condition,
+                'status'        => 'In-Storage',
+                'location'      => ['type' => '', 'address' => ''],
+                'created_at'    => $now,
+                'updated_at'    => $now,
             ]);
             $imported++;
         }

@@ -17,7 +17,7 @@ class Export extends BaseController
 
     public function __construct()
     {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     public function index()
@@ -27,12 +27,16 @@ class Export extends BaseController
         $subtype = strtolower(trim((string) ($this->request->getGet('subtype') ?? 'models')));
 
         [$headers, $rows, $title] = match ($module) {
-            'projects'  => $this->getProjectsData(),
-            'equipment' => $this->getResourceData('Equipment', $subtype),
-            'tools'     => $this->getResourceData('Tools', $subtype),
-            'manpower'  => $this->getManpowerData(),
-            'staff'     => $this->getStaffData(),
-            default     => [[], [], 'Export'],
+            'projects'       => $this->getProjectsData(),
+            'equipment'      => $this->getResourceData('Equipment', $subtype),
+            'tools'          => $this->getResourceData('Tools', $subtype),
+            'manpower'       => $this->getManpowerData(),
+            'staff'          => $this->getStaffData(),
+            'resource_units' => $this->getResourceItemsByModel(
+                (string)($this->request->getGet('resource_id') ?? ''),
+                (string)($this->request->getGet('resource_name') ?? 'Resource')
+            ),
+            default          => [[], [], 'Export'],
         };
 
         if (empty($headers)) {
@@ -191,6 +195,42 @@ class Export extends BaseController
         }
 
         return [$headers, $rows, $category . ' — All Units'];
+    }
+
+    private function getResourceItemsByModel(string $resourceId, string $resourceName): array
+    {
+        if ($resourceId === '') return [[], [], 'Export'];
+
+        $headers = [
+            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand', 'Model Number',
+            'Location Address', 'Location Type', 'Assigned Project ID',
+            'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
+        ];
+        $rows = [];
+        $db = $this->firestore->getDb();
+
+        $itemDocs = $db->collection('resource')->document($resourceId)->collection('items')->documents();
+        foreach ($itemDocs as $itemDoc) {
+            if (!$itemDoc->exists()) continue;
+            $item = $itemDoc->data();
+            $loc  = is_array($item['location'] ?? null) ? $item['location'] : [];
+
+            $rows[] = [
+                $itemDoc->id(),
+                $item['serial_number'] ?? '',
+                $item['condition'] ?? '',
+                $item['status'] ?? '',
+                $item['brand'] ?? ($item['brand_name'] ?? ''),
+                $item['model_number'] ?? '',
+                $loc['address'] ?? ($item['location_address'] ?? ''),
+                $loc['type'] ?? ($item['location_type'] ?? ''),
+                $item['assigned_project_id'] ?? '',
+                $this->formatDateMDY($item['created_at'] ?? ''),
+                $this->formatDateMDY($item['updated_at'] ?? ''),
+            ];
+        }
+
+        return [$headers, $rows, $resourceName . ' — Units'];
     }
 
     private function getManpowerData(): array

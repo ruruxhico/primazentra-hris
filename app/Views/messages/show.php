@@ -1,198 +1,6 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
-<style>
-.msg-show-wrap {
-    display:flex; flex-direction:column;
-    height:calc(100vh - 120px); min-height:400px;
-    background:#fff; border:1px solid #e2ddd4; border-radius:14px;
-    box-shadow:0 2px 10px rgba(0,0,0,0.08);
-    padding:1.25rem 1.5rem 0;
-}
-
-.msg-chat-hdr {
-    display:flex; align-items:center; gap:12px;
-    padding-bottom:12px; border-bottom:1px solid #eee; flex-shrink:0;
-    position:relative;
-}
-.msg-back-btn {
-    background:none; border:none; cursor:pointer; color:#b8960c;
-    display:flex; align-items:center; padding:4px;
-    border-radius:6px; transition:background .1s;
-}
-.msg-back-btn:hover { background:#fdf8e1; }
-.msg-back-btn .material-symbols-outlined { font-size:22px; }
-.msg-chat-title { font-size:1.1rem; font-weight:700; color:#1a1a1a; }
-
-.msg-hdr-info-btn {
-    flex-shrink:0; background:none; border:none; cursor:pointer;
-    color:#b8960c; padding:4px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center;
-    transition:background .12s;
-}
-.msg-hdr-info-btn:hover { background:#f0ead8; }
-.msg-hdr-info-btn .material-symbols-outlined { font-size:20px; font-variation-settings:'FILL' 1; }
-
-.msg-hdr-pop {
-    display:none; position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid #e8d97a; border-radius:10px;
-    padding:10px 14px; min-width:180px; max-width:260px;
-    box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:200;
-    font-size:.88rem; color:#333;
-}
-.msg-hdr-pop.open { display:block; }
-.msg-hdr-pop-title {
-    font-weight:700; font-size:.82rem; color:#b8960c;
-    text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;
-}
-.msg-hdr-pop ul { margin:0; padding:0 0 0 14px; }
-.msg-hdr-pop li { margin-bottom:3px; }
-
-.msg-thread {
-    flex:1; overflow-y:auto; padding:16px 4px;
-    display:flex; flex-direction:column; gap:10px;
-}
-
-.msg-bubble-row { display:flex; align-items:flex-end; gap:8px; }
-.msg-bubble-row.mine { flex-direction:row-reverse; }
-
-.msg-avatar {
-    width:30px; height:30px; border-radius:50%; flex-shrink:0;
-    background:#e8e8e8; color:#888; font-size:12px; font-weight:700;
-    display:flex; align-items:center; justify-content:center;
-    text-transform:uppercase;
-}
-.msg-bubble-row.mine .msg-avatar { background:#f0ead8; color:#b8960c; }
-
-.msg-bubble-wrap { max-width:72%; display:flex; flex-direction:column; }
-.msg-bubble-row.mine .msg-bubble-wrap { align-items:flex-end; }
-
-.msg-sender-label { font-size:.78rem; color:#aaa; margin-bottom:3px; padding:0 4px; }
-
-.msg-bubble {
-    padding:9px 14px; border-radius:16px; font-size:.95rem;
-    line-height:1.45; word-break:break-word;
-    background:#f0f0f0; color:#222; border-bottom-left-radius:4px;
-}
-.msg-bubble-row.mine .msg-bubble {
-    background:#b8960c; color:#fff;
-    border-bottom-right-radius:4px; border-bottom-left-radius:16px;
-}
-
-.msg-bubble img {
-    max-width:240px; max-height:240px; border-radius:10px;
-    display:block; cursor:pointer; margin-bottom:4px;
-}
-.msg-file-link {
-    display:flex; align-items:center; gap:8px;
-    font-size:.85rem; text-decoration:none;
-    color:inherit;
-}
-.msg-file-link .material-symbols-outlined { font-size:20px; }
-.msg-bubble-row.mine .msg-file-link { color:#fff; }
-
-.msg-time { font-size:.75rem; color:#bbb; margin-top:3px; padding:0 4px; }
-.msg-bubble-row.mine .msg-time { text-align:right; }
-
-.msg-date-div {
-    text-align:center; font-size:.72rem; color:#bbb; margin:6px 0;
-    display:flex; align-items:center; gap:8px;
-}
-.msg-date-div::before, .msg-date-div::after {
-    content:''; flex:1; height:1px; background:#eee;
-}
-
-.msg-empty-thread {
-    flex:1; display:flex; align-items:center; justify-content:center;
-    flex-direction:column; gap:8px; color:#ccc;
-}
-.msg-empty-thread .material-symbols-outlined { font-size:44px; opacity:.4; }
-.msg-empty-thread p { font-size:.85rem; }
-
-#threadLoading { text-align:center; padding:40px; color:#aaa; font-size:.9rem; }
-
-/* Compose */
-.msg-compose-area { flex-shrink:0; border-top:1px solid #eee; padding-top:10px; padding-bottom:14px; }
-
-/* Multi-file chip row */
-.msg-chips-row {
-    display:flex; flex-wrap:wrap; gap:6px; padding-bottom:8px;
-}
-.msg-att-chip {
-    display:flex; align-items:center; gap:5px;
-    background:#fdf8e1; border:1px solid #e8d97a; border-radius:20px;
-    padding:4px 8px 4px 5px; font-size:.77rem; max-width:210px;
-}
-.att-chip-img {
-    width:30px; height:30px; border-radius:5px; object-fit:cover; flex-shrink:0;
-}
-.att-chip-icon { font-size:20px; color:#b8960c; flex-shrink:0; }
-.att-chip-name {
-    flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#555; max-width:130px;
-}
-.att-chip-rm {
-    background:none; border:none; cursor:pointer; color:#c00;
-    font-size:17px; line-height:1; padding:0 2px; flex-shrink:0;
-}
-
-.msg-compose {
-    display:flex; align-items:flex-end; gap:8px;
-}
-.msg-attach-btn {
-    background:none; border:1.5px solid #ddd; color:#888;
-    border-radius:50%; width:40px; height:40px; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    cursor:pointer; transition:border-color .15s, color .15s;
-}
-.msg-attach-btn:hover { border-color:#b8960c; color:#b8960c; }
-.msg-attach-btn .material-symbols-outlined { font-size:20px; }
-
-.msg-compose textarea {
-    flex:1; resize:none; border:1.5px solid #ddd; border-radius:10px;
-    padding:10px 12px; font-size:.95rem; outline:none;
-    line-height:1.4; max-height:120px; overflow-y:auto;
-    transition:border-color .15s; font-family:inherit;
-}
-.msg-compose textarea:focus { border-color:#b8960c; }
-
-.msg-send-btn {
-    background:#b8960c; color:#fff; border:none;
-    border-radius:50%; width:40px; height:40px; flex-shrink:0;
-    cursor:pointer; display:flex; align-items:center; justify-content:center;
-    transition:background .15s;
-}
-.msg-send-btn:hover { background:#9a7c0a; }
-.msg-send-btn:disabled { opacity:.5; cursor:default; }
-.msg-send-btn .material-symbols-outlined { font-size:20px; }
-
-/* Lightbox */
-#imgLightbox {
-    display:none; position:fixed; inset:0; z-index:2000;
-    background:rgba(0,0,0,.85); align-items:center; justify-content:center;
-    cursor:zoom-out;
-}
-#imgLightbox.open { display:flex; }
-#imgLightbox img { max-width:90vw; max-height:90vh; border-radius:8px; }
-
-/* Toast */
-#pzToastWrap {
-    position:fixed; bottom:24px; right:24px; z-index:3000;
-    display:flex; flex-direction:column; gap:8px;
-    pointer-events:none; max-width:320px;
-}
-.pz-toast {
-    padding:11px 16px; border-radius:9px; font-size:.85rem; font-weight:500;
-    line-height:1.4; box-shadow:0 4px 18px rgba(0,0,0,.18);
-    pointer-events:all; opacity:0; transform:translateY(8px);
-    transition:opacity .22s, transform .22s;
-    display:flex; align-items:flex-start; gap:10px;
-}
-.pz-toast.show { opacity:1; transform:translateY(0); }
-.pz-toast.type-error   { background:#c62828; color:#fff; }
-.pz-toast.type-success { background:#2e7d32; color:#fff; }
-.pz-toast.type-info    { background:#1565c0; color:#fff; }
-.pz-toast .pz-toast-icon { font-size:18px; flex-shrink:0; }
-</style>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -245,8 +53,9 @@
     var _base   = '<?= base_url() ?>';
     var _chatId = '<?= esc($chatId) ?>';
     var _myUid  = '<?= esc(session()->get('userId') ?? '') ?>';
-    var _known  = {};
-    var _atBot  = true;
+    var _known    = {};
+    var _atBot    = true;
+    var _lastDate = '';
     var _selectedFiles = [];   // array of File objects
 
     var thread    = document.getElementById('msgThread');
@@ -311,9 +120,9 @@
         if (initial) {
             thread.innerHTML = '';
             _known = {};
+            _lastDate = '';
         }
 
-        var lastDate = '';
         var frag = document.createDocumentFragment();
         var hasNew = false;
 
@@ -323,8 +132,8 @@
             hasNew = true;
 
             var dateLabel = fmtDate(msg.sent_at);
-            if (dateLabel !== lastDate) {
-                lastDate = dateLabel;
+            if (dateLabel !== _lastDate) {
+                _lastDate = dateLabel;
                 var div = document.createElement('div');
                 div.className = 'msg-date-div';
                 div.textContent = dateLabel;

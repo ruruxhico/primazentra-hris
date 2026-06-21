@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 
@@ -19,139 +19,6 @@
     </div>
 </div>
 
-<style>
-/* ── Tabs ───────────────────────────────────────────────────── */
-.rv-tabs {
-    display: flex; border-bottom: 2px solid #e5e0d0; margin-bottom: 1.2rem;
-}
-.rv-tab {
-    background: none; border: none; padding: 9px 22px;
-    font-size: 0.8rem; font-weight: 700; letter-spacing: 0.06em;
-    color: #bbb; cursor: pointer; border-bottom: 2px solid transparent;
-    margin-bottom: -2px; font-family: inherit; transition: color .15s;
-}
-.rv-tab.active  { color: #8C701C; border-bottom-color: #C47A0F; }
-.rv-tab:hover   { color: #8C701C; }
-.rv-panel       { display: none; }
-.rv-panel.active { display: block; }
-
-/* ── Controls bar ───────────────────────────────────────────── */
-.rv-controls {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
-    margin: 0 2rem 0.9rem;
-}
-.rv-search-wrap { position: relative; flex: 1; min-width: 200px; }
-.rv-search-wrap .material-symbols-outlined { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; color: #aaa; pointer-events: none; }
-.rv-search {
-    width: 100%; padding: 8px 14px 8px 38px;
-    border: 1.5px solid #ddd; border-radius: 999px;
-    font-size: 0.87rem; font-family: inherit; outline: none; box-sizing: border-box;
-}
-.rv-search:focus { border-color: #C47A0F; box-shadow: 0 0 0 3px rgba(196,122,15,.1); }
-.rv-btn {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 7px 14px; border-radius: 8px; font-size: 0.8rem;
-    font-weight: 700; letter-spacing: 0.04em; cursor: pointer;
-    border: 1.5px solid transparent; font-family: inherit; white-space: nowrap;
-    font-variation-settings: 'FILL' 0, 'wght' 400;
-}
-.rv-btn .material-symbols-outlined { font-size: 16px; }
-.rv-btn-filter  { background: #fff; border-color: #ddd; color: #555; }
-.rv-btn-filter:hover { border-color: #C47A0F; color: #8C701C; }
-.rv-btn-add     { background: #8C701C; color: #fff; border-color: #8C701C; text-decoration: none; }
-.rv-btn-add:hover { background: #6e570f; color: #fff; text-decoration: none; }
-.rv-btn-import  { background: #fff; border-color: #adb5bd; color: #495057; }
-.rv-btn-import:hover { border-color: #8C701C; color: #8C701C; }
-.rv-btn-export  { background: #fff; border-color: #adb5bd; color: #495057; }
-.rv-btn-export:hover { border-color: #8C701C; color: #8C701C; }
-
-/* ── Filter panel ───────────────────────────────────────────── */
-.rv-filter-panel {
-    background: #fff; border: 1px solid #e0d4b0; border-radius: 8px;
-    padding: 14px 16px 10px; margin: 0 2rem 0.9rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-}
-.rv-filter-row  { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-.rv-filter-row:last-child { margin-bottom: 0; }
-.rv-filter-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    color: #8C701C; letter-spacing: 0.05em; min-width: 100px; }
-.rv-chip-row    { display: flex; flex-wrap: wrap; gap: 6px; }
-.rv-chip {
-    padding: 4px 12px; border: 1.5px solid #d4c185; border-radius: 20px;
-    font-size: 0.75rem; font-weight: 700; cursor: pointer; background: #fff;
-    color: #8C701C; font-family: inherit;
-}
-.rv-chip:hover  { background: #8C701C; color: #fff; border-color: #8C701C; }
-.rv-chip.active { background: #8C701C; color: #fff; border-color: #8C701C; }
-.rv-filter-badge {
-    display: inline-flex; align-items: center; justify-content: center;
-    background: #8C701C; color: #fff; border-radius: 50%;
-    font-size: 9px; font-weight: 800; width: 14px; height: 14px; margin-left: 3px;
-}
-.rv-filter-reset {
-    background: none; border: 1px solid #d4c185; color: #8C701C;
-    border-radius: 6px; padding: 5px 12px; font-size: 0.78rem; font-weight: 600;
-    cursor: pointer; font-family: inherit; text-decoration: none; display: inline-block;
-}
-.rv-filter-reset:hover { background: #8C701C; color: #fff; text-decoration: none; }
-
-/* ── Manpower status badge ──────────────────────────────────── */
-.mp-status-badge {
-    display: inline-block; padding: 2px 10px; border-radius: 20px;
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
-    border: 1px solid;
-}
-.mp-status-available { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
-.mp-status-deployed  { background: #fff3e0; color: #e65100; border-color: #ffcc80; }
-.mp-status-onleave   { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
-.mp-status-other     { background: #f5f5f5; color: #757575; border-color: #e0e0e0; }
-
-/* ── Recently Deleted ───────────────────────────────────────── */
-.rv-rd-wrap { margin: 1.5rem 2rem 0; border: 1px solid #e0d4b0; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.07); background: #fff; }
-.rv-rd-toggle {
-    width: 100%; display: flex; align-items: center; gap: 0.5rem;
-    background: #fdf8ee; border: none; padding: 0.7rem 1rem;
-    font-size: 0.85rem; font-weight: 700; color: #5c3d11; cursor: pointer;
-    font-family: inherit; text-align: left;
-    font-variation-settings: 'FILL' 0, 'wght' 400;
-}
-.rv-rd-toggle:hover { background: #f5e7b2; }
-.rv-rd-toggle .material-symbols-outlined { font-size: 18px; color: #8c701c; }
-.rv-rd-chevron { margin-left: auto; transition: transform 0.2s; font-size: 18px !important; }
-.rv-rd-badge {
-    background: #e53e3e; color: #fff; border-radius: 10px;
-    font-size: 0.7rem; font-weight: 800; padding: 0.1rem 0.45rem; line-height: 1.4;
-}
-.rv-rd-panel { padding: 0.7rem 1rem; background: #fff; }
-.rv-rd-empty { color: #888; font-size: 0.85rem; text-align: center; padding: 0.8rem 0; }
-.rd-table { font-size: 0.84rem; width: 100%; border-collapse: collapse; }
-.rd-table th { background: #fdf8ee; color: #8c701c; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; border-bottom: 2px solid #e8d9a8; text-align: left; }
-.rd-table td { padding: 6px 10px; border-bottom: 1px solid #f0e6c8; font-size: 0.82rem; }
-.rd-table tr:last-child td { border-bottom: none; }
-
-/* ── Bulk action bar ────────────────────────────────────────── */
-.rv-bulk-bar {
-    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
-    background: #3a2a0a; color: #fff; border-radius: 30px;
-    padding: 0.65rem 1.2rem; display: flex; align-items: center; gap: 1rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 200;
-    animation: rvSlideUp 0.2s ease;
-}
-@keyframes rvSlideUp { from { opacity:0; transform:translateX(-50%) translateY(16px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
-.rv-bulk-count { font-size: 0.88rem; font-weight: 600; }
-.rv-bulk-del-btn {
-    display: flex; align-items: center; gap: 5px;
-    background: #e53e3e; color: #fff; border: none; border-radius: 20px;
-    padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 700; cursor: pointer;
-    font-family: inherit; font-variation-settings: 'FILL' 0, 'wght' 400;
-}
-.rv-bulk-del-btn:hover { background: #c53030; }
-.rv-bulk-del-btn .material-symbols-outlined { font-size: 16px; }
-
-/* ── checkbox col ───────────────────────────────────────────── */
-.pz-col-check { width: 36px; text-align: center; }
-.pz-col-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #C47A0F; }
-</style>
 
 <?php
     $activeEquipFilters    = $activeEquipFilters    ?? [];
@@ -161,11 +28,6 @@
     $eqActiveCount         = count(array_filter($activeEquipFilters));
     $toolsActiveCount      = count(array_filter($activeToolFilters));
     $mpActiveCount         = count(array_filter($activeManpowerFilters));
-    $recentlyDeletedResources = $recentlyDeletedResources ?? [];
-    $recentlyDeletedManpower  = $recentlyDeletedManpower  ?? [];
-    $rdEquipment = array_values(array_filter($recentlyDeletedResources, fn($r) => strcasecmp((string)($r['data']['category'] ?? ''), 'Equipment') === 0));
-    $rdTools     = array_values(array_filter($recentlyDeletedResources, fn($r) => strcasecmp((string)($r['data']['category'] ?? ''), 'Tools')     === 0));
-    $rdManpower  = $recentlyDeletedManpower;
     $equipment   = $equipment ?? [];
     $tools       = $tools     ?? [];
     $manpower    = $manpower  ?? [];
@@ -211,6 +73,15 @@
         <button class="rv-btn rv-btn-export" onclick="openExportModal('equipment','Equipment')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
+
+        <div class="rv-btn-group-view">
+            <a href="<?= base_url('resources/deleted?tab=equipment') ?>" class="rv-btn-trash">
+                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
+            </a>
+            <a href="<?= base_url('resources/archived?tab=equipment') ?>" class="rv-btn-archive">
+                <span class="material-symbols-outlined">inventory_2</span> Archive
+            </a>
+        </div>
     </div>
 
     <div id="eqFilterPanel" class="rv-filter-panel" style="display:none">
@@ -269,6 +140,12 @@
                         <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
+                        <button type="button" class="action-btn action-archive"
+                                data-id="<?= esc((string)$item['id']) ?>"
+                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
+                                title="Archive">
+                            <span class="material-symbols-outlined">inventory_2</span>
+                        </button>
                         <button type="button" class="action-btn action-delete"
                                 data-id="<?= esc((string)$item['id']) ?>"
                                 data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
@@ -299,37 +176,6 @@
         </div>
     </div>
 
-    <!-- Recently Deleted – Equipment -->
-    <div class="rv-rd-wrap">
-        <button type="button" class="rv-rd-toggle" id="rdToggleBtnEquipment">
-            <span class="material-symbols-outlined">restore_from_trash</span>
-            Recently Deleted
-            <?php if (!empty($rdEquipment)): ?><span class="rv-rd-badge"><?= count($rdEquipment) ?></span><?php endif; ?>
-            <span class="material-symbols-outlined rv-rd-chevron">expand_more</span>
-        </button>
-        <div class="rv-rd-panel" id="rdPanelEquipment" style="display:none">
-            <?php if (empty($rdEquipment)): ?>
-            <p class="rv-rd-empty">No recently deleted equipment.</p>
-            <?php else: ?>
-            <table class="rd-table">
-                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th>Actions</th></tr></thead>
-                <tbody>
-                <?php foreach ($rdEquipment as $rd): ?>
-                <tr data-trash-id="<?= esc($rd['id']) ?>">
-                    <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
-                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
-                    <td style="white-space:nowrap">
-                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
 </div><!-- /panel-equipment -->
 
 <!-- ══════════════════════════════════════════════════════════
@@ -357,6 +203,15 @@
         <button class="rv-btn rv-btn-export" onclick="openExportModal('tools','Tools')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
+
+        <div class="rv-btn-group-view">
+            <a href="<?= base_url('resources/deleted?tab=tools') ?>" class="rv-btn-trash">
+                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
+            </a>
+            <a href="<?= base_url('resources/archived?tab=tools') ?>" class="rv-btn-archive">
+                <span class="material-symbols-outlined">inventory_2</span> Archive
+            </a>
+        </div>
     </div>
 
     <div id="toolsFilterPanel" class="rv-filter-panel" style="display:none">
@@ -415,6 +270,12 @@
                         <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
+                        <button type="button" class="action-btn action-archive"
+                                data-id="<?= esc((string)$item['id']) ?>"
+                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
+                                title="Archive">
+                            <span class="material-symbols-outlined">inventory_2</span>
+                        </button>
                         <button type="button" class="action-btn action-delete"
                                 data-id="<?= esc((string)$item['id']) ?>"
                                 data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
@@ -445,36 +306,6 @@
         </div>
     </div>
 
-    <div class="rv-rd-wrap">
-        <button type="button" class="rv-rd-toggle" id="rdToggleBtnTools">
-            <span class="material-symbols-outlined">restore_from_trash</span>
-            Recently Deleted
-            <?php if (!empty($rdTools)): ?><span class="rv-rd-badge"><?= count($rdTools) ?></span><?php endif; ?>
-            <span class="material-symbols-outlined rv-rd-chevron">expand_more</span>
-        </button>
-        <div class="rv-rd-panel" id="rdPanelTools" style="display:none">
-            <?php if (empty($rdTools)): ?>
-            <p class="rv-rd-empty">No recently deleted tools.</p>
-            <?php else: ?>
-            <table class="rd-table">
-                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th>Actions</th></tr></thead>
-                <tbody>
-                <?php foreach ($rdTools as $rd): ?>
-                <tr data-trash-id="<?= esc($rd['id']) ?>">
-                    <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
-                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
-                    <td style="white-space:nowrap">
-                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
 </div><!-- /panel-tools -->
 
 <!-- ══════════════════════════════════════════════════════════
@@ -502,6 +333,15 @@
         <button class="rv-btn rv-btn-export" onclick="openExportModal('manpower','Manpower')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
+
+        <div class="rv-btn-group-view">
+            <a href="<?= base_url('resources/deleted?tab=manpower') ?>" class="rv-btn-trash">
+                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
+            </a>
+            <a href="<?= base_url('resources/archived?tab=manpower') ?>" class="rv-btn-archive">
+                <span class="material-symbols-outlined">inventory_2</span> Archive
+            </a>
+        </div>
     </div>
 
     <div id="mpFilterPanel" class="rv-filter-panel" style="display:none">
@@ -618,41 +458,14 @@
         </div>
     </div>
 
-    <div class="rv-rd-wrap">
-        <button type="button" class="rv-rd-toggle" id="rdToggleBtnManpower">
-            <span class="material-symbols-outlined">restore_from_trash</span>
-            Recently Deleted
-            <?php if (!empty($rdManpower)): ?><span class="rv-rd-badge"><?= count($rdManpower) ?></span><?php endif; ?>
-            <span class="material-symbols-outlined rv-rd-chevron">expand_more</span>
-        </button>
-        <div class="rv-rd-panel" id="rdPanelManpower" style="display:none">
-            <?php if (empty($rdManpower)): ?>
-            <p class="rv-rd-empty">No recently deleted manpower.</p>
-            <?php else: ?>
-            <table class="rd-table">
-                <thead><tr><th>Name</th><th>Deleted</th><th>Expires</th><th>Actions</th></tr></thead>
-                <tbody>
-                <?php foreach ($rdManpower as $rd): ?>
-                <tr data-trash-id="<?= esc($rd['id']) ?>">
-                    <td><?= esc($rd['name'] ?? '—') ?></td>
-                    <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
-                    <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
-                    <td style="white-space:nowrap">
-                        <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                        <button type="button" class="action-btn action-delete rd-perma-btn" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-    </div>
 </div><!-- /panel-manpower -->
 
 <!-- Bulk action bar -->
 <div class="rv-bulk-bar" id="bulkActionBar" style="display:none">
     <span class="rv-bulk-count" id="bulkCount">0 selected</span>
+    <button type="button" class="rv-bulk-arch-btn" id="bulkArchiveBtn">
+        <span class="material-symbols-outlined">inventory_2</span> Archive Selected
+    </button>
     <button type="button" class="rv-bulk-del-btn" id="bulkDeleteBtn">
         <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
@@ -749,6 +562,13 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(() => row.remove(), 280);
     }
 
+    function renumberTable(tableEl, noColIdx) {
+        if (!tableEl) return;
+        tableEl.querySelectorAll('tbody tr').forEach(function (tr, i) {
+            if (tr.cells[noColIdx]) tr.cells[noColIdx].textContent = i + 1;
+        });
+    }
+
     /* ── Add restored resource as table row ── */
     function addRestoredRow(module, id, d) {
         let tbodyId, cbClass, colCount;
@@ -801,6 +621,7 @@ document.addEventListener('DOMContentLoaded', function () {
             '<td class="text-center" style="white-space:nowrap">' +
               '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
               '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
+              '<button type="button" class="action-btn action-archive" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' +
               '<button type="button" class="action-btn action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
             '</td>';
 
@@ -811,6 +632,9 @@ document.addEventListener('DOMContentLoaded', function () {
             pendingRow      = row;
             confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
             confirmDialog.classList.add('open');
+        });
+        row.querySelector('.action-archive').addEventListener('click', function () {
+            wireArchiveBtn(this, row);
         });
         row.querySelector('.row-cb').addEventListener('change', updateBulkBar);
 
@@ -913,6 +737,18 @@ document.addEventListener('DOMContentLoaded', function () {
         cb.addEventListener('change', updateBulkBar);
     });
 
+    const bulkArchBtn = document.getElementById('bulkArchiveBtn');
+    bulkArchBtn && bulkArchBtn.addEventListener('click', function () {
+        const panel   = getActivePanel();
+        const checked = getCheckedInPanel(panel);
+        if (!checked.length) return;
+        const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        confirmMessage.innerText = 'Archive ' + checked.length + ' item(s)?\n' + names;
+        pendingDeleteId         = '__bulk_archive__';
+        pendingBulkArchiveItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
+        confirmDialog.classList.add('open');
+    });
+
     bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
         const panel   = getActivePanel();
         const checked = getCheckedInPanel(panel);
@@ -925,9 +761,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     /* ── Single delete ── */
-    let pendingDeleteId  = null;
-    let pendingRow       = null;
-    let pendingBulkItems = [];
+    let pendingDeleteId         = null;
+    let pendingRow              = null;
+    let pendingBulkItems        = [];
+    let pendingArchiveId        = null;
+    let pendingArchiveRow       = null;
+    let pendingBulkArchiveItems = [];
 
     document.querySelectorAll('.action-delete').forEach(btn => {
         btn.addEventListener('click', function (e) {
@@ -939,13 +778,84 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ── Archive ───────────────────────────────────────────────
+    const ARCHIVE_URL = '<?= base_url('resources/archive') ?>';
+    function wireArchiveBtn(btn, row) {
+        const resolvedRow = row || btn.closest('tr');
+        if (resolvedRow) resolvedRow.dataset.name = btn.dataset.name || 'this resource';
+        pendingArchiveId  = btn.dataset.id;
+        pendingArchiveRow = resolvedRow;
+        confirmMessage.innerText = 'Archive "' + (btn.dataset.name || 'this resource') + '"? It will be moved to the archive and removed from active records.';
+        confirmDialog.classList.add('open');
+    }
+    document.querySelectorAll('.action-archive').forEach(function (btn) {
+        btn.addEventListener('click', function () { wireArchiveBtn(this, null); });
+    });
+
     confirmCancel?.addEventListener('click', function () {
         pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
+        pendingArchiveId = null; pendingArchiveRow = null; pendingBulkArchiveItems = [];
         confirmDialog.classList.remove('open');
     });
 
     confirmOk?.addEventListener('click', function () {
+        // ── Archive path ──────────────────────────────────────────────
+        if (pendingArchiveId) {
+            const id   = pendingArchiveId;
+            const row  = pendingArchiveRow;
+            pendingArchiveId = null; pendingArchiveRow = null;
+            confirmDialog.classList.remove('open');
+            const body = new URLSearchParams();
+            if (csrfName) body.append(csrfName, csrfHash);
+            body.append('id', id);
+            fetch(ARCHIVE_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.success) {
+                        showToast('"' + (row?.dataset?.name || id) + '" archived', 'success');
+                        const tbl = row?.closest('table');
+                        animateRowOut(row);
+                        if (tbl) setTimeout(() => renumberTable(tbl, 1), 290);
+                        updateBulkBar();
+                    } else {
+                        showToast(d.message || 'Archive failed', 'error');
+                    }
+                })
+                .catch(() => showToast('Error archiving resource', 'error'));
+            return;
+        }
+
         if (!pendingDeleteId) return;
+
+        // Bulk archive path
+        if (pendingDeleteId === '__bulk_archive__') {
+            const items = [...pendingBulkArchiveItems];
+            pendingBulkArchiveItems = []; pendingDeleteId = null;
+            confirmDialog.classList.remove('open');
+            let done = 0;
+            items.forEach(item => {
+                const body = new URLSearchParams();
+                if (csrfName) body.append(csrfName, csrfHash);
+                body.append('id', item.id);
+                fetch(ARCHIVE_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d && d.success) {
+                            const tbl = item.row?.closest('table');
+                            animateRowOut(item.row);
+                            if (tbl) setTimeout(() => renumberTable(tbl, 1), 290);
+                        }
+                    })
+                    .finally(() => {
+                        done++;
+                        if (done === items.length) {
+                            showToast(items.length + ' item(s) archived', 'success');
+                            updateBulkBar();
+                        }
+                    });
+            });
+            return;
+        }
 
         if (pendingDeleteId === '__bulk__') {
             const items = [...pendingBulkItems];
@@ -982,59 +892,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .finally(() => { pendingDeleteId = null; pendingRow = null; confirmDialog.classList.remove('open'); });
     });
 
-    /* ── Recently Deleted panels ── */
-    function wireRdPanel(btnId, panelId) {
-        const btn   = document.getElementById(btnId);
-        const panel = document.getElementById(panelId);
-        if (!btn || !panel) return;
-        btn.addEventListener('click', function () {
-            const open = panel.style.display !== 'none';
-            panel.style.display = open ? 'none' : '';
-            const ch = this.querySelector('.rv-rd-chevron');
-            if (ch) ch.style.transform = open ? '' : 'rotate(180deg)';
-        });
-    }
-    wireRdPanel('rdToggleBtnEquipment', 'rdPanelEquipment');
-    wireRdPanel('rdToggleBtnTools',     'rdPanelTools');
-    wireRdPanel('rdToggleBtnManpower',  'rdPanelManpower');
-
-    document.querySelectorAll('.rd-restore-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
-            const fd = new FormData();
-            fd.append(csrfName, csrfHash);
-            fd.append('trash_id', trashId);
-            fetch('<?= base_url('trash/restore') ?>', { method:'POST', body:fd })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.success) {
-                        showToast((d.name || 'Item') + ' restored', 'success');
-                        animateRowOut(row);
-                        if (d.id && d.data) addRestoredRow(d.module, d.id, d.data);
-                    } else { showToast(d.message || 'Restore failed', 'error'); }
-                })
-                .catch(() => showToast('Restore failed', 'error'));
-        });
-    });
-
-    document.querySelectorAll('.rd-perma-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
-            if (!confirm('Permanently delete this item? This cannot be undone.')) return;
-            const fd = new FormData();
-            fd.append(csrfName, csrfHash);
-            fd.append('trash_id', trashId);
-            fetch('<?= base_url('trash/permanent-delete') ?>', { method:'POST', body:fd })
-                .then(r => r.json())
-                .then(d => {
-                    if (d.success) { showToast('Permanently deleted', 'success'); animateRowOut(row); }
-                    else { showToast(d.message || 'Failed', 'error'); }
-                })
-                .catch(() => showToast('Failed', 'error'));
-        });
-    });
 });
 
 /* ── Export / Import modals ─────────────────────────────── */

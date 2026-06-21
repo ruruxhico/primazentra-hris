@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 <?php
@@ -16,69 +16,6 @@
 
 <?php $mapsKey = $mapsKey ?? ''; ?>
 
-<style>
-.unit-cards-container { display: flex; flex-direction: column; gap: 0.6rem; }
-.unit-card { border: 1.5px solid #c8a951; border-radius: 10px; overflow: hidden; background: #fff; }
-.unit-card-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.6rem 1rem; background: #f5e7b2; cursor: pointer; user-select: none;
-}
-.unit-card-title { font-weight: 700; font-size: 0.82rem; color: #5c3d11; }
-.unit-card-chevron { font-size: 20px !important; color: #7a5c1e; transition: transform 0.2s ease; flex-shrink: 0; }
-.unit-card.collapsed .unit-card-chevron { transform: rotate(180deg); }
-.unit-card-body { padding: 1rem 1.1rem 0.8rem; }
-.unit-card.collapsed .unit-card-body { display: none; }
-.unit-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem 1rem; }
-@media (max-width: 600px) { .unit-fields-grid { grid-template-columns: 1fr; } }
-.unit-field { display: flex; flex-direction: column; gap: 0.25rem; }
-.unit-field > label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #7a5c1e; letter-spacing: 0.3px; }
-.unit-field input, .unit-field select {
-    width: 100%; padding: 0.38rem 0.6rem;
-    border: 1.5px solid #d4b87a; border-radius: 7px;
-    font-size: 0.85rem; background: #fafaf8; color: #333; box-sizing: border-box;
-}
-.unit-field input:focus, .unit-field select:focus { outline: none; border-color: #a0782a; background: #fff; }
-.unit-field-address { grid-column: 1 / -1; }
-.unit-warehouse-input-wrap { display: flex; gap: 0.4rem; }
-.unit-warehouse-input-wrap input { flex: 1; }
-.unit-card-footer { display: flex; justify-content: flex-end; margin-top: 0.75rem; padding-top: 0.6rem; border-top: 1px solid #e8d5a0; }
-.qty-stepper { display: flex; align-items: center; background: #f5f5f3; border-radius: 999px; border: 1.5px solid #d4b87a; flex-shrink: 0; min-width: 0; width: fit-content; }
-.qty-btn { flex: 0 0 28px !important; width: 28px !important; min-width: 0 !important; height: 24px !important; font-size: 14px !important; line-height: 24px !important; text-align: center; background: none !important; border: none !important; color: #7a5c1e !important; cursor: pointer; transition: background 0.15s; user-select: none; padding: 0 !important; }
-.qty-btn:hover { background: #ede3c4 !important; border-radius: 999px; }
-.qty-input { flex: 0 0 28px !important; width: 28px !important; min-width: 0 !important; text-align: center; border: none !important; background: transparent !important; font-size: 12px !important; font-weight: 600; color: #333; padding: 0 !important; -moz-appearance: textfield; }
-.qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.qty-input:focus { outline: none; }
-.qty-stepper .qty-input { border: none !important; border-radius: 0 !important; background: transparent !important; }
-.add-flow-controls { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
-.unit-qty-row { display: flex; justify-content: flex-end; align-items: center; gap: 0.3rem; margin-top: 0.4rem; }
-.unit-qty-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; color: #7a5c1e; letter-spacing: 0.3px; }
-.equipment-remove-btn { background: transparent !important; border: 1.5px solid #e53e3e !important; color: #e53e3e !important; border-radius: 8px !important; }
-.equipment-remove-btn:hover { background: #e53e3e !important; color: #fff !important; }
-/* ── Warehouse default banner ─────────────────────────────── */
-.warehouse-default-banner { display:flex; align-items:flex-start; gap:0.55rem; background:#fdf8ee; border:1px solid #d4b87a; border-radius:9px; padding:0.6rem 0.85rem; margin-bottom:0.75rem; font-size:0.83rem; }
-.wdb-icon { font-size:18px !important; color:#8c701c; margin-top:1px; flex-shrink:0; }
-.wdb-body { flex:1; min-width:0; }
-.wdb-label { color:#8c701c; font-weight:700; margin-right:0.3rem; }
-.wdb-address { color:#3a2a0a; word-break:break-word; }
-.wdb-not-set { color:#aaa; font-style:italic; }
-.wdb-edit-form { display:flex; flex-direction:column; gap:0.4rem; margin-top:0.2rem; }
-.wdb-input-row { display:flex; gap:0.4rem; align-items:center; }
-.wdb-action-row { display:flex; gap:0.4rem; justify-content:flex-end; }
-.wdb-input { flex:1; min-width:0; padding:0.3rem 0.6rem; border:1.5px solid #d4b87a; border-radius:7px; font-size:0.82rem; background:#fff; box-sizing:border-box; font-family:inherit; }
-.wdb-save-btn { padding:0.3rem 0.75rem; background:#c8a951; color:#fff; border:none; border-radius:7px; font-size:0.8rem; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap; }
-.wdb-save-btn:hover { background:#8c701c; }
-.wdb-save-btn:disabled { opacity:0.6; cursor:not-allowed; }
-.wdb-cancel-btn { padding:0.3rem 0.55rem; background:none; border:1px solid #ccc; border-radius:7px; font-size:0.8rem; cursor:pointer; font-family:inherit; color:#666; }
-.wdb-map-btn { padding:0.3rem 0.65rem; background:#fff; border:1.5px solid #d4b87a; border-radius:7px; font-size:0.8rem; color:#7a5c1e; cursor:pointer; font-family:inherit; white-space:nowrap; }
-.wdb-map-btn:hover { background:#f5e7b2; }
-.wdb-edit-btn { background:none; border:1px solid #d4b87a; border-radius:6px; font-size:0.74rem; color:#8c701c; cursor:pointer; padding:0.18rem 0.5rem; font-family:inherit; flex-shrink:0; margin-top:1px; }
-.wdb-edit-btn:hover { background:#f5e7b2; }
-/* ── Warehouse saved chip (per card) ─────────────────────── */
-.warehouse-saved-strip { margin-top:0.35rem; }
-.warehouse-use-saved-btn { display:inline-flex; align-items:center; gap:0.3rem; background:#fdf8ee; border:1px solid #d4b87a; border-radius:20px; padding:0.2rem 0.75rem 0.2rem 0.55rem; font-size:0.75rem; color:#5c3d11; cursor:pointer; font-family:inherit; transition:background 0.15s; max-width:100%; }
-.warehouse-use-saved-btn:hover { background:#f5e7b2; border-color:#a0782a; }
-.wss-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px; font-weight:600; }
-</style>
 
 <a href="<?= base_url('resources') ?>" class="pz-back-link">
     <span class="material-symbols-outlined">arrow_back</span> Resources
@@ -96,22 +33,24 @@
     <p>Register a new type of equipment. You can add specific physical units after creating this profile.</p>
 </div>
 
-<div class="equipment-shell">
-    <div class="equipment-card">
-        <form method="POST" action="<?= $formAction ?>" id="equipmentForm">
-            <?= csrf_field() ?>
-            <input type="hidden" name="category" value="Equipment">
-            <input type="hidden" name="status" value="<?= esc((string)($resource['status'] ?? 'Available')) ?>">
-            <input type="hidden" name="next_availability" value="<?= esc((string)($resource['next_availability'] ?? '')) ?>">
-            <input type="hidden" name="location_address" value="<?= esc((string)($resource['location']['address'] ?? '')) ?>">
-            <input type="hidden" name="location_type" value="<?= esc((string)($resource['location']['type'] ?? '')) ?>">
-            <input type="hidden" name="asset_status" value="<?= esc((string)($asset['status'] ?? 'In-Storage')) ?>">
-            <input type="hidden" name="asset_assigned_project_id" value="<?= esc((string)($asset['assigned_project_id'] ?? '')) ?>">
+<div class="pz-form-container">
+    <form method="POST" action="<?= $formAction ?>" id="equipmentForm">
+        <?= csrf_field() ?>
+        <input type="hidden" name="category" value="Equipment">
+        <input type="hidden" name="status" value="<?= esc((string)($resource['status'] ?? 'Available')) ?>">
+        <input type="hidden" name="next_availability" value="<?= esc((string)($resource['next_availability'] ?? '')) ?>">
+        <input type="hidden" name="location_address" value="<?= esc((string)($resource['location']['address'] ?? '')) ?>">
+        <input type="hidden" name="location_type" value="<?= esc((string)($resource['location']['type'] ?? '')) ?>">
+        <input type="hidden" name="asset_status" value="<?= esc((string)($asset['status'] ?? 'In-Storage')) ?>">
+        <input type="hidden" name="asset_assigned_project_id" value="<?= esc((string)($asset['assigned_project_id'] ?? '')) ?>">
 
-            <div class="equipment-field">
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Equipment Details</p>
+            <div class="pz-form-group">
                 <label for="name">Equipment Name *</label>
                 <input type="text" id="name" name="name" placeholder="e.g., Tower Crane, Concrete Mixer" value="<?= esc((string)($resource['name'] ?? '')) ?>" required>
             </div>
+        </div>
 
             <div class="equipment-toggle-card">
                 <label class="equipment-checkbox-label">
@@ -251,12 +190,13 @@
                 </div>
             </div>
 
-            <div class="equipment-actions">
-                <button type="submit" class="btn btn-save-mobile">Save Model</button>
-                <a href="<?= base_url('resources') ?>" class="btn btn-cancel-mobile">Cancel</a>
-            </div>
-        </form>
-    </div>
+        <div class="pz-form-actions">
+            <button type="submit" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">save</span> Save Model
+            </button>
+            <a href="<?= base_url('resources') ?>" class="pz-btn pz-btn-cancel">Cancel</a>
+        </div>
+    </form>
 </div>
 
 <template id="equipmentItemTemplate">

@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 
@@ -42,73 +42,6 @@
     <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
 
-<style>
-/* ── Controls bar ── */
-.rv-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin: 0 2rem 0.9rem; }
-.rv-search-wrap { position:relative; flex:1; min-width:200px; }
-.rv-search-wrap .material-symbols-outlined { position:absolute; left:12px; top:50%; transform:translateY(-50%); font-size:18px; color:#aaa; pointer-events:none; }
-.rv-search { width:100%; padding:8px 14px 8px 38px; border:1.5px solid #ddd; border-radius:999px; font-size:0.87rem; font-family:inherit; outline:none; box-sizing:border-box; }
-.rv-search:focus { border-color:#C47A0F; box-shadow:0 0 0 3px rgba(196,122,15,.1); }
-.rv-btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:8px; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; cursor:pointer; border:1.5px solid transparent; font-family:inherit; white-space:nowrap; font-variation-settings:'FILL' 0,'wght' 400; text-decoration:none; }
-.rv-btn .material-symbols-outlined { font-size:16px; }
-.rv-btn-filter { background:#fff; border-color:#ddd; color:#555; }
-.rv-btn-filter:hover { border-color:#C47A0F; color:#8C701C; }
-.rv-btn-add { background:#8C701C; color:#fff; border-color:#8C701C; }
-.rv-btn-add:hover { background:#6e570f; color:#fff; }
-.rv-btn-import { background:#fff; border-color:#adb5bd; color:#495057; }
-.rv-btn-import:hover { border-color:#8C701C; color:#8C701C; }
-.rv-btn-export { background:#fff; border-color:#adb5bd; color:#495057; }
-.rv-btn-export:hover { border-color:#8C701C; color:#8C701C; }
-
-.filter-panel { background:#fff; border:1px solid #e0d4b0; border-radius:8px; padding:16px 20px 12px; margin: 0 2rem 12px; box-shadow:0 2px 8px rgba(0,0,0,0.07); }
-.filter-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:12px 16px; }
-.filter-group { display:flex; flex-direction:column; gap:4px; }
-.filter-group label { font-size:11px; font-weight:600; text-transform:uppercase; color:#666; letter-spacing:.4px; }
-.filter-group select { padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:13px; background:#fff; }
-.filter-footer { display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap; }
-.filter-badge { display:inline-flex; align-items:center; justify-content:center; background:#8C701C; color:#fff; border-radius:50%; font-size:10px; font-weight:700; width:16px; height:16px; margin-left:5px; vertical-align:middle; }
-
-/* Checkbox column */
-.pz-col-check { width: 36px; text-align: center; }
-.pz-col-check input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #c8a951; }
-
-/* Bulk action bar */
-.bulk-action-bar {
-    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
-    background: #3a2a0a; color: #fff; border-radius: 30px;
-    padding: 0.65rem 1.2rem; display: flex; align-items: center; gap: 1rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 200;
-    animation: slideUp 0.2s ease;
-}
-@keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-.bulk-count { font-size: 0.88rem; font-weight: 600; }
-.bulk-delete-btn {
-    display: flex; align-items: center; gap: 0.3rem;
-    background: #e53e3e; color: #fff; border: none; border-radius: 20px;
-    padding: 0.4rem 1rem; font-size: 0.82rem; font-weight: 700; cursor: pointer; font-family: inherit;
-}
-.bulk-delete-btn:hover { background: #c53030; }
-.bulk-delete-btn .material-symbols-outlined { font-size: 16px; }
-
-/* Recently Deleted section */
-.recently-deleted-wrap { margin-top: 1.5rem; border: 1px solid #e8d9a8; border-radius: 10px; overflow: hidden; }
-.rd-toggle-btn {
-    width: 100%; display: flex; align-items: center; gap: 0.5rem;
-    background: #fdf8ee; border: none; padding: 0.75rem 1rem;
-    font-size: 0.88rem; font-weight: 700; color: #5c3d11; cursor: pointer;
-    font-family: inherit; text-align: left;
-}
-.rd-toggle-btn:hover { background: #f5e7b2; }
-.rd-toggle-btn .material-symbols-outlined { font-size: 18px; color: #8c701c; }
-.rd-chevron { margin-left: auto; transition: transform 0.2s; }
-.rd-badge {
-    background: #e53e3e; color: #fff; border-radius: 10px;
-    font-size: 0.72rem; font-weight: 800; padding: 0.1rem 0.45rem; line-height: 1.4;
-}
-.rd-panel { padding: 0.75rem 1rem; background: #fff; }
-.rd-empty { color: #aaa; font-size: 0.85rem; text-align: center; padding: 1rem 0; }
-.rd-table { font-size: 0.84rem; }
-</style>
 
 <?php
     $activeFilters  = $activeFilters  ?? [];
@@ -144,6 +77,15 @@
     <button class="rv-btn rv-btn-export" id="exportBtn" data-module="projects">
         <span class="material-symbols-outlined">upload</span> Export
     </button>
+
+    <div class="rv-btn-group-view">
+        <a href="<?= base_url('projects/deleted') ?>" class="rv-btn-trash">
+            <span class="material-symbols-outlined">restore_from_trash</span> Deleted
+        </a>
+        <a href="<?= base_url('projects/archived') ?>" class="rv-btn-archive">
+            <span class="material-symbols-outlined">inventory_2</span> Archive
+        </a>
+    </div>
 </div>
 
 <!-- Filter Panel -->
@@ -275,6 +217,7 @@
                             <a href="<?= base_url('projects/show/' . $project['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
                             <?php if (pz_can('edit_project')): ?>
                             <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                            <button type="button" class="action-btn action-archive" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
                             <a href="#" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             <?php endif; ?>
                         </td>
@@ -310,49 +253,12 @@
 <!-- Bulk Action Bar -->
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">
     <span class="bulk-count" id="bulkCount">0 selected</span>
+    <button type="button" class="bulk-archive-btn" id="bulkArchiveBtn">
+        <span class="material-symbols-outlined">inventory_2</span> Archive Selected
+    </button>
     <button type="button" class="bulk-delete-btn" id="bulkDeleteBtn">
         <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
-</div>
-
-<!-- Recently Deleted Section -->
-<?php $recentlyDeleted = $recentlyDeleted ?? []; ?>
-<div class="recently-deleted-wrap" id="recentlyDeletedWrap">
-    <button type="button" class="rd-toggle-btn" id="rdToggleBtn">
-        <span class="material-symbols-outlined">restore_from_trash</span>
-        Recently Deleted
-        <?php if (!empty($recentlyDeleted)): ?>
-        <span class="rd-badge"><?= count($recentlyDeleted) ?></span>
-        <?php endif; ?>
-        <span class="material-symbols-outlined rd-chevron">expand_more</span>
-    </button>
-    <div class="rd-panel" id="rdPanel" style="display:none">
-        <?php if (empty($recentlyDeleted)): ?>
-        <p class="rd-empty">No recently deleted items.</p>
-        <?php else: ?>
-        <table class="resource-table rd-table">
-            <thead><tr>
-                <th>Name</th>
-                <th>Deleted</th>
-                <th>Expires</th>
-                <th class="text-center">Actions</th>
-            </tr></thead>
-            <tbody>
-            <?php foreach ($recentlyDeleted as $rd): ?>
-            <tr data-trash-id="<?= esc($rd['id']) ?>">
-                <td><?= esc($rd['name'] ?? '—') ?></td>
-                <td><?= date('d M Y H:i', (int)($rd['deleted_at'] ?? 0)) ?></td>
-                <td><?= max(0, (int)ceil((($rd['expires_at'] ?? 0) - time()) / 86400)) ?> days</td>
-                <td class="text-center" style="white-space:nowrap">
-                    <button type="button" class="action-btn rd-restore-btn" data-id="<?= esc($rd['id']) ?>" title="Restore"><span class="material-symbols-outlined">restore</span></button>
-                    <button type="button" class="action-btn rd-perma-btn" style="color:#e53e3e" data-id="<?= esc($rd['id']) ?>" title="Delete forever"><span class="material-symbols-outlined">delete_forever</span></button>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-            </tbody>
-        </table>
-        <?php endif; ?>
-    </div>
 </div>
 
 </div><!-- /.page-module -->
@@ -368,10 +274,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const toast = document.getElementById('customToast');
     const DELETE_URL = '<?= base_url('projects/delete') ?>';
     const BASE_URL   = '<?= base_url() ?>';
-
-    function escHtml(s) {
-        return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
 
     function showToast(message, type = 'info') {
         if (!toast) return;
@@ -403,67 +305,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const td = tr.cells[noColIdx];
             if (td) td.textContent = num++;
         });
-    }
-
-    function addRestoredProjectRow(id, d) {
-        const table = document.getElementById('projectsTable');
-        if (!table) return;
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-
-        tbody.querySelector('[colspan]')?.closest('tr')?.remove();
-
-        const nameVal  = escHtml(d.project_name || 'N/A');
-        const type     = escHtml(d.project_type || 'N/A');
-        const location = escHtml((d.location && d.location.address) || 'N/A');
-        const progress = d.overall_progress ?? 0;
-
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-            '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + escHtml(id) + '" data-name="' + nameVal + '"></td>' +
-            '<td>0</td>' +
-            '<td><strong>' + nameVal + '</strong></td>' +
-            '<td>' + type + '</td>' +
-            '<td>' + location + '</td>' +
-            '<td class="text-center"><span class="progress-badge">' + progress + '%</span></td>' +
-            '<td>' + escHtml(d.project_manager_name || '—') + '</td>' +
-            '<td>' + escHtml(d.site_engineer_name  || '—') + '</td>' +
-            '<td class="text-center" style="white-space:nowrap">' +
-                '<a href="' + BASE_URL + 'projects/show/'   + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
-                '<a href="' + BASE_URL + 'projects/update/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
-                '<a href="#" data-id="' + escHtml(id) + '" data-name="' + nameVal + '" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>' +
-            '</td>';
-
-        // Wire delete button (matches existing pendingDeleteId pattern)
-        tr.querySelector('.action-delete')?.addEventListener('click', function(e) {
-            e.preventDefault();
-            pendingDeleteId = this.dataset.id;
-            pendingRow = this.closest('tr');
-            confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this project') + '"?';
-            confirmDialog.classList.add('open');
-        });
-
-        // Wire checkbox for bulk select
-        const newCb = tr.querySelector('.row-cb');
-        if (newCb && selectAllCb) {
-            newCb.addEventListener('change', function() {
-                const all = document.querySelectorAll('.row-cb');
-                selectAllCb.checked = all.length > 0 && [...all].every(c => c.checked);
-                selectAllCb.indeterminate = getChecked().length > 0 && !selectAllCb.checked;
-                updateBulkBar();
-            });
-        }
-
-        tr.style.opacity = '0';
-        tr.style.background = '#edf7e6';
-        tbody.appendChild(tr);
-        requestAnimationFrame(() => {
-            tr.style.transition = 'opacity 300ms ease, background 1.2s ease';
-            tr.style.opacity = '1';
-            setTimeout(() => { tr.style.background = ''; }, 1000);
-        });
-
-        renumberTable(table, 1);
     }
 
     // — Filter panel toggle —
@@ -529,6 +370,17 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    const bulkArchBtn = document.getElementById('bulkArchiveBtn');
+    bulkArchBtn && bulkArchBtn.addEventListener('click', function () {
+        const checked = getChecked();
+        if (!checked.length) return;
+        const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        confirmMessage.innerText = 'Archive ' + checked.length + ' item(s)?\n' + names;
+        pendingDeleteId = '__bulk_archive__';
+        pendingBulkArchiveItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
+        confirmDialog.classList.add('open');
+    });
+
     bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
         const checked = getChecked();
         if (!checked.length) return;
@@ -540,9 +392,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ── Single delete ─────────────────────────────────────────────
-    let pendingDeleteId  = null;
-    let pendingRow       = null;
-    let pendingBulkItems = [];
+    let pendingDeleteId       = null;
+    let pendingRow            = null;
+    let pendingBulkItems      = [];
+    let pendingArchiveId      = null;
+    let pendingArchiveRow     = null;
+    let pendingBulkArchiveItems = [];
 
     document.querySelectorAll('.action-delete').forEach(btn => {
         btn.addEventListener('click', function (e) {
@@ -557,11 +412,70 @@ document.addEventListener('DOMContentLoaded', function () {
 
     confirmCancel?.addEventListener('click', function () {
         pendingDeleteId = null; pendingRow = null; pendingBulkItems = [];
+        pendingArchiveId = null; pendingArchiveRow = null; pendingBulkArchiveItems = [];
         confirmDialog.classList.remove('open');
     });
 
     confirmOk?.addEventListener('click', function () {
+        // ── Archive path ──────────────────────────────────────────────
+        if (pendingArchiveId) {
+            const id   = pendingArchiveId;
+            const row  = pendingArchiveRow;
+            const name = row?.dataset?.name || id;
+            pendingArchiveId = null; pendingArchiveRow = null;
+            confirmDialog.classList.remove('open');
+            const body = new URLSearchParams();
+            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+            body.append('id', id);
+            fetch(ARCHIVE_URL, {
+                method: 'POST', credentials: 'same-origin',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                body: body.toString()
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.success) {
+                    showToast('"' + name + '" archived', 'success');
+                    animateRowOut(row);
+                    setTimeout(() => renumberTable(document.getElementById('projectsTable'), 1), 290);
+                } else {
+                    showToast(data.message || 'Archive failed', 'error');
+                }
+            })
+            .catch(() => showToast('Error archiving project', 'error'));
+            return;
+        }
+
         if (!pendingDeleteId) return;
+
+        // Bulk archive path
+        if (pendingDeleteId === '__bulk_archive__') {
+            const items = [...pendingBulkArchiveItems];
+            pendingBulkArchiveItems = []; pendingDeleteId = null;
+            confirmDialog.classList.remove('open');
+            const projectsTable = document.getElementById('projectsTable');
+            let done = 0;
+            items.forEach(item => {
+                const body = new URLSearchParams();
+                if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+                body.append('id', item.id);
+                fetch(ARCHIVE_URL, {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body: body.toString()
+                })
+                .then(r => r.json())
+                .then(data => { if (data && data.success) animateRowOut(item.row); })
+                .finally(() => {
+                    done++;
+                    if (done === items.length) {
+                        showToast(items.length + ' item(s) archived', 'success');
+                        setTimeout(() => renumberTable(projectsTable, 1), 290);
+                    }
+                });
+            });
+            return;
+        }
 
         // Bulk delete path
         if (pendingDeleteId === '__bulk__') {
@@ -623,60 +537,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // ── Recently Deleted ────────────────────────────────────────
-    const rdToggleBtn = document.getElementById('rdToggleBtn');
-    const rdPanel     = document.getElementById('rdPanel');
-
-    rdToggleBtn && rdToggleBtn.addEventListener('click', function () {
-        const open = rdPanel && rdPanel.style.display !== 'none';
-        if (rdPanel) rdPanel.style.display = open ? 'none' : '';
-        const chevron = this.querySelector('.rd-chevron');
-        if (chevron) chevron.style.transform = open ? '' : 'rotate(180deg)';
-    });
-
-    document.querySelectorAll('.rd-restore-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
-            const fd = new FormData();
-            fd.append(csrfName, csrfHash);
-            fd.append('trash_id', trashId);
-            fetch('<?= base_url('trash/restore') ?>', { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast((data.name || 'Item') + ' restored', 'success');
-                        animateRowOut(row);
-                        if (data.id && data.data) addRestoredProjectRow(data.id, data.data);
-                    } else {
-                        showToast(data.message || 'Restore failed', 'error');
-                    }
-                })
-                .catch(() => showToast('Restore failed', 'error'));
+    // ── Archive ──────────────────────────────────────────────────────────────
+    const ARCHIVE_URL = '<?= base_url('projects/archive') ?>';
+    document.querySelectorAll('.action-archive').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const row  = this.closest('tr');
+            row.dataset.name = this.dataset.name || 'this project';
+            pendingArchiveId  = this.dataset.id;
+            pendingArchiveRow = row;
+            confirmMessage.innerText = 'Archive "' + (this.dataset.name || 'this project') + '"? It will be removed from active projects and stored in the archive.';
+            confirmDialog.classList.add('open');
         });
     });
 
-    document.querySelectorAll('.rd-perma-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const trashId = this.dataset.id;
-            const row = this.closest('tr');
-            if (!confirm('Permanently delete this item? This cannot be undone.')) return;
-            const fd = new FormData();
-            fd.append(csrfName, csrfHash);
-            fd.append('trash_id', trashId);
-            fetch('<?= base_url('trash/permanent-delete') ?>', { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        showToast('Permanently deleted', 'success');
-                        animateRowOut(row);
-                    } else {
-                        showToast(data.message || 'Failed', 'error');
-                    }
-                })
-                .catch(() => showToast('Failed', 'error'));
-        });
-    });
     // ── Export / Import ──────────────────────────────────────────────────────
     const exportBtn = document.getElementById('exportBtn');
     const importBtn = document.getElementById('importBtn');
@@ -687,45 +561,45 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- Export Modal -->
-<div id="exportModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;" hidden>
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-    <h3 style="margin:0 0 18px;color:#1a3c5e;font-size:17px;">Export Projects</h3>
-    <p style="margin:0 0 18px;color:#555;font-size:13px;">Choose a format to download:</p>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <a id="exportXlsx" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #1a3c5e;border-radius:8px;text-decoration:none;color:#1a3c5e;font-weight:600;font-size:14px;transition:background .15s;">
-        <span style="font-size:20px;">📊</span> Download XLSX
+<div id="exportModal" class="pz-modal-overlay" style="display:none" hidden>
+  <div class="pz-modal-box">
+    <h3 class="pz-modal-title">Export Projects</h3>
+    <p class="pz-modal-subtitle">Choose a format to download:</p>
+    <div class="pz-modal-export-list">
+      <a id="exportXlsx" href="#" target="_blank" class="pz-export-link pz-export-link--xlsx">
+        <span class="pz-export-link-icon">📊</span> Download XLSX
       </a>
-      <a id="exportCsv" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #7b5ea7;border-radius:8px;text-decoration:none;color:#7b5ea7;font-weight:600;font-size:14px;transition:background .15s;">
-        <span style="font-size:20px;">📋</span> Download CSV
+      <a id="exportCsv" href="#" target="_blank" class="pz-export-link pz-export-link--csv">
+        <span class="pz-export-link-icon">📋</span> Download CSV
       </a>
-      <a id="exportPdf" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;transition:background .15s;">
-        <span style="font-size:20px;">📄</span> Download PDF
+      <a id="exportPdf" href="#" target="_blank" class="pz-export-link pz-export-link--pdf">
+        <span class="pz-export-link-icon">📄</span> Download PDF
       </a>
-      <a id="exportPrint" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #27ae60;border-radius:8px;text-decoration:none;color:#27ae60;font-weight:600;font-size:14px;transition:background .15s;">
-        <span style="font-size:20px;">🖨️</span> Open Printable View
+      <a id="exportPrint" href="#" target="_blank" class="pz-export-link pz-export-link--print">
+        <span class="pz-export-link-icon">🖨️</span> Open Printable View
       </a>
     </div>
-    <div style="text-align:right;margin-top:18px;">
-      <button onclick="closeExportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+    <div class="pz-modal-close-row">
+      <button onclick="closeExportModal()" class="pz-btn-modal-cancel">Close</button>
     </div>
   </div>
 </div>
 
 <!-- Import Modal -->
-<div id="importModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:360px;max-width:480px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-    <h3 style="margin:0 0 6px;color:#1a3c5e;font-size:17px;">Import Projects</h3>
-    <p style="margin:0 0 14px;color:#555;font-size:13px;">Upload an .xlsx or .csv file. <a id="importTplLink" href="#" style="color:#1a3c5e;font-weight:600;">Download template</a></p>
-    <div id="importDropZone" style="border:2px dashed #b0c4d8;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#888;font-size:13px;transition:border-color .15s;">
+<div id="importModal" class="pz-modal-overlay" style="display:none" hidden>
+  <div class="pz-modal-box">
+    <h3 class="pz-modal-title">Import Projects</h3>
+    <p class="pz-modal-subtitle">Upload an .xlsx or .csv file. <a id="importTplLink" href="#">Download template</a></p>
+    <div id="importDropZone" class="pz-modal-drop-zone">
       <div style="font-size:28px;margin-bottom:6px;">📂</div>
       Click or drag &amp; drop your .xlsx or .csv file here
       <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>
-    <div id="importFileName" style="margin-top:8px;font-size:12px;color:#555;"></div>
-    <div id="importResult" style="margin-top:10px;font-size:13px;"></div>
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
-      <button onclick="closeImportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Cancel</button>
-      <button id="importSubmitBtn" onclick="submitImport()" style="padding:8px 18px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">Import</button>
+    <div id="importFileName" class="pz-modal-file-name"></div>
+    <div id="importResult" class="pz-modal-result"></div>
+    <div class="pz-modal-actions">
+      <button onclick="closeImportModal()" class="pz-btn-modal-cancel">Cancel</button>
+      <button id="importSubmitBtn" onclick="submitImport()" class="pz-btn-modal-import-navy">Import</button>
     </div>
   </div>
 </div>

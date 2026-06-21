@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 
@@ -10,20 +10,6 @@
     <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
 
-<style>
-.pw-shell { max-width:480px; margin:0 auto; }
-.pw-card { background:#fff; border:1px solid #e5e0d0; border-radius:10px; padding:1.6rem 1.8rem; }
-.pw-card h3 { font-size:0.92rem; font-weight:700; text-transform:uppercase; color:#5c3d11; letter-spacing:.4px; margin:0 0 1rem; }
-.pw-field { margin-bottom:1rem; }
-.pw-field label { display:block; font-size:0.78rem; font-weight:700; text-transform:uppercase; color:#666; letter-spacing:.4px; margin-bottom:4px; }
-.pw-field input { width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.92rem; font-family:inherit; }
-.pw-actions { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem; }
-.btn-pw-save { background:#8C701C; color:#fff; border:none; border-radius:6px; padding:9px 22px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit; }
-.btn-pw-save:hover { background:#6e570f; }
-.btn-pw-back { background:#f5f0e4; color:#5c3d11; border:1px solid #d4c185; border-radius:6px; padding:8px 18px; font-size:0.9rem; font-weight:600; cursor:pointer; text-decoration:none; font-family:inherit; }
-.btn-pw-back:hover { background:#ede3c6; }
-.pw-hint { font-size:0.78rem; color:#888; margin-top:4px; }
-</style>
 
 <div class="pw-shell">
     <div class="pw-card">

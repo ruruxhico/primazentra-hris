@@ -9,7 +9,7 @@ class Auth extends BaseController {
     protected FirestoreService $firestore;
 
     public function __construct() {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     public function login() {
@@ -251,6 +251,7 @@ class Auth extends BaseController {
             }
 
             // Valid temp password — log in with the force-change flag
+            $picPath = (string)($userData['profile_picture'] ?? '');
             session()->set([
                 'isLoggedIn'              => true,
                 'userId'                  => $user['id'],
@@ -261,19 +262,22 @@ class Auth extends BaseController {
                 'remember_me'             => $rememberMe,
                 'force_change_password'   => true,
                 'temp_password_expires_at'=> $expiresTs ?? null,
+                'profilePicture'          => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
             ]);
 
             return redirect()->to('/change-password');
         }
 
+        $picPath = (string)($userData['profile_picture'] ?? '');
         session()->set([
-            'isLoggedIn'  => true,
-            'userId'      => $user['id'],
-            'userEmail'   => (string)($userData['email'] ?? $email),
-            'userName'    => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
-            'role'        => $userData['role'],
-            'login_time'  => time(),
-            'remember_me' => $rememberMe,
+            'isLoggedIn'     => true,
+            'userId'         => $user['id'],
+            'userEmail'      => (string)($userData['email'] ?? $email),
+            'userName'       => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
+            'role'           => $userData['role'],
+            'login_time'     => time(),
+            'remember_me'    => $rememberMe,
+            'profilePicture' => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);

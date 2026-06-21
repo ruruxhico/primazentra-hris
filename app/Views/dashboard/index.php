@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
 <?php if (!empty($googleMapsBrowserKey)): ?>
@@ -8,233 +8,6 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
 <?php endif; ?>
 <meta name="csrf-name" content="<?= csrf_token() ?>">
 <meta name="csrf-hash" content="<?= csrf_hash() ?>">
-<style>
-/* ── Report modal overlay ─────────────────────────────────────────────── */
-.rpt-overlay {
-    display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
-    z-index:1200; align-items:center; justify-content:center;
-}
-.rpt-overlay.open { display:flex; }
-.rpt-modal {
-    background:#fff; border-radius:14px; width:min(420px,95vw);
-    max-height:90vh; display:flex; flex-direction:column;
-    box-shadow:0 8px 32px rgba(0,0,0,.28); overflow:hidden;
-    transition: width .2s ease;
-}
-.rpt-modal.wide { width:min(720px,96vw); }
-.rpt-sum-row-label { font-weight:600; font-size:.82rem; white-space:nowrap; }
-.rpt-modal-hdr {
-    display:flex; align-items:center; gap:.6rem;
-    background:#c0392b; color:#fff; padding:.85rem 1rem;
-}
-.rpt-modal-hdr .rpt-hdr-back {
-    background:none; border:none; color:#fff; cursor:pointer; padding:2px;
-    display:flex; align-items:center; border-radius:50%;
-}
-.rpt-modal-hdr .rpt-hdr-back:hover { background:rgba(255,255,255,.2); }
-.rpt-modal-hdr .rpt-hdr-back .material-symbols-outlined { font-size:20px; }
-.rpt-modal-title { flex:1; font-weight:700; font-size:.95rem; }
-.rpt-modal-hdr .rpt-hdr-close {
-    background:none; border:none; color:#fff; cursor:pointer; padding:2px;
-    display:flex; align-items:center; border-radius:50%;
-}
-.rpt-modal-hdr .rpt-hdr-close:hover { background:rgba(255,255,255,.2); }
-.rpt-modal-hdr .rpt-hdr-close .material-symbols-outlined { font-size:20px; }
-
-/* progress report modal header is golden */
-.rpt-overlay[data-type="daily"] .rpt-modal-hdr { background:#8C701C; }
-
-.rpt-modal-body { flex:1; overflow-y:auto; padding:1rem 1.1rem; }
-
-/* Calendar */
-.rpt-cal-nav {
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom:.7rem;
-}
-.rpt-cal-nav button {
-    background:none; border:1px solid #ddd; border-radius:6px; padding:3px 7px;
-    cursor:pointer; display:flex; align-items:center;
-}
-.rpt-cal-nav button:hover { background:#f5f0e4; }
-.rpt-cal-nav button .material-symbols-outlined { font-size:18px; }
-.rpt-cal-month { font-size:.92rem; font-weight:700; color:#3a2a0a; }
-.rpt-cal-grid {
-    display:grid; grid-template-columns:repeat(7,1fr); gap:2px;
-    text-align:center;
-}
-.rpt-dow { font-size:.72rem; font-weight:700; color:#888; padding:4px 0; }
-.rpt-cal-day {
-    font-size:.84rem; padding:7px 3px; border-radius:50%; cursor:default;
-    line-height:1; aspect-ratio:1/1; display:flex; align-items:center; justify-content:center;
-}
-.rpt-cal-day.has-report {
-    background:#c0392b; color:#fff; cursor:pointer; font-weight:700;
-}
-.rpt-cal-day.has-report:hover { background:#a93226; }
-.rpt-cal-day.is-today {
-    border:2px solid #c0392b; color:#c0392b; font-weight:700;
-}
-.rpt-cal-day.has-report.is-today { border-color:#fff; }
-
-/* golden for progress */
-.rpt-overlay[data-type="daily"] .rpt-cal-day.has-report { background:#8C701C; }
-.rpt-overlay[data-type="daily"] .rpt-cal-day.has-report:hover { background:#6e570f; }
-.rpt-overlay[data-type="daily"] .rpt-cal-day.is-today { border-color:#8C701C; color:#8C701C; }
-
-.rpt-legend {
-    display:flex; gap:1rem; margin-top:.8rem; justify-content:center;
-    font-size:.76rem; color:#666;
-}
-.rpt-legend-item { display:flex; align-items:center; gap:.35rem; }
-.rpt-dot {
-    width:14px; height:14px; border-radius:50%; flex-shrink:0;
-}
-.rpt-dot.filled { background:#c0392b; }
-.rpt-dot.outline { border:2px solid #c0392b; }
-.rpt-overlay[data-type="daily"] .rpt-dot.filled { background:#8C701C; }
-.rpt-overlay[data-type="daily"] .rpt-dot.outline { border-color:#8C701C; }
-
-/* Detail view */
-.rpt-detail-badge {
-    display:inline-flex; align-items:center; gap:.4rem;
-    background:#fdecea; color:#c0392b; border:1px solid #f5c6c6;
-    border-radius:6px; padding:.4rem .75rem; font-size:.82rem; font-weight:700; margin-bottom:.8rem;
-}
-.rpt-detail-badge .material-symbols-outlined { font-size:16px; }
-.rpt-detail-date {
-    display:flex; align-items:center; gap:.4rem;
-    font-size:.84rem; color:#555; margin-bottom:.8rem;
-}
-.rpt-detail-date .material-symbols-outlined { font-size:16px; color:#888; }
-.rpt-detail-section { margin-bottom:.8rem; }
-.rpt-detail-section strong { display:block; font-size:.78rem; text-transform:uppercase; color:#666; letter-spacing:.4px; margin-bottom:.3rem; }
-.rpt-detail-section ul { margin:.3rem 0 0 1.2rem; padding:0; font-size:.88rem; }
-.rpt-detail-section p { font-size:.88rem; margin:0; }
-.rpt-detail-meta { font-size:.78rem; color:#888; margin-top:.6rem; }
-.rpt-daily-date { font-size:1.15rem; font-weight:800; color:#2c1f07; margin-bottom:.5rem; }
-.rpt-daily-row  { font-size:.88rem; color:#555; margin-bottom:.6rem; }
-.rpt-daily-section-title { font-weight:700; font-size:.88rem; color:#2c1f07; margin:.7rem 0 .3rem; }
-.rpt-daily-crew { margin:.2rem 0 .5rem 1.1rem; padding:0; font-size:.88rem; color:#333; }
-.rpt-daily-crew li { margin-bottom:.2rem; }
-.rpt-daily-ext  { font-style:italic; color:#999; font-size:.82rem; }
-.rpt-daily-completion { font-size:.9rem; color:#2c1f07; font-weight:600; margin:.6rem 0; }
-.rpt-daily-divider { border:none; border-top:1px solid #e0e0e0; margin:.8rem 0; }
-.rpt-daily-milestone { margin-bottom:.65rem; }
-.rpt-daily-ms-name { font-size:.9rem; color:#2c1f07; font-weight:500; }
-.rpt-daily-ms-meta { font-size:.82rem; color:#777; margin-top:.1rem; }
-/* ── Summary buttons ───────────────────────────────────────── */
-.rpt-summary-btn {
-    width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;
-    padding:.7rem 1rem; border:1.5px solid #c8a951; border-radius:50px;
-    background:#fff; color:#5c3d11; font-size:.9rem; font-weight:700;
-    cursor:pointer; font-family:inherit; letter-spacing:.01em;
-}
-.rpt-summary-btn:hover { background:#fdf8ee; border-color:#8C701C; }
-.rpt-summary-btn .material-symbols-outlined { font-size:18px; }
-/* ── Summary tables ────────────────────────────────────────── */
-.rpt-sum-title { font-size:.95rem; font-weight:700; color:#3a2a0a; margin-bottom:.8rem; display:flex; align-items:center; gap:.4rem; }
-.rpt-sum-title .material-symbols-outlined { font-size:1.1rem; }
-.rpt-sum-metrics { display:grid; grid-template-columns:repeat(2,1fr); gap:.6rem; margin-bottom:1rem; }
-.rpt-sum-metric { background:#fdf8ee; border-radius:8px; padding:.6rem .8rem; text-align:center; }
-.rpt-sum-metric-label { font-size:.68rem; font-weight:700; text-transform:uppercase; color:#8c701c; letter-spacing:.04em; margin-bottom:.2rem; }
-.rpt-sum-metric-value { font-size:1.2rem; font-weight:800; color:#3a2a0a; }
-.rpt-sum-metric-value.pos { color:#2e7d32; }
-.rpt-sum-metric-value.neg { color:#c62828; }
-.rpt-sum-table { width:100%; border-collapse:collapse; font-size:.82rem; }
-.rpt-sum-table th { background:#fdf8ee; color:#8c701c; font-weight:700; font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; padding:.5rem .6rem; border-bottom:2px solid #e8d9a8; text-align:left; }
-.rpt-sum-table td { padding:.5rem .6rem; border-bottom:1px solid #f0e6c8; color:#3a2a0a; }
-.rpt-sum-table tr:last-child td { border-bottom:none; }
-.rpt-sum-table .num { text-align:right; font-variant-numeric:tabular-nums; }
-.rpt-sum-table .pos { color:#2e7d32; font-weight:600; }
-.rpt-sum-table .neg { color:#c62828; font-weight:600; }
-.rpt-sum-table .muted { color:#aaa; }
-.rpt-sum-ms-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#c8a951; margin-right:3px; vertical-align:middle; }
-.rpt-sum-status { display:inline-block; padding:.1rem .45rem; border-radius:4px; font-size:.72rem; font-weight:600; }
-.rpt-sum-status-pending    { background:#f5f5f5; color:#666; }
-.rpt-sum-status-inprogress { background:#e3f2fd; color:#1565c0; }
-.rpt-sum-status-done       { background:#e8f5e9; color:#2e7d32; }
-.rpt-sum-empty { text-align:center; color:#aaa; padding:1.5rem; font-size:.88rem; }
-.rpt-sum-overall-hdr { background:#8C701C; color:#fff; border-radius:8px 8px 0 0; padding:.9rem 1rem; text-align:center; margin-bottom:0; }
-.rpt-sum-overall-title { font-size:1rem; font-weight:700; }
-.rpt-sum-overall-sub { font-size:.82rem; opacity:.85; margin-top:.2rem; }
-.rpt-sum-overall-badge { display:inline-block; background:rgba(255,255,255,.2); border-radius:50px; font-size:.78rem; padding:.25rem .75rem; margin-top:.4rem; }
-.rpt-sum-ms-heading { font-size:.82rem; font-weight:800; color:#8C701C; text-transform:uppercase; letter-spacing:.06em; margin:.9rem 0 .4rem; }
-
-/* Progress detail badge is golden */
-.rpt-overlay[data-type="daily"] .rpt-detail-badge { background:#fffbee; color:#8C701C; border-color:#d4c185; }
-
-/* New report form */
-.rpt-form-title { font-weight:700; color:#c0392b; margin-bottom:1rem; font-size:.95rem; }
-.rpt-overlay[data-type="daily"] .rpt-form-title { color:#8C701C; }
-.rpt-form-group { margin-bottom:.9rem; }
-.rpt-form-group label { display:block; font-size:.78rem; font-weight:700; text-transform:uppercase; color:#666; letter-spacing:.4px; margin-bottom:4px; }
-.rpt-form-group input[type="date"],
-.rpt-form-group input[type="number"],
-.rpt-form-group textarea {
-    width:100%; padding:7px 10px; border:1px solid #ccc; border-radius:6px;
-    font-size:.9rem; font-family:inherit;
-}
-.rpt-form-group textarea { resize:vertical; }
-.rpt-causes { border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; }
-.rpt-cause-item {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:.6rem .85rem; font-size:.88rem; cursor:pointer;
-    border-bottom:1px solid #f0f0f0;
-}
-.rpt-cause-item:last-child { border-bottom:none; }
-.rpt-cause-item:hover { background:#fafafa; }
-.rpt-cause-item input[type="checkbox"] { accent-color:#c0392b; width:16px; height:16px; cursor:pointer; }
-.rpt-overlay[data-type="daily"] .rpt-cause-item input[type="checkbox"] { accent-color:#8C701C; }
-
-/* Modal footer */
-.rpt-modal-footer {
-    padding:.75rem 1rem; border-top:1px solid #ebebeb;
-    display:flex; gap:.6rem; align-items:center; justify-content:flex-end;
-}
-.rpt-btn-back {
-    background:#f5f5f5; border:1px solid #ddd; color:#444;
-    border-radius:6px; padding:7px 14px; font-size:.85rem; font-weight:600;
-    cursor:pointer; display:flex; align-items:center; gap:.3rem; font-family:inherit;
-}
-.rpt-btn-back:hover { background:#ebebeb; }
-.rpt-btn-back .material-symbols-outlined { font-size:16px; }
-.rpt-btn-new {
-    background:#c0392b; color:#fff; border:none; border-radius:6px;
-    padding:7px 16px; font-size:.85rem; font-weight:700; cursor:pointer;
-    display:flex; align-items:center; gap:.4rem; font-family:inherit;
-}
-.rpt-btn-new:hover { background:#a93226; }
-.rpt-btn-new .material-symbols-outlined { font-size:16px; }
-.rpt-overlay[data-type="daily"] .rpt-btn-new { background:#8C701C; }
-.rpt-overlay[data-type="daily"] .rpt-btn-new:hover { background:#6e570f; }
-.rpt-btn-submit {
-    background:#c0392b; color:#fff; border:none; border-radius:6px;
-    padding:7px 18px; font-size:.85rem; font-weight:700; cursor:pointer; font-family:inherit;
-}
-.rpt-btn-submit:hover { background:#a93226; }
-.rpt-overlay[data-type="daily"] .rpt-btn-submit { background:#8C701C; }
-.rpt-overlay[data-type="daily"] .rpt-btn-submit:hover { background:#6e570f; }
-
-/* Dashboard card footer icon buttons */
-.db-icon-btn {
-    background:none; border:none; cursor:pointer; padding:2px; color:var(--db-orange);
-    display:inline-flex; align-items:center; border-radius:4px; font-family:inherit;
-}
-.db-icon-btn:hover { color:#3a2a0a; background:#f0ebe0; }
-.db-icon-btn .material-symbols-outlined {
-    font-size:20px;
-    font-variation-settings:'FILL' 1,'wght' 600;
-}
-.db-icon-btn.db-icon-emergency { color:#c0392b; }
-.db-icon-btn.db-icon-emergency .material-symbols-outlined {
-    font-variation-settings:'FILL' 0,'wght' 400;
-}
-.db-icon-btn.db-icon-emergency:hover { color:#922b21; background:#fdecea; }
-.db-icon-btn.db-icon-report:hover { color:#6e570f; }
-.db-icon-chat {
-    font-variation-settings:'FILL' 1,'wght' 600 !important;
-}
-</style>
 <?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
@@ -276,81 +49,161 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     <p class="db-today">Today,</p>
     <p class="db-today-date"><?= date('F j, Y') ?></p>
 
-    <div class="db-info-row">
+    <?php
+    $displayBlockers = !empty($mlBlockers) ? $mlBlockers : [];
+    $usingMl         = !empty($mlBlockers);
+    $activeList      = !empty($displayBlockers) ? $displayBlockers : $blockers;
+    $isManual        = empty($displayBlockers);
+    // Split into 3 equal columns (populated below after computing $blockerRows)
+    $total = count($activeList);
+    $third = (int)ceil($total / 3);
 
-        <!-- BLOCKERS --------------------------------------- -->
-        <div class="db-info-col">
-            <div class="db-info-card">
-                <div class="db-info-title">Blockers</div>
-                <?php if (empty($blockers)): ?>
-                    <p class="db-empty">No blockers â€” all projects on track.</p>
-                <?php else: ?>
-                    <div class="db-blockers-list">
-                    <?php foreach (array_slice($blockers, 0, 5) as $bl):
-                        $endTs     = is_numeric($bl['end_date'] ?? '') ? (int)$bl['end_date'] : @strtotime((string)($bl['end_date'] ?? ''));
-                        $delayDays = ($endTs && $endTs < time()) ? (int)floor((time() - $endTs) / 86400) : 0;
-                        $reason    = $bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress');
-                    ?>
-                    <div class="db-blocker-box">
-                        <span class="db-blocker-name"><?= esc(strtoupper($bl['project_name'] ?? 'Project')) ?></span>
-                        <?php if ($delayDays > 0): ?>
-                        <span class="db-blocker-sep">Â·</span>
-                        <span class="db-blocker-line"><?= $delayDays ?>d delay</span>
-                        <?php endif; ?>
-                        <span class="db-blocker-sep">Â·</span>
-                        <span class="db-blocker-line"><?= esc(ucwords((string)$reason)) ?></span>
-                    </div>
-                    <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
+    // Pre-compute display rows to avoid inline logic in each column loop
+    $blockerRows = [];
+    foreach ($activeList as $bl) {
+        if ($isManual) {
+            $endTs = is_numeric($bl['end_date'] ?? '') ? (int)$bl['end_date'] : @strtotime((string)($bl['end_date'] ?? ''));
+            $dd    = ($endTs && $endTs < time()) ? (int)floor((time() - $endTs) / 86400) : 0;
+            $blockerRows[] = [
+                'name'    => strtoupper($bl['project_name'] ?? 'Project'),
+                'status'  => ucwords((string)($bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress'))),
+                'statusc' => '#555',
+                'delay'   => $dd . 'd delay',
+                'delayc'  => $dd > 0 ? '#c0392b' : '#888',
+            ];
+        } else {
+            $isOk  = in_array(strtolower($bl['predicted'] ?? ''), ['no blocker','unknown','none','']);
+            $delay = (int)($bl['estimated_delay_days'] ?? 0);
+            $blockerRows[] = [
+                'name'    => strtoupper($bl['project_name'] ?? 'Project'),
+                'status'  => ucwords((string)($bl['predicted'] ?? 'Risk Detected')),
+                'statusc' => $isOk ? '#1e6b45' : '#c0392b',
+                'delay'   => $delay . 'd delay',
+                'delayc'  => $delay > 0 ? '#c0392b' : '#888',
+            ];
+        }
+    }
+    $bCol1 = array_slice($blockerRows, 0, $third);
+    $bCol2 = array_slice($blockerRows, $third, $third);
+    $bCol3 = array_slice($blockerRows, $third * 2);
+    ?>
 
-        <!-- AVAILABLE TOOLS -------------------------------- -->
-        <div class="db-info-col">
-            <div class="db-info-card">
-                <div class="db-info-title">Available Tools</div>
+    <style>
+    /* Summary section cards */
+    .pz-sc { background:#FBF6E8; border:2px solid #C8A951; border-radius:10px; overflow:hidden; box-sizing:border-box; margin-bottom:.75rem; }
+    .pz-sc-title { font-weight:800; font-size:.88rem; color:#2c1a00; text-transform:uppercase; letter-spacing:.05em; padding:.55rem .9rem .4rem; background:#FBF6E8; border-bottom:1px solid #E8D9A8; }
+    .pz-sc-tbl { width:100%; border-collapse:collapse; }
+    .pz-sc-tbl th { background:#C8A951; color:#2c1a00; font-weight:700; text-transform:uppercase; font-size:.72rem; padding:.28rem .55rem; text-align:left; white-space:nowrap; }
+    .pz-sc-tbl td { font-size:.78rem; color:#2c1a00; padding:.24rem .55rem; border-bottom:1px solid #E8D9A8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .pz-sc-tbl tr:last-child td { border-bottom:none; }
+    .pz-sc-tbl tr:nth-child(even) td { background:#f5efd6; }
+    .pz-sc-divider { width:1px; background:#E8D9A8; padding:0; }
+    /* Bottom row */
+    .pz-sc-row { display:flex; gap:.75rem; align-items:flex-start; }
+    .pz-sc-row > div { flex:1 1 0; min-width:0; }
+    .pz-sc-row .pz-sc { margin-bottom:0; }
+    /* Responsive: stack on small screens */
+    @media (max-width:600px) {
+        .pz-sc-row { flex-direction:column; }
+        .pz-sc-row > div { width:100%; }
+        .pz-bl-hide { display:none; } /* hide right half of blockers on mobile */
+    }
+    </style>
+
+    <!-- ── BLOCKERS CARD ── -->
+    <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:.75rem;”>
+        <div class=”pz-sc-title” style=”font-weight:800;font-size:.88rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.55rem .9rem .4rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Predicted Blockers</div>
+        <?php if (empty($activeList)): ?>
+            <p style=”text-align:center;font-style:italic;color:#888;margin:.75rem;font-size:.82rem;”>No predicted blockers — all projects on track.</p>
+        <?php else: ?>
+        <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
+            <thead>
+                <tr>
+                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:28%;”>Project</th>
+                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:16%;”>Status</th>
+                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:6%;”>Delay</th>
+                    <th class=”pz-bl-hide” style=”background:#E8D9A8;width:2px;padding:0;”></th>
+                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:28%;”>Project</th>
+                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:16%;”>Status</th>
+                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:6%;”>Delay</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php
+            $maxRows = max(count($bCol1), count($bCol2));
+            for ($ri = 0; $ri < $maxRows; $ri++):
+                $L = $bCol1[$ri] ?? null;
+                $R = $bCol2[$ri] ?? null;
+            ?>
+            <tr>
+                <td style=”font-weight:700;max-width:0;overflow:hidden;text-overflow:ellipsis;”><?= $L ? esc($L['name']) : '' ?></td>
+                <td style=”color:<?= $L ? esc($L['statusc']) : '#888' ?>;”><?= $L ? esc($L['status']) : '' ?></td>
+                <td style=”font-weight:700;color:<?= $L ? esc($L['delayc']) : '#888' ?>;”><?= $L ? esc($L['delay']) : '' ?></td>
+                <td class=”pz-bl-hide pz-sc-divider” style=”width:2px;background:#E8D9A8;padding:0;”></td>
+                <td class=”pz-bl-hide” style=”font-weight:700;max-width:0;overflow:hidden;text-overflow:ellipsis;”><?= $R ? esc($R['name']) : '' ?></td>
+                <td class=”pz-bl-hide” style=”color:<?= $R ? esc($R['statusc']) : '#888' ?>;”><?= $R ? esc($R['status']) : '' ?></td>
+                <td class=”pz-bl-hide” style=”font-weight:700;color:<?= $R ? esc($R['delayc']) : '#888' ?>;”><?= $R ? esc($R['delay']) : '' ?></td>
+            </tr>
+            <?php endfor; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+    </div><!-- /blockers -->
+
+    <!-- ── TOOLS + DEPLOY ── -->
+    <div class=”pz-sc-row” style=”display:flex;gap:.75rem;align-items:flex-start;”>
+
+        <!-- Available Tools -->
+        <div style=”flex:1 1 0;min-width:0;”>
+            <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:0;”>
+                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Available Tools</div>
                 <?php if (empty($availableTools)): ?>
-                    <p class="db-empty">No tools available.</p>
+                    <p style=”text-align:center;font-style:italic;color:#888;margin:.6rem;font-size:.82rem;”>No tools available.</p>
                 <?php else: ?>
-                    <table class="db-info-tbl">
-                        <thead><tr><th>Name</th><th>Qty</th></tr></thead>
-                        <tbody>
-                        <?php foreach (array_slice($availableTools, 0, 8) as $t): ?>
-                            <tr>
-                                <td><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
-                                <td><?= esc((string)($t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? 'â€”')) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
+                    <thead><tr>
+                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Name</th>
+                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:3.5rem;text-align:center;”>Qty</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($availableTools as $t): ?>
+                    <tr>
+                        <td style=”font-weight:700;”><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
+                        <td style=”text-align:center;color:#5a3e00;”><?= esc((string)($t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
                 <?php endif; ?>
             </div>
         </div>
 
-        <!-- AVAILABLE TO DEPLOY ---------------------------- -->
-        <div class="db-info-col">
-            <div class="db-info-card">
-                <div class="db-info-title">Available to Deploy</div>
+        <!-- Available to Deploy -->
+        <div style=”flex:1 1 0;min-width:0;”>
+            <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:0;”>
+                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Available to Deploy</div>
                 <?php if (empty($availableManpower)): ?>
-                    <p class="db-empty">No manpower available.</p>
+                    <p style=”text-align:center;font-style:italic;color:#888;margin:.6rem;font-size:.82rem;”>No manpower available.</p>
                 <?php else: ?>
-                    <table class="db-info-tbl">
-                        <thead><tr><th>Name</th><th>Role</th></tr></thead>
-                        <tbody>
-                        <?php foreach (array_slice($availableManpower, 0, 8) as $mp): ?>
-                            <tr>
-                                <td><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
-                                <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
+                    <thead><tr>
+                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Name</th>
+                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Role</th>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($availableManpower as $mp): ?>
+                    <tr>
+                        <td style=”font-weight:700;”><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
+                        <td style=”color:#5a3e00;”><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
                 <?php endif; ?>
             </div>
         </div>
 
-    </div><!-- /db-info-row -->
+    </div><!-- /tools+deploy -->
 
 </section><!-- #summary -->
 
@@ -911,16 +764,22 @@ document.addEventListener('DOMContentLoaded', function () {
             html += '<div class="rpt-detail-badge"><span class="material-symbols-outlined">warning</span>Emergency — ' + h(_pname) + '</div>';
             html += '<div class="rpt-detail-date"><span class="material-symbols-outlined">calendar_today</span>Date: ' + fmtDate + '</div>';
             var causes = d.causes || [];
+            html += '<div class="rpt-detail-section"><strong>Cause(s)</strong>';
             if (causes.length) {
-                html += '<div class="rpt-detail-section"><strong>Cause(s)</strong><ul>';
+                html += '<ul>';
                 causes.forEach(function (c) {
                     var label = h(c);
                     if (c === 'Other' && d.other_cause) label += ': ' + h(d.other_cause);
                     html += '<li>' + label + '</li>';
                 });
-                html += '</ul></div>';
+                html += '</ul>';
+            } else {
+                html += '<p style="color:#888;font-style:italic">No cause recorded.</p>';
             }
-            if (d.notes) html += '<div class="rpt-detail-section"><strong>Notes</strong><p>' + h(d.notes) + '</p></div>';
+            html += '</div>';
+            html += '<div class="rpt-detail-section"><strong>Notes</strong>';
+            html += d.notes ? '<p>' + h(d.notes) + '</p>' : '<p style="color:#888;font-style:italic">No notes recorded.</p>';
+            html += '</div>';
             if (d.filed_by) html += '<div class="rpt-detail-meta">Filed by: ' + h(d.filed_by) + '</div>';
         } else {
             // Date header
@@ -1016,6 +875,18 @@ document.addEventListener('DOMContentLoaded', function () {
     window.submitReport = function () {
         var form = document.getElementById('rptNewForm');
         if (!form) return;
+        if (_type === 'emergency') {
+            var checked = form.querySelectorAll('input[name="causes[]"]:checked');
+            if (!checked.length) {
+                var causesBox = form.querySelector('.rpt-causes');
+                if (causesBox) {
+                    causesBox.style.outline = '2px solid #c0392b';
+                    causesBox.style.borderRadius = '6px';
+                    setTimeout(function () { causesBox.style.outline = ''; }, 2000);
+                }
+                return;
+            }
+        }
         var fd = new FormData(form);
         var csrfName = (document.querySelector('meta[name="csrf-name"]') || {}).content;
         var csrfHash = (document.querySelector('meta[name="csrf-hash"]') || {}).content;
@@ -1105,10 +976,40 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (_summaryType === 'weekly') {
             var targets = d.weeklyTargets || [];
+
+            // If no saved weekly_targets but project has start/end dates,
+            // generate week slots with S-curve targets (mirrors mobile behavior)
+            var scurveFallback = false;
+            if (!targets.length && d.startDate && d.endDate) {
+                var _s  = new Date(d.startDate + 'T00:00:00');
+                var _e  = new Date(d.endDate   + 'T00:00:00');
+                var _n  = Math.max(1, Math.ceil((_e - _s) / (7 * 24 * 3600 * 1000)));
+                for (var _i = 0; _i < _n; _i++) {
+                    var _ws = new Date(_s.getTime() + _i * 7 * 24 * 3600 * 1000);
+                    targets.push({
+                        week:           _i + 1,
+                        week_start:     _ws.toISOString().slice(0, 10),
+                        target_percent: Math.round((1 - Math.cos(Math.PI * (_i + 1) / _n)) / 2 * 10000) / 100,
+                        actual_percent: null,
+                    });
+                }
+                scurveFallback = true;
+            }
+
+            // Show only weeks that have already started (mirror mobile behaviour)
+            var _today = new Date(); _today.setHours(0, 0, 0, 0);
+            targets = targets.filter(function(wt) {
+                if (!wt.week_start) return true;
+                return new Date(wt.week_start + 'T00:00:00') <= _today;
+            });
+
             if (!targets.length) {
-                html += '<div class="rpt-sum-empty">No weekly schedule data available. Open this project\'s Schedule screen on mobile and save to enable this view.</div>';
+                html += '<div class="rpt-sum-empty">No project dates set. Add a start and end date to the project to generate the weekly target table.</div>';
             } else {
                 html += '<div class="rpt-sum-title">Cumulative Weekly Progress Target Summary</div>';
+                if (scurveFallback) {
+                    html += '<div style="font-size:.76rem;color:#8C701C;background:#fffbee;border:1px solid #e8d9a8;border-radius:6px;padding:.4rem .75rem;margin-bottom:.75rem;">Targets computed via S-curve (no saved schedule). Save a milestone schedule to use custom targets.</div>';
+                }
                 html += '<table class="rpt-sum-table">';
                 html += '<thead><tr>' +
                         '<th>Week No.</th>' +
@@ -1613,6 +1514,32 @@ function toggleMapPanel() {
         }, 280);
     }
 }
+
+// ── ML Blockers carousel ─────────────────────────────────────────────
+(function () {
+    var currentSlide = 0;
+    var totalSlides  = <?= count($slidePages ?? []) ?>;
+
+    window.moveMlSlide = function (dir) {
+        currentSlide = (currentSlide + dir + totalSlides) % totalSlides;
+        updateCarousel();
+    };
+    window.goToMlSlide = function (idx) {
+        currentSlide = idx;
+        updateCarousel();
+    };
+    function updateCarousel() {
+        if (totalSlides <= 1) return;
+        var track = document.getElementById('mlCarouselTrack');
+        if (track) track.style.transform = 'translateX(-' + (currentSlide * 100) + '%)';
+        document.querySelectorAll('.db-dot').forEach(function (d, i) {
+            d.classList.toggle('active', i === currentSlide);
+        });
+    }
+    if (totalSlides > 1) {
+        setInterval(function () { window.moveMlSlide(1); }, 6000);
+    }
+}());
 </script>
 
 <?= $this->endSection() ?>

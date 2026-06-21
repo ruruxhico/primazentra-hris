@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 <?php
@@ -30,36 +30,23 @@
     <h1><?= $isEdit ? 'Edit Project' : 'Add Project' ?></h1>
 </div>
 
-<style>
-#projectForm input[type="text"]:not([readonly]) { text-transform: uppercase; }
-
-/* ── Milestone drag sort ─────────────────────────────── */
-.phase-drag-handle { cursor:grab; color:#b09060; font-size:1.25rem; user-select:none; flex-shrink:0; line-height:1; padding:0 2px 0 0; transition:color 120ms; }
-.phase-drag-handle:hover  { color:#8C701C; }
-.phase-drag-handle:active { cursor:grabbing; }
-.phase-card.pz-dragging   { opacity:.35; }
-.phase-drop-line { height:3px; background:#8C701C; border-radius:2px; margin:1px 0; pointer-events:none; }
-
-/* ── Form toast ──────────────────────────────────────── */
-#formToast { position:fixed; bottom:2rem; left:50%; transform:translateX(-50%) translateY(80px); background:#c0392b; color:#fff; padding:.7rem 1.5rem; border-radius:10px; font-weight:700; font-size:1rem; box-shadow:0 4px 20px rgba(0,0,0,.22); z-index:9999; opacity:0; transition:opacity 220ms,transform 220ms; pointer-events:none; max-width:500px; text-align:center; }
-#formToast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-</style>
 
 <div id="formToast"></div>
-<div class="form-container project-form-container">
+<div class="pz-form-container">
     <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data">
         <?= csrf_field() ?>
 
-        <div class="form-section">
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Project Information</p>
 
-            <div class="form-group">
-                <label for="project_name">Project Name *</label>
-                <input type="text" id="project_name" name="project_name"
-                       value="<?= esc($project['project_name'] ?? '') ?>" required>
-            </div>
-
-            <div class="form-group">
-                <label for="client_name">Client Name</label>
+            <div class="pz-form-row cols-2">
+                <div class="pz-form-group">
+                    <label for="project_name">Project Name *</label>
+                    <input type="text" id="project_name" name="project_name"
+                           value="<?= esc($project['project_name'] ?? '') ?>" required>
+                </div>
+                <div class="pz-form-group">
+                    <label for="client_name">Client Name</label>
                 <?php
                 $predefinedClients = ['ATC', 'COMMTREND', 'EDGEPOINT', 'FTAP', 'ITP', 'LDIC', 'SMSGT', 'SMART'];
                 $allClientSuggestions = array_unique(array_merge(
@@ -78,12 +65,13 @@
                     <?php endforeach; ?>
                 </datalist>
             </div>
+            </div><!-- /cols-2 -->
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row" style="max-width:320px;margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="project_type">Tower Type *</label>
                     <select id="project_type" name="project_type" required>
-                        <option value="">SELECT TYPE</option>
+                        <option value="">Select Type</option>
                         <?php foreach (['BUILD-TO-SUIT','RETROFITTING','COLOCATION', 'CONVERSION'] as $type): ?>
                             <option value="<?= esc($type) ?>"
                                 <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
@@ -92,11 +80,10 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
             </div>
 
             <!-- ── Location field with Maps integration ──────── -->
-            <div class="form-group">
+            <div class="pz-form-group" style="margin-top:.65rem">
                 <label for="location_address">Address *</label>
                 <div class="location-wrap">
                     <div class="location-input-row">
@@ -139,11 +126,11 @@
             </div>
             <!-- ── /Location ──────────────────────────────────── -->
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="project_manager_id">Project Manager *</label>
                     <select id="project_manager_id" name="project_manager_id" required>
-                        <option value="">SELECT PROJECT MANAGER</option>
+                        <option value="">Select Project Manager</option>
                         <?php foreach ($projectManagers ?? [] as $mgr): ?>
                             <?php $label = trim(($mgr['first_name'] ?? '') . ' ' . ($mgr['last_name'] ?? '')); ?>
                             <option value="<?= esc($mgr['id'] ?? '') ?>"
@@ -154,10 +141,10 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label for="site_engineer_id">Site Engineer *</label>
                     <select id="site_engineer_id" name="site_engineer_id" required>
-                        <option value="">SELECT SITE ENGINEER</option>
+                        <option value="">Select Site Engineer</option>
                         <?php foreach ($siteEngineers ?? [] as $eng): ?>
                             <?php $label = trim(($eng['first_name'] ?? '') . ' ' . ($eng['last_name'] ?? '')); ?>
                             <option value="<?= esc($eng['id'] ?? '') ?>"
@@ -169,8 +156,8 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="start_date">Start Date</label>
                     <div class="date-picker" data-target="start">
                         <input type="text" id="start_date_display" class="date-display"
@@ -184,7 +171,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label for="end_date">End Date</label>
                     <div class="date-picker" data-target="end">
                         <input type="text" id="end_date_display" class="date-display"
@@ -199,15 +186,15 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="budget">Budget *</label>
                     <input type="number" id="budget" name="budget"
                            min="0" step="0.01"
                            value="<?= esc($project['budget'] ?? '') ?>" required>
                 </div>
 
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label for="attachments">Attachments</label>
                     <label class="file-upload-label" for="attachments">
                         <span class="material-symbols-outlined file-upload-icon">upload_file</span>
@@ -241,10 +228,10 @@
                 </div>
             </div>
 
-        </div><!-- /form-section -->
+        </div><!-- /pz-form-section -->
 
         <!-- ── Project Schedule (phase accordion) ─────────── -->
-        <div class="form-section">
+        <div class="pz-form-section">
             <?php $hasSavedPhases = !empty($phases); ?>
 
             <div class="form-group add-tasks-toggle">
@@ -341,11 +328,12 @@
             </label>
         </div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
+        <div class="pz-form-actions">
+            <button type="submit" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">save</span>
                 <?= $isEdit ? 'Update Project' : 'Create Project' ?>
             </button>
-            <a href="<?= base_url('projects') ?>" class="btn btn-secondary">Cancel</a>
+            <a href="<?= base_url('projects') ?>" class="pz-btn pz-btn-cancel">Cancel</a>
         </div>
     </form>
 </div>
@@ -621,6 +609,22 @@ if (window.location.hostname === 'localhost') {
             { name: 'SP', weight: 30, qty: 6  },
             { name: 'L',  weight: 20, qty: 1  },
             { name: 'BP', weight: 10           },
+        ],
+        'CONVERSION': [
+            { name: 'SKOM',                      weight: 5  },
+            { name: 'Site Lay-out',              weight: 5  },
+            { name: 'Excavation',                weight: 8  },
+            { name: 'Grounding',                 weight: 7  },
+            { name: 'Lean Concrete',             weight: 7  },
+            { name: 'Rebars Installation',       weight: 8  },
+            { name: 'ABST Installation',         weight: 8  },
+            { name: 'Formworks Installation',    weight: 7  },
+            { name: 'Tower Foundation Casting',  weight: 8  },
+            { name: 'Backfilling',               weight: 6  },
+            { name: 'Tower Erection',            weight: 9  },
+            { name: 'Electrical Works',          weight: 8  },
+            { name: 'Cable Ladder Installation', weight: 7  },
+            { name: 'Site Development',          weight: 7  },
         ],
         '_DEFAULT': [
             { name: 'Mobilization & Site Setup',  weight: 9.7  },

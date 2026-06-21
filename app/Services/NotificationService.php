@@ -12,7 +12,7 @@ class NotificationService
 
     public function __construct()
     {
-        $this->db = (new FirestoreService())->getDb();
+        $this->db = (FirestoreService::getInstance())->getDb();
     }
 
     public function send(string $userId, string $type, string $title, string $body, array $metadata = []): string

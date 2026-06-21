@@ -52,15 +52,21 @@
               </a>
             </div>
             <?php
-              $hdrPic = (string)(session()->get('profilePicture') ?? '');
+              $hdrPic      = (string)(session()->get('profilePicture') ?? '');
               $hdrPicValid = $hdrPic !== '' && file_exists(FCPATH . $hdrPic);
+              $hdrInitial  = strtoupper(substr($userName !== '' ? $userName : 'User', 0, 1));
             ?>
             <a href="<?= base_url('profile') ?>" class="user-profile" style="text-decoration:none;color:inherit;" title="My Profile">
-              <span class="avatar-initial" style="<?= $hdrPicValid ? 'padding:0;overflow:hidden;' : '' ?>">
+              <span class="avatar-initial" id="hdrAvatarWrap" style="<?= $hdrPicValid ? 'padding:0;overflow:hidden;' : '' ?>">
                 <?php if ($hdrPicValid): ?>
-                  <img src="<?= base_url($hdrPic) ?>?v=<?= filemtime(FCPATH . $hdrPic) ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                  <img src="<?= base_url($hdrPic) ?>?v=<?= filemtime(FCPATH . $hdrPic) ?>"
+                       alt=""
+                       id="hdrAvatarImg"
+                       style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
+                       onerror="this.style.display='none';document.getElementById('hdrAvatarFallback').style.display='';document.getElementById('hdrAvatarWrap').style.padding='';">
+                  <span id="hdrAvatarFallback" style="display:none"><?= $hdrInitial ?></span>
                 <?php else: ?>
-                  <?= strtoupper(substr($userName !== '' ? $userName : 'User', 0, 1)) ?>
+                  <?= $hdrInitial ?>
                 <?php endif; ?>
               </span>
               <div>
@@ -82,85 +88,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
   <!-- ── Notification bell ── -->
-  <style>
-  .pz-notif-wrap { position:relative; }
-  .pz-notif-btn {
-    background:none; border:none; cursor:pointer; padding:6px;
-    display:flex; align-items:center; justify-content:center;
-    position:relative; color:#fff; border-radius:8px;
-    transition:background .15s;
-  }
-  .pz-notif-btn:hover { background:rgba(255,255,255,.15); }
-  .pz-notif-btn .material-symbols-outlined { font-size:22px; color:#ffd740; font-variation-settings:'FILL' 1,'wght' 400; }
-  .pz-notif-badge {
-    position:absolute; top:3px; right:3px;
-    background:#e53935; color:#fff; font-size:10px; font-weight:700;
-    min-width:16px; height:16px; border-radius:8px;
-    display:flex; align-items:center; justify-content:center;
-    padding:0 3px; pointer-events:none; line-height:1;
-  }
-  .pz-notif-panel {
-    display:none; position:absolute; right:0; top:calc(100% + 6px);
-    width:340px; background:#fff; border-radius:10px;
-    box-shadow:0 4px 24px rgba(0,0,0,.18); z-index:9999;
-    overflow:hidden;
-  }
-  .pz-notif-panel.open { display:block; }
-  .pz-notif-hdr {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:12px 16px; border-bottom:1px solid #eee;
-    font-weight:700; font-size:.92rem; color:#333;
-  }
-  .pz-notif-mark-all {
-    background:none; border:none; cursor:pointer; font-size:.78rem;
-    color:#b8960c; font-weight:600; padding:0;
-  }
-  .pz-notif-mark-all:hover { text-decoration:underline; }
-  .pz-notif-list { max-height:380px; overflow-y:auto; }
-  .pz-notif-empty { padding:32px 16px; text-align:center; color:#999; font-size:.88rem; }
-  .pz-notif-item {
-    display:flex; align-items:flex-start; gap:10px;
-    padding:12px 16px; border-bottom:1px solid #f5f5f5;
-    cursor:pointer; transition:background .12s;
-    text-decoration:none; color:inherit;
-  }
-  .pz-notif-item:hover { background:#fdf8e1; }
-  .pz-notif-item.unread { background:#fffbea; }
-  .pz-notif-item.unread:hover { background:#fdf3c0; }
-  .pz-notif-icon {
-    width:34px; height:34px; border-radius:50%; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    background:#f0e9c5; color:#b8960c;
-  }
-  .pz-notif-icon .material-symbols-outlined { font-size:18px; }
-  .pz-notif-content { flex:1; min-width:0; }
-  .pz-notif-title { font-weight:600; font-size:.85rem; color:#222; line-height:1.3; }
-  .pz-notif-body  { font-size:.8rem; color:#555; margin-top:2px; line-height:1.35; }
-  .pz-notif-time  { font-size:.72rem; color:#aaa; margin-top:4px; }
-  .pz-notif-dot   { width:8px; height:8px; border-radius:50%; background:#b8960c; flex-shrink:0; margin-top:5px; }
-  .pz-notif-view-all {
-    display:block; text-align:center; padding:10px;
-    font-size:.8rem; color:#b8960c; font-weight:600;
-    border-top:1px solid #eee; text-decoration:none;
-    transition:background .12s;
-  }
-  .pz-notif-view-all:hover { background:#fdf8e1; }
-  .pz-msg-wrap { position:relative; }
-  .pz-msg-badge {
-    position:absolute; top:3px; right:3px;
-    background:#e53935; color:#fff; font-size:10px; font-weight:700;
-    min-width:16px; height:16px; border-radius:8px;
-    display:flex; align-items:center; justify-content:center;
-    padding:0 3px; pointer-events:none; line-height:1;
-  }
-  .pz-msg-btn {
-    background:none; border:none; cursor:pointer; padding:6px;
-    display:flex; align-items:center; justify-content:center;
-    border-radius:50%; transition:background .15s; text-decoration:none; position:relative;
-  }
-  .pz-msg-btn:hover { background:rgba(255,255,255,.15); }
-  .pz-msg-btn .material-symbols-outlined { font-size:22px; color:#90caf9; font-variation-settings:'FILL' 1,'wght' 400; }
-  </style>
   <script>
   (function () {
     var _base    = '<?= base_url() ?>';
@@ -328,10 +255,6 @@
   </script>
 
   <!-- Long-press drag-to-scroll (hold left button 300 ms on any non-interactive area) -->
-  <style>
-    body.pz-drag-scroll,
-    body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !important; }
-  </style>
   <script>
   (function () {
     var DELAY = 300; // ms before drag-scroll activates

@@ -14,7 +14,7 @@ class Messages extends BaseController
 
     public function __construct()
     {
-        $this->db = (new FirestoreService())->getDb();
+        $this->db = (FirestoreService::getInstance())->getDb();
     }
 
     // GET /messages
@@ -124,6 +124,7 @@ class Messages extends BaseController
                 foreach ($members as $mUid) {
                     $allUids[(string)$mUid] = true;
                 }
+                $unreadCounts = (array)($d['unread_counts'] ?? []);
                 $chats[] = [
                     'id'           => $doc->id(),
                     'project_id'   => $d['project_id']   ?? null,
@@ -131,6 +132,7 @@ class Messages extends BaseController
                     'members'      => $members,
                     'last_message' => $this->serializeLastMessage($d['last_message'] ?? null),
                     'created_at'   => $this->tsToIso($d['created_at'] ?? null),
+                    'unread_count' => (int)($unreadCounts[$uid] ?? 0),
                 ];
             }
 

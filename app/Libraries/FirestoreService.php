@@ -7,27 +7,36 @@ use Kreait\Firebase\Contract\Auth;
 use Kreait\Firebase\Factory;
 
 class FirestoreService {
+
+    private static ?self $instance = null;
+
     protected FirestoreClient $db;
     protected Auth $auth;
 
-    public function __construct() {
+    private function __construct() {
         $path = WRITEPATH . 'credentials/firebase_key.json';
 
         if (!file_exists($path)) {
             die("<b>System Error:</b> Firebase key not found at: " . htmlspecialchars($path));
         }
 
-        // Set env var so gRPC credential chain finds the file
         putenv('GOOGLE_APPLICATION_CREDENTIALS=' . realpath($path));
 
         try {
-            $factory      = (new Factory)->withServiceAccount($path);
-            $this->db     = $factory->createFirestore()->database();
-            $this->auth   = $factory->createAuth();
-
+            $factory    = (new Factory)->withServiceAccount($path);
+            $this->db   = $factory->createFirestore()->database();
+            $this->auth = $factory->createAuth();
         } catch (\Exception $e) {
             die("<b>Firestore Connection Error:</b> " . htmlspecialchars($e->getMessage()));
         }
+    }
+
+    public static function getInstance(): self
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
     }
 
     public function getDb(): FirestoreClient { return $this->db; }

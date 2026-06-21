@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
 use App\Libraries\MilestoneProgressService;
 use App\Libraries\StorageService;
@@ -17,7 +18,7 @@ class Projects extends BaseController
 
     public function __construct()
     {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
         $this->usersModel = new Model_Users();
     }
 
@@ -354,6 +355,59 @@ class Projects extends BaseController
         } catch (\Exception $e) {
             log_message('error', 'Projects::update - ' . $e->getMessage());
             return redirect()->back()->with('error', 'Failed to update project');
+        }
+    }
+
+    public function deleted(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new TrashService($this->firestore))->getTrashItems('project');
+        return view('shared/module_deleted', [
+            'pageTitle'  => 'Deleted Projects',
+            'activePage' => 'projects',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'project',
+            'title'      => 'Deleted Projects',
+            'backUrl'    => base_url('projects'),
+            'items'      => $items,
+        ]);
+    }
+
+    public function archived(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new ArchiveService($this->firestore))->getArchivedItems('project');
+        return view('shared/module_archived', [
+            'pageTitle'  => 'Archived Projects',
+            'activePage' => 'projects',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'project',
+            'title'      => 'Archived Projects',
+            'backUrl'    => base_url('projects'),
+            'items'      => $items,
+        ]);
+    }
+
+    public function archive(): object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        try {
+            $id = trim((string)($this->request->getPost('id') ?? ''));
+            if (!$id) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
+
+            $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+            $data = $snap->exists() ? $snap->data() : [];
+            $name = (string)($data['project_name'] ?? $id);
+
+            (new ArchiveService($this->firestore))->moveToArchive('project', $id, $name, $data, [], session()->get('userName'));
+            $this->firestore->getDb()->collection('project')->document($id)->delete();
+
+            return $this->response->setJSON(['success' => true, 'name' => $name]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::archive - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
         }
     }
 

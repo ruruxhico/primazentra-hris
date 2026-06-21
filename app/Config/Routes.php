@@ -32,6 +32,8 @@ $routes->get('summary', 'Dashboard::index');
 $routes->get('monitor', 'Dashboard::index');
 
 // Projects Routes
+$routes->get('projects/deleted',  'Projects::deleted');
+$routes->get('projects/archived', 'Projects::archived');
 $routes->get('projects', 'Projects::index');
 $routes->get('projects/create', 'Projects::create');
 $routes->post('projects/create', 'Projects::create');
@@ -73,6 +75,8 @@ $routes->get('profile/change-password',   'Profile::changePassword');
 $routes->post('profile/change-password',  'Profile::processChangePassword');
 
 // Resource Requests & Transfers
+$routes->get('requests/deleted',  'ResourceRequests::deleted');
+$routes->get('requests/archived', 'ResourceRequests::archived');
 $routes->get('requests',                          'ResourceRequests::index');
 $routes->get('requests/pending-json',             'ResourceRequests::pendingJson');
 $routes->get('requests/(:segment)',               'ResourceRequests::show/$1');
@@ -82,6 +86,8 @@ $routes->post('requests/approve-secondary/(:segment)', 'ResourceRequests::approv
 $routes->post('requests/reject/(:segment)',        'ResourceRequests::reject/$1');
 
 // Resources Routes
+$routes->get('resources/deleted',  'Resources::deleted');
+$routes->get('resources/archived', 'Resources::archived');
 $routes->get('resources', 'Resources::index');
 $routes->get('resources/requests', 'Resources::index');
 $routes->get('resources/create', 'Resources::create');
@@ -116,6 +122,8 @@ $routes->post('manpower/delete', 'Manpower::delete');
 $routes->get('manpower/delete/(:segment)', 'Manpower::delete/$1');
 
 // Staff Routes
+$routes->get('staff/deleted',  'Staff::deleted');
+$routes->get('staff/archived', 'Staff::archived');
 $routes->get('staff', 'Staff::index');
 $routes->get('staff/create', 'Staff::create');
 $routes->post('staff/create', 'Staff::create');
@@ -135,6 +143,13 @@ $routes->get('verification-success',       'VerifyAccount::verificationSuccess')
 // Trash (soft-delete restore/permanent-delete)
 $routes->post('trash/restore', 'Trash::restore');
 $routes->post('trash/permanent-delete', 'Trash::permanentDelete');
+
+// Archive
+$routes->post('archive/restore',          'Archive::restore');
+$routes->post('archive/permanent-delete', 'Archive::permanentDelete');
+$routes->post('staff/archive',            'Staff::archive');
+$routes->post('projects/archive',         'Projects::archive');
+$routes->post('resources/archive',        'Resources::archive');
 
 // Notifications
 $routes->get('notifications',               'Notifications::index');

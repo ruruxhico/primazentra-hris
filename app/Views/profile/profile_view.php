@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 
@@ -13,62 +13,6 @@
     <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
 <?php endif; ?>
 
-<style>
-.profile-shell { max-width: 560px; margin: 0 auto; }
-.profile-avatar-row { display:flex; align-items:center; gap:1.2rem; margin-bottom:1.6rem; }
-
-/* Avatar wrapper — clickable to upload */
-.profile-avatar-wrap {
-    position:relative; width:80px; height:80px; flex-shrink:0; cursor:pointer;
-}
-.profile-avatar-circle {
-    width:80px; height:80px; border-radius:50%;
-    background:#8C701C; color:#fff; font-size:2rem; font-weight:700;
-    display:flex; align-items:center; justify-content:center;
-    overflow:hidden; border:3px solid #d4c185;
-}
-.profile-avatar-circle img {
-    width:100%; height:100%; object-fit:cover; border-radius:50%;
-}
-.profile-avatar-overlay {
-    position:absolute; inset:0; border-radius:50%;
-    background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;
-    opacity:0; transition:opacity .2s;
-}
-.profile-avatar-wrap:hover .profile-avatar-overlay { opacity:1; }
-.profile-avatar-overlay .material-symbols-outlined { color:#fff; font-size:24px; }
-.profile-avatar-uploading .profile-avatar-overlay { opacity:1; background:rgba(0,0,0,0.55); }
-#avatarUploadProgress {
-    display:none; font-size:0.75rem; color:#8C701C; margin-top:4px; text-align:center;
-}
-.profile-avatar-upload-err {
-    font-size:0.75rem; color:#c0392b; margin-top:4px; display:none;
-}
-
-.profile-avatar-meta .profile-role { font-size:0.82rem; font-weight:700; text-transform:uppercase; color:#8C701C; letter-spacing:.5px; }
-.profile-avatar-meta .profile-email { font-size:0.84rem; color:#555; margin-top:2px; }
-.profile-avatar-meta .profile-change-hint { font-size:0.75rem; color:#aaa; margin-top:3px; }
-
-.profile-card { background:#fff; border:1px solid #e5e0d0; border-radius:10px; padding:1.6rem 1.8rem; margin-bottom:1.2rem; }
-.profile-card h3 { font-size:0.92rem; font-weight:700; text-transform:uppercase; color:#5c3d11; letter-spacing:.4px; margin:0 0 1rem; }
-.profile-field { margin-bottom:1rem; }
-.profile-field label { display:block; font-size:0.78rem; font-weight:700; text-transform:uppercase; color:#666; letter-spacing:.4px; margin-bottom:4px; }
-.profile-field input { width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.92rem; font-family:inherit; }
-.profile-field input[readonly] { background:#f6f4ee; color:#888; cursor:not-allowed; }
-.profile-actions { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-top:0.5rem; }
-.btn-profile-save {
-    background:#8C701C; color:#fff; border:none; border-radius:6px;
-    padding:9px 22px; font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit;
-}
-.btn-profile-save:hover { background:#6e570f; }
-.btn-profile-pw {
-    background:#f5f0e4; color:#5c3d11; border:1px solid #d4c185; border-radius:6px;
-    padding:8px 18px; font-size:0.9rem; font-weight:600; cursor:pointer;
-    text-decoration:none; display:inline-flex; align-items:center; gap:5px; font-family:inherit;
-}
-.btn-profile-pw:hover { background:#ede3c6; color:#3d2800; }
-.btn-profile-pw .material-symbols-outlined { font-size:16px; }
-</style>
 
 <div class="profile-shell">
 
