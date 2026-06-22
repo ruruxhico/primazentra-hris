@@ -8,6 +8,8 @@ class MLService extends BaseConfig
 {
     public string $baseUrl = 'http://127.0.0.1:8000';
     public int    $timeoutSeconds = 5;
+    public $mcdaDistanceWeight = 0.7;
+    public $mcdaAvailabilityWeight = 0.3;
 
     public function __construct()
     {

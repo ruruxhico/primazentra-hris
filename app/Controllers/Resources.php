@@ -861,10 +861,12 @@ class Resources extends BaseController
                 return redirect()->back()->with('error', 'Missing resource or item id');
             }
 
-            $this->firestore->getDb()
-                ->collection('resource')->document($resourceId)
-                ->collection('items')->document($itemId)
-                ->delete();
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+            if ($snap->exists()) {
+                $this->cleanProjectResourceEntry($db, $resourceId, $itemId, $snap->data()['assigned_project_id'] ?? null);
+            }
+            $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
 
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit deleted successfully.');
         } catch (\Exception $e) {
@@ -888,6 +890,8 @@ class Resources extends BaseController
             $data['resource_id'] = $resourceId;
 
             $name = ($data['serial_number'] ?? '') ?: $itemId;
+
+            $this->cleanProjectResourceEntry($db, $resourceId, $itemId, $data['assigned_project_id'] ?? null);
 
             $trashService = new \App\Libraries\TrashService($this->firestore);
             $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
@@ -955,6 +959,10 @@ class Resources extends BaseController
         $deleted = 0;
         foreach ((array)$ids as $itemId) {
             try {
+                $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+                if ($snap->exists()) {
+                    $this->cleanProjectResourceEntry($db, $resourceId, $itemId, $snap->data()['assigned_project_id'] ?? null);
+                }
                 $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
                 $deleted++;
             } catch (\Throwable) {}
@@ -978,12 +986,36 @@ class Resources extends BaseController
                 if (!$snap->exists()) continue;
                 $data = $snap->data(); $data['id'] = $itemId; $data['resource_id'] = $resourceId;
                 $name = ($data['serial_number'] ?? '') ?: $itemId;
+                $this->cleanProjectResourceEntry($db, $resourceId, $itemId, $data['assigned_project_id'] ?? null);
                 $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
                 $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
                 $done++;
             } catch (\Throwable) {}
         }
         return $this->response->setJSON(['success' => true, 'archived' => $done]);
+    }
+
+    private function cleanProjectResourceEntry($db, string $resourceId, string $unitId, $assignedProjectId): void
+    {
+        $pid = $assignedProjectId instanceof \Google\Cloud\Firestore\DocumentReference
+            ? $assignedProjectId->id()
+            : trim((string)($assignedProjectId ?? ''));
+        if ($pid === '') return;
+        try {
+            $snap    = $db->collection('project')->document($pid)->snapshot();
+            if (!$snap->exists()) return;
+            $current  = (array)($snap->data()['resources'] ?? []);
+            $filtered = array_values(array_filter($current, function ($r) use ($resourceId, $unitId) {
+                return !((string)($r['ref_id'] ?? '') === $resourceId && (string)($r['unit_id'] ?? '') === $unitId);
+            }));
+            if (count($filtered) !== count($current)) {
+                $db->collection('project')->document($pid)->update([
+                    ['path' => 'resources', 'value' => $filtered],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::cleanProjectResourceEntry - ' . $e->getMessage());
+        }
     }
 
     private function buildResourcePayload(): array

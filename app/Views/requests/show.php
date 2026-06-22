@@ -192,9 +192,29 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             <?= csrf_field() ?>
 
             <?php if (!$sourceKnown): ?>
+            <?php if (isset($recommended_best) && !empty($recommended_best)): ?>
+                <div class="mb-3 p-3" style="background-color:#f8f9fa;border-radius:8px;border-left:4px solid #f39c12;max-width:450px;margin-bottom:.85rem;">
+                    <p style="font-size:0.85rem;font-weight:bold;color:#6c757d;margin:0 0 .5rem">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">magic_button</span> AI RECOMMENDATIONS
+                    </p>
+                    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                        <span class="pz-badge" style="background:#10b981;color:#fff;cursor:pointer;padding:.4rem .6rem;"
+                              onclick="document.getElementById('source_site_input').value='<?= esc($recommended_best['project_id'] ?? '') ?>'">
+                            ⭐ Best: <?= esc($recommended_best['project_name']) ?> (Score: <?= esc($recommended_best['score']) ?>)
+                        </span>
+                        <?php if (isset($recommended_nearest) && !empty($recommended_nearest) && ($recommended_nearest['project_id'] ?? '') !== ($recommended_best['project_id'] ?? '')): ?>
+                        <span class="pz-badge" style="background:#0ea5e9;color:#fff;cursor:pointer;padding:.4rem .6rem;"
+                              onclick="document.getElementById('source_site_input').value='<?= esc($recommended_nearest['project_id'] ?? '') ?>'">
+                            📍 Nearest: <?= esc($recommended_nearest['project_name']) ?> (<?= esc($recommended_nearest['distance_km']) ?> km)
+                        </span>
+                        <?php endif; ?>
+                    </div>
+                    <small style="color:#9ca3af;font-size:0.75rem;">Click a badge to auto-select the source site below.</small>
+                </div>
+            <?php endif; ?>
             <div class="pz-form-group" style="max-width:340px; margin-bottom:.85rem">
                 <label>Select source site</label>
-                <select name="approved_source_project_id" required>
+                <select name="approved_source_project_id" id="source_site_input" required>
                     <option value="">Choose a source site</option>
                     <?php foreach ($projects as $proj): ?>
                     <option value="<?= esc($proj['id']) ?>"><?= esc($proj['label']) ?></option>
@@ -203,6 +223,25 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             </div>
             <?php else: ?>
             <input type="hidden" name="approved_source_project_id" value="<?= esc($req['source_project_id']) ?>">
+            <?php if (isset($recommended_best) && !empty($recommended_best)): ?>
+                <?php
+                $aiAgreesWithSource = strtolower($recommended_best['project_name'] ?? '') === strtolower($sourceName ?? '');
+                ?>
+                <div style="background-color:#f8f9fa;border-radius:8px;border-left:4px solid <?= $aiAgreesWithSource ? '#10b981' : '#f39c12' ?>;max-width:450px;margin-bottom:.85rem;padding:.6rem .85rem;">
+                    <p style="font-size:0.78rem;font-weight:700;color:#6c757d;margin:0 0 .35rem;text-transform:uppercase;letter-spacing:.04em;">
+                        <span class="material-symbols-outlined" style="font-size:.95rem;vertical-align:middle">magic_button</span>
+                        AI Sourcing Insight
+                    </p>
+                    <?php if ($aiAgreesWithSource): ?>
+                        <span style="font-size:.84rem;color:#1e6b45;font-weight:600;">✓ AI agrees — <?= esc($recommended_best['project_name']) ?> is the top-scored source (Score: <?= esc($recommended_best['score']) ?>)</span>
+                    <?php else: ?>
+                        <span style="font-size:.84rem;color:#92400e;">AI suggests a different source: <strong><?= esc($recommended_best['project_name']) ?></strong> (Score: <?= esc($recommended_best['score']) ?>)</span>
+                        <?php if (isset($recommended_nearest) && !empty($recommended_nearest)): ?>
+                        <br><span style="font-size:.78rem;color:#6c757d;">Nearest: <?= esc($recommended_nearest['project_name']) ?> (<?= esc($recommended_nearest['distance_km']) ?> km)</span>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <div class="pz-form-group" style="max-width:340px; margin-bottom:.85rem">
                 <label>Approved source</label>
                 <div style="font-weight:700; font-size:1rem; color:#2c1a00; padding:.4rem 0"><?= esc($sourceName) ?></div>
