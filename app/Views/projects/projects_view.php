@@ -10,12 +10,14 @@
 <div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
     <div class="confirm-backdrop"></div>
     <div class="confirm-box">
-        <div class="confirm-content">
-            <p id="confirmMessage">Are you sure?</p>
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="confirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="confirmTitle">Delete</p>
         </div>
+        <div class="confirm-content"><p id="confirmMessage"></p></div>
         <div class="confirm-actions">
-            <button id="confirmCancel" class="btn-toolbar">Cancel</button>
-            <button id="confirmOk" class="btn-toolbar btn-add">OK</button>
+            <button id="confirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="confirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
         </div>
     </div>
 </div>
@@ -56,7 +58,7 @@
 <div class="rv-controls">
     <div class="rv-search-wrap">
         <span class="material-symbols-outlined">search</span>
-        <input type="text" id="searchProjects" placeholder="Search projects…" class="rv-search">
+        <input type="text" id="searchProjects" placeholder="" class="rv-search">
     </div>
 
     <button type="button" class="rv-btn rv-btn-filter" id="filterToggleBtn">
@@ -274,6 +276,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const toast = document.getElementById('customToast');
     const DELETE_URL = '<?= base_url('projects/delete') ?>';
     const BASE_URL   = '<?= base_url() ?>';
+    function setConfirmType(type) {
+        const isArchive = type === 'archive';
+        confirmDialog.classList.toggle('confirm-archive', isArchive);
+        var icon  = document.getElementById('confirmIcon');
+        var title = document.getElementById('confirmTitle');
+        if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'delete_forever';
+        if (title) title.textContent = isArchive ? 'Archive' : 'Delete';
+    }
 
     function showToast(message, type = 'info') {
         if (!toast) return;
@@ -375,6 +385,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const checked = getChecked();
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        setConfirmType('archive');
         confirmMessage.innerText = 'Archive ' + checked.length + ' item(s)?\n' + names;
         pendingDeleteId = '__bulk_archive__';
         pendingBulkArchiveItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
@@ -385,6 +396,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const checked = getChecked();
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        setConfirmType('delete');
         confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
         pendingDeleteId = '__bulk__';
         pendingBulkItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
@@ -405,6 +417,7 @@ document.addEventListener('DOMContentLoaded', function () {
             pendingDeleteId = this.dataset.id;
             pendingRow = this.closest('tr');
             const name = this.dataset.name || 'this project';
+            setConfirmType('delete');
             confirmMessage.innerText = 'Delete "' + name + '"?';
             confirmDialog.classList.add('open');
         });
@@ -546,6 +559,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.dataset.name = this.dataset.name || 'this project';
             pendingArchiveId  = this.dataset.id;
             pendingArchiveRow = row;
+            setConfirmType('archive');
             confirmMessage.innerText = 'Archive "' + (this.dataset.name || 'this project') + '"? It will be removed from active projects and stored in the archive.';
             confirmDialog.classList.add('open');
         });

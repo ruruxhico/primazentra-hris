@@ -10,12 +10,14 @@
 <div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
     <div class="confirm-backdrop"></div>
     <div class="confirm-box">
-        <div class="confirm-content">
-            <p id="confirmMessage">Are you sure?</p>
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="confirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="confirmTitle">Delete</p>
         </div>
+        <div class="confirm-content"><p id="confirmMessage"></p></div>
         <div class="confirm-actions">
-            <button id="confirmCancel" class="btn-toolbar">Cancel</button>
-            <button id="confirmOk" class="btn-toolbar btn-add">OK</button>
+            <button id="confirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="confirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
         </div>
     </div>
 </div>
@@ -43,7 +45,7 @@
 <div class="rv-controls">
     <div class="rv-search-wrap">
         <span class="material-symbols-outlined">search</span>
-        <input type="text" id="searchStaff" placeholder="Search staff…" class="rv-search">
+        <input type="text" id="searchStaff" placeholder="" class="rv-search">
     </div>
 
     <button type="button" class="rv-btn rv-btn-filter" id="filterToggleBtn">
@@ -170,10 +172,12 @@
                             </span>
                         </td>
                         <td class="text-center">
-                            <a href="<?= base_url('staff/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
-                            <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
-                            <button type="button" class="action-btn action-archive" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
-                            <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                            <div class="action-wrap">
+                                <a href="<?= base_url('staff/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                                <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
+                                <button type="button" class="action-btn action-archive" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
+                                <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -336,12 +340,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.row-cb').forEach(wireRowCb);
 
     // ── Promise-based custom confirm (no native browser dialogs) ──
+    const confirmIcon  = document.getElementById('confirmIcon');
+    const confirmTitle = document.getElementById('confirmTitle');
     let _confirmResolve = null;
-    function openConfirm(message) {
-        if (_confirmResolve) return Promise.resolve(false); // block overlap
+    function openConfirm(message, type = 'delete') {
+        if (_confirmResolve) return Promise.resolve(false);
         return new Promise(resolve => {
             _confirmResolve = resolve;
             confirmMessage.innerText = message;
+            const isArchive = type === 'archive';
+            confirmDialog.classList.toggle('confirm-archive', isArchive);
+            if (confirmIcon)  { confirmIcon.textContent  = isArchive ? 'inventory_2' : 'delete_forever'; }
+            if (confirmTitle) { confirmTitle.textContent = isArchive ? 'Archive' : 'Delete'; }
             confirmDialog.classList.add('open');
         });
     }
@@ -364,7 +374,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const checked = getChecked();
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
-        if (!await openConfirm('Archive ' + checked.length + ' item(s)?\n' + names)) return;
+        if (!await openConfirm('Archive ' + checked.length + ' item(s)?\n' + names, 'archive')) return;
 
         const items = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
         document.querySelectorAll('.row-cb').forEach(c => { c.checked = false; });
@@ -475,7 +485,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const id   = this.dataset.id;
             const name = this.dataset.name || 'this staff member';
             const row  = this.closest('tr');
-            if (!await openConfirm('Archive "' + name + '"? They will be moved to the archive and removed from active records.')) return;
+            if (!await openConfirm('Archive "' + name + '"? They will be moved to the archive and removed from active records.', 'archive')) return;
             const body = new URLSearchParams();
             if (csrfName && csrfHash) body.append(csrfName, csrfHash);
             body.append('id', id);

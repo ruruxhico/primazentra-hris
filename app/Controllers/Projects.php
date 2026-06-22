@@ -37,9 +37,13 @@ class Projects extends BaseController
                     continue;
                 }
 
-                $projectData = $doc->data();
-                $projectData['id'] = $doc->id();
-                $projects[] = $this->enrichProjectForView($projectData);
+                try {
+                    $projectData = $doc->data();
+                    $projectData['id'] = $doc->id();
+                    $projects[] = $this->enrichProjectForView($projectData);
+                } catch (\Throwable $te) {
+                    log_message('error', 'Projects::index enrich [' . $doc->id() . '] - ' . $te->getMessage());
+                }
             }
 
             // PM: show only their own projects by default; toggle via ?view_all=1
@@ -161,8 +165,8 @@ class Projects extends BaseController
             ];
 
             return view('projects/projects_view', $data);
-        } catch (\Exception $e) {
-            log_message('error', 'Projects::index - ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::index - ' . $e->getMessage() . ' | ' . $e->getFile() . ':' . $e->getLine());
 
             $data = [
                 'pageTitle'       => 'Projects',
@@ -1808,8 +1812,20 @@ class Projects extends BaseController
             return '';
         }
 
+        if ($value instanceof \Google\Cloud\Core\Timestamp) {
+            try {
+                return \DateTimeImmutable::createFromInterface($value->get())
+                    ->setTimezone(new \DateTimeZone('Asia/Manila'))
+                    ->format('Y-m-d');
+            } catch (\Throwable) { return ''; }
+        }
+
         if (is_numeric($value)) {
             return date('Y-m-d', (int) $value);
+        }
+
+        if (!is_string($value) && !is_int($value) && !is_float($value)) {
+            return '';
         }
 
         $timestamp = strtotime((string) $value);

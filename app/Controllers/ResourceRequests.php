@@ -61,14 +61,21 @@ class ResourceRequests extends BaseController
         $pager->store('requests', $currentPage, $perPage, $total);
         $requests = array_slice($requests, ($currentPage - 1) * $perPage, $perPage);
 
+        $pagerOffset   = ($currentPage - 1) * $perPage;
+        $totalPages    = $total > 0 ? (int)ceil($total / $perPage) : 1;
+
         return view('requests/index', [
-            'pageTitle'      => 'Resource Requests & Transfers',
-            'activePage'     => 'resources',
-            'requests'       => $requests,
-            'filterStatus'   => $status,
-            'filterCategory' => $category,
-            'filterSearch'   => $search,
-            'role'           => session()->get('role') ?? '',
+            'pageTitle'       => 'Resource Requests & Transfers',
+            'activePage'      => 'resources',
+            'requests'        => $requests,
+            'requestsTotal'   => $total,
+            'perPage'         => $perPage,
+            'pagerOffset'     => $pagerOffset,
+            'requestsTotalPages' => $totalPages,
+            'filterStatus'    => $status,
+            'filterCategory'  => $category,
+            'filterSearch'    => $search,
+            'role'            => session()->get('role') ?? '',
         ]);
     }
 

@@ -158,6 +158,30 @@ $count = count($items);
         if (info) info.textContent = 'Showing ' + count + ' record' + (count !== 1 ? 's' : '');
     }
 
+    var _archCr = null;
+    var archCd  = document.getElementById('archConfirmDialog');
+    var archCm  = document.getElementById('archConfirmMessage');
+    function openArchConfirm(message, type) {
+        if (_archCr) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            _archCr = resolve;
+            var isArchive = type === 'archive';
+            archCd.classList.toggle('confirm-archive', isArchive);
+            var icon  = document.getElementById('archConfirmIcon');
+            var title = document.getElementById('archConfirmTitle');
+            if (icon)  icon.textContent  = isArchive ? 'unarchive' : 'delete_forever';
+            if (title) title.textContent = isArchive ? 'Restore' : 'Delete';
+            archCm.innerText = message;
+            archCd.classList.add('open');
+        });
+    }
+    document.getElementById('archConfirmOk')?.addEventListener('click', function () {
+        if (!_archCr) return; var r = _archCr; _archCr = null; archCd.classList.remove('open'); r(true);
+    });
+    document.getElementById('archConfirmCancel')?.addEventListener('click', function () {
+        if (!_archCr) return; var r = _archCr; _archCr = null; archCd.classList.remove('open'); r(false);
+    });
+
     function flash(msg, ok) {
         var b = document.createElement('div');
         b.className = 'del-flash ' + (ok ? 'del-flash-ok' : 'del-flash-err');
@@ -167,7 +191,7 @@ $count = count($items);
         setTimeout(function () { b.remove(); }, 3500);
     }
 
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', async function (e) {
         var unarchiveBtn = e.target.closest('.del-btn-unarchive');
         var permaBtn     = e.target.closest('.del-btn-perma');
 
@@ -175,7 +199,7 @@ $count = count($items);
             var row  = unarchiveBtn.closest('tr');
             var id   = unarchiveBtn.dataset.id;
             var name = (row.cells[1] && row.cells[1].textContent.trim()) || 'this record';
-            if (!confirm('Unarchive "' + name + '" and restore it to active records?')) return;
+            if (!await openArchConfirm('Unarchive "' + name + '" and restore it to active records?', 'archive')) return;
             unarchiveBtn.disabled = true;
             unarchiveBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Restoring…';
             post(BASE + 'archive/restore', { arch_id: id })
@@ -200,7 +224,7 @@ $count = count($items);
             var row  = permaBtn.closest('tr');
             var id   = permaBtn.dataset.id;
             var name = (row.cells[1] && row.cells[1].textContent.trim()) || 'this record';
-            if (!confirm('Permanently delete "' + name + '" from archive? This cannot be undone.')) return;
+            if (!await openArchConfirm('Permanently delete "' + name + '" from archive? This cannot be undone.')) return;
             permaBtn.disabled = true;
             permaBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Deleting…';
             post(BASE + 'archive/permanent-delete', { arch_id: id })
@@ -223,5 +247,20 @@ $count = count($items);
     });
 }());
 </script>
+
+<div id="archConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="archConfirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="archConfirmTitle">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="archConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="archConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="archConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
 
 <?= $this->endSection() ?>

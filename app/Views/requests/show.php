@@ -163,7 +163,7 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             <!-- Still allow rejection -->
             <form method="POST" action="<?= base_url('requests/reject/' . $req['id']) ?>">
                 <?= csrf_field() ?>
-                <button type="submit" class="pz-btn pz-btn-danger-outline" onclick="return confirm('Reject this request?')">
+                <button type="submit" class="pz-btn pz-btn-danger-outline" class="reject-form-btn">
                     <span class="material-symbols-outlined">cancel</span> Reject
                 </button>
             </form>
@@ -180,7 +180,7 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
                 </form>
                 <form method="POST" action="<?= base_url('requests/reject/' . $req['id']) ?>">
                     <?= csrf_field() ?>
-                    <button type="submit" class="pz-btn pz-btn-danger-outline" onclick="return confirm('Reject this request?')">
+                    <button type="submit" class="pz-btn pz-btn-danger-outline" class="reject-form-btn">
                         <span class="material-symbols-outlined">cancel</span> Reject
                     </button>
                 </form>
@@ -230,12 +230,45 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
 </div>
 <?php endif; ?>
 
+<div id="reqConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" style="color:#c0392b">cancel</span>
+            <p class="confirm-hdr-title">Reject</p>
+        </div>
+        <div class="confirm-content"><p id="reqConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="reqConfirmOk"     class="confirm-btn confirm-btn-action">Reject</button>
+            <button id="reqConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <?= $this->endSection() ?>
 
 <?php $this->section('scripts') ?>
 <script>
-function rejectRequest(id) {
-    if (!confirm('Reject this transfer request?')) return;
+var _rqCr = null;
+var rqCd  = document.getElementById('reqConfirmDialog');
+var rqCm  = document.getElementById('reqConfirmMessage');
+function openReqConfirm(message) {
+    if (_rqCr) return Promise.resolve(false);
+    return new Promise(function (resolve) {
+        _rqCr = resolve;
+        rqCm.innerText = message;
+        rqCd.classList.add('open');
+    });
+}
+document.getElementById('reqConfirmOk')?.addEventListener('click', function () {
+    if (!_rqCr) return; var r = _rqCr; _rqCr = null; rqCd.classList.remove('open'); r(true);
+});
+document.getElementById('reqConfirmCancel')?.addEventListener('click', function () {
+    if (!_rqCr) return; var r = _rqCr; _rqCr = null; rqCd.classList.remove('open'); r(false);
+});
+
+async function rejectRequest(id) {
+    if (!await openReqConfirm('Reject this transfer request?')) return;
     var form = document.createElement('form');
     form.method = 'POST';
     form.action = '<?= base_url('requests/reject/') ?>' + id;
@@ -247,5 +280,15 @@ function rejectRequest(id) {
     document.body.appendChild(form);
     form.submit();
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.reject-form-btn').forEach(function (btn) {
+        btn.addEventListener('click', async function (e) {
+            e.preventDefault();
+            if (!await openReqConfirm('Reject this request?')) return;
+            this.closest('form').submit();
+        });
+    });
+});
 </script>
 <?php $this->endSection() ?>

@@ -464,8 +464,8 @@
         }).catch(function () { showToast('Network error'); btn.disabled = false; btn.textContent = 'ASSIGN'; });
     }
 
-    function doUnassign(btn) {
-        if (!confirm('Remove this assignment?')) return;
+    async function doUnassign(btn) {
+        if (!await openPresConfirm('Remove this assignment?', 'delete')) return;
         btn.disabled = true;
         post(BASE + 'projects/' + PID + '/resources/unassign', {
             assignment_id: btn.dataset.assignmentId,
@@ -598,8 +598,8 @@
         }).catch(function () { showToast('Network error'); btn.disabled = false; btn.textContent = 'ASSIGN'; });
     }
 
-    function doUnassignUnit(btn) {
-        if (!confirm('Remove this unit from the project?')) return;
+    async function doUnassignUnit(btn) {
+        if (!await openPresConfirm('Remove this unit from the project?', 'delete')) return;
         btn.disabled = true;
         post(BASE + 'projects/' + PID + '/resources/unassign', {
             assignment_id: btn.dataset.assignmentId,
@@ -661,7 +661,51 @@
             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
         });
     }
+
+    // ── Custom confirm ────────────────────────────────────────────
+    var _presConfirmResolve = null;
+    var presCd = document.getElementById('presConfirmDialog');
+    var presCm = document.getElementById('presConfirmMessage');
+    function openPresConfirm(message, type) {
+        if (_presConfirmResolve) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            _presConfirmResolve = resolve;
+            var isArchive = type === 'archive';
+            presCd.classList.toggle('confirm-archive', isArchive);
+            var icon  = document.getElementById('presConfirmIcon');
+            var title = document.getElementById('presConfirmTitle');
+            if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'delete_forever';
+            if (title) title.textContent = isArchive ? 'Archive' : 'Delete';
+            presCm.innerText = message;
+            presCd.classList.add('open');
+        });
+    }
+    document.getElementById('presConfirmOk')?.addEventListener('click', function () {
+        if (!_presConfirmResolve) return;
+        var r = _presConfirmResolve; _presConfirmResolve = null;
+        presCd.classList.remove('open'); r(true);
+    });
+    document.getElementById('presConfirmCancel')?.addEventListener('click', function () {
+        if (!_presConfirmResolve) return;
+        var r = _presConfirmResolve; _presConfirmResolve = null;
+        presCd.classList.remove('open'); r(false);
+    });
 }());
 </script>
+
+<div id="presConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="presConfirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="presConfirmTitle">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="presConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="presConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="presConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
 
 <?= $this->endSection() ?>

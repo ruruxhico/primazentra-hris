@@ -11,10 +11,14 @@
 <div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
     <div class="confirm-backdrop"></div>
     <div class="confirm-box">
-        <div class="confirm-content"><p id="confirmMessage">Are you sure?</p></div>
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="confirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="confirmTitle">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="confirmMessage"></p></div>
         <div class="confirm-actions">
-            <button id="confirmCancel" class="btn-toolbar">Cancel</button>
-            <button id="confirmOk"     class="btn-toolbar btn-add">OK</button>
+            <button id="confirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="confirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
         </div>
     </div>
 </div>
@@ -56,7 +60,7 @@
     <div class="rv-controls">
         <div class="rv-search-wrap">
             <span class="material-symbols-outlined">search</span>
-            <input type="text" id="searchEquipment" class="rv-search" placeholder="Search equipment…">
+            <input type="text" id="searchEquipment" class="rv-search" placeholder="">
         </div>
         <button type="button" class="rv-btn rv-btn-filter" id="eqFilterToggle">
             <span class="material-symbols-outlined">tune</span>
@@ -186,7 +190,7 @@
     <div class="rv-controls">
         <div class="rv-search-wrap">
             <span class="material-symbols-outlined">search</span>
-            <input type="text" id="searchTools" class="rv-search" placeholder="Search tools…">
+            <input type="text" id="searchTools" class="rv-search" placeholder="">
         </div>
         <button type="button" class="rv-btn rv-btn-filter" id="toolsFilterToggle">
             <span class="material-symbols-outlined">tune</span>
@@ -316,7 +320,7 @@
     <div class="rv-controls">
         <div class="rv-search-wrap">
             <span class="material-symbols-outlined">search</span>
-            <input type="text" id="searchManpower" class="rv-search" placeholder="Search manpower…">
+            <input type="text" id="searchManpower" class="rv-search" placeholder="">
         </div>
         <button type="button" class="rv-btn rv-btn-filter" id="mpFilterToggle">
             <span class="material-symbols-outlined">tune</span>
@@ -472,10 +476,11 @@
 </div>
 
 <!-- Export Modal -->
-<div id="exportModal" style="display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;" hidden>
-  <div style="background:#fff;border-radius:12px;padding:28px 32px;min-width:340px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.18);">
-    <h3 id="exportModalTitle" style="margin:0 0 6px;color:#2c1f07;font-size:17px;">Export</h3>
-    <div id="exportSubtypeWrap" style="display:none;margin:14px 0;background:#fdf8ee;border:1px solid #e8d9a8;border-radius:8px;padding:12px 16px;">
+<div id="exportModal" class="pz-modal-overlay" style="display:none" hidden>
+  <div class="pz-modal-box">
+    <h3 id="exportModalTitle" class="pz-modal-title">Export</h3>
+    <p class="pz-modal-subtitle">Choose a format to download:</p>
+    <div id="exportSubtypeWrap" style="display:none;margin:0 0 16px;background:#fdf8ee;border:1px solid #e8d9a8;border-radius:8px;padding:12px 16px;">
       <p style="margin:0 0 10px;font-size:12px;font-weight:700;color:#8C701C;text-transform:uppercase;letter-spacing:.4px;">Export Type</p>
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
         <input type="radio" name="exportSubtype" value="models" checked style="margin-top:2px;accent-color:#8C701C;">
@@ -486,15 +491,22 @@
         <span style="font-size:13px;color:#333;"><strong>All specific units per model</strong><br><span style="font-size:11px;color:#777;">One row per unit across all models in one file</span></span>
       </label>
     </div>
-    <p style="margin:12px 0 14px;color:#555;font-size:13px;">Choose a format to download:</p>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <a id="exportXlsx"  href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #8C701C;border-radius:8px;text-decoration:none;color:#8C701C;font-weight:600;font-size:14px;"><span style="font-size:20px;">📊</span> Download XLSX</a>
-      <a id="exportCsv"   href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #7b5ea7;border-radius:8px;text-decoration:none;color:#7b5ea7;font-weight:600;font-size:14px;"><span style="font-size:20px;">📋</span> Download CSV</a>
-      <a id="exportPdf"   href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #c0392b;border-radius:8px;text-decoration:none;color:#c0392b;font-weight:600;font-size:14px;"><span style="font-size:20px;">📄</span> Download PDF</a>
-      <a id="exportPrint" href="#" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #27ae60;border-radius:8px;text-decoration:none;color:#27ae60;font-weight:600;font-size:14px;"><span style="font-size:20px;">🖨️</span> Open Printable View</a>
+    <div class="pz-modal-export-list">
+      <a id="exportXlsx"  href="#" target="_blank" class="pz-export-link pz-export-link--xlsx">
+        <span class="pz-export-link-icon">📊</span> Download XLSX
+      </a>
+      <a id="exportCsv"   href="#" target="_blank" class="pz-export-link pz-export-link--csv">
+        <span class="pz-export-link-icon">📋</span> Download CSV
+      </a>
+      <a id="exportPdf"   href="#" target="_blank" class="pz-export-link pz-export-link--pdf">
+        <span class="pz-export-link-icon">📄</span> Download PDF
+      </a>
+      <a id="exportPrint" href="#" target="_blank" class="pz-export-link pz-export-link--print">
+        <span class="pz-export-link-icon">🖨️</span> Open Printable View
+      </a>
     </div>
-    <div style="text-align:right;margin-top:18px;">
-      <button onclick="closeExportModal()" style="padding:8px 18px;background:#f0f0f0;border:none;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+    <div class="pz-modal-close-row">
+      <button onclick="closeExportModal()" class="pz-btn-modal-cancel">Close</button>
     </div>
   </div>
 </div>
@@ -527,6 +539,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirmOk      = document.getElementById('confirmOk');
     const confirmCancel  = document.getElementById('confirmCancel');
     const toast          = document.getElementById('customToast');
+    function setConfirmType(type) {
+        const isArchive = type === 'archive';
+        confirmDialog.classList.toggle('confirm-archive', isArchive);
+        var icon  = document.getElementById('confirmIcon');
+        var title = document.getElementById('confirmTitle');
+        if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'delete_forever';
+        if (title) title.textContent = isArchive ? 'Archive' : 'Delete';
+    }
     const DELETE_URL     = '<?= base_url('resources/delete') ?>';
     const BASE_URL       = '<?= base_url() ?>';
 
@@ -630,6 +650,7 @@ document.addEventListener('DOMContentLoaded', function () {
         row.querySelector('.action-delete').addEventListener('click', function () {
             pendingDeleteId = this.dataset.id;
             pendingRow      = row;
+            setConfirmType('delete');
             confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
             confirmDialog.classList.add('open');
         });
@@ -743,6 +764,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const checked = getCheckedInPanel(panel);
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        setConfirmType('archive');
         confirmMessage.innerText = 'Archive ' + checked.length + ' item(s)?\n' + names;
         pendingDeleteId         = '__bulk_archive__';
         pendingBulkArchiveItems = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
@@ -754,6 +776,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const checked = getCheckedInPanel(panel);
         if (!checked.length) return;
         const names = checked.map(c => c.dataset.name || c.value).join(', ');
+        setConfirmType('delete');
         confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
         pendingDeleteId   = '__bulk__';
         pendingBulkItems  = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
@@ -773,6 +796,7 @@ document.addEventListener('DOMContentLoaded', function () {
             e.preventDefault();
             pendingDeleteId = this.dataset.id;
             pendingRow      = this.closest('tr');
+            setConfirmType('delete');
             confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
             confirmDialog.classList.add('open');
         });
@@ -785,6 +809,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (resolvedRow) resolvedRow.dataset.name = btn.dataset.name || 'this resource';
         pendingArchiveId  = btn.dataset.id;
         pendingArchiveRow = resolvedRow;
+        setConfirmType('archive');
         confirmMessage.innerText = 'Archive "' + (btn.dataset.name || 'this resource') + '"? It will be moved to the archive and removed from active records.';
         confirmDialog.classList.add('open');
     }

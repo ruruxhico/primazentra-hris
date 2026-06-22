@@ -5,7 +5,8 @@
     $isSummary   = $currentPath === 'summary'  || $currentPath === 'dashboard' || $currentPath === '';
     $isMonitor   = $currentPath === 'monitor';
     $isProjects  = $currentPath === 'projects' || str_starts_with($currentPath, 'projects/');
-    $isResources = $currentPath === 'resources' || $currentPath === 'requests' || str_starts_with($currentPath, 'resources/') || str_starts_with($currentPath, 'requests/');
+    $isRequests  = $currentPath === 'requests' || str_starts_with($currentPath, 'requests/');
+    $isResources = $currentPath === 'resources' || str_starts_with($currentPath, 'resources/');
     $isStaff     = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
     $isProfile   = $currentPath === 'profile' || str_starts_with($currentPath, 'profile/');
     $isMessages  = $currentPath === 'messages' || str_starts_with($currentPath, 'messages/');
@@ -58,13 +59,13 @@
             <!-- Resources — Admin / OpsMgr / PM -->
             <?php if (pz_can('view_resources')): ?>
             <li>
-                <a href="<?= base_url('resources') ?>" class="<?= $isResources ? 'active' : '' ?>">
+                <a href="<?= base_url('resources') ?>" class="<?= ($isResources && !$isRequests) ? 'active' : '' ?>">
                     <span class="icon material-symbols-outlined" aria-hidden="true">inventory_2</span>
                     <span class="label">Resources</span>
                 </a>
                 <?php if (pz_can('view_requests')): ?>
                 <ul class="submenu">
-                    <li><a href="<?= base_url('requests') ?>">
+                    <li><a href="<?= base_url('requests') ?>" class="<?= $isRequests ? 'active' : '' ?>">
                         <span class="icon material-symbols-outlined" aria-hidden="true">contact_support</span>
                         <span class="label">Resource Requests & Transfers</span>
                     </a></li>

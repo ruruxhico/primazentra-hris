@@ -168,6 +168,24 @@ $count = count($items);
         if (info) info.textContent = 'Showing ' + count + ' record' + (count !== 1 ? 's' : '');
     }
 
+    var _delCr = null;
+    var delCd  = document.getElementById('delConfirmDialog');
+    var delCm  = document.getElementById('delConfirmMessage');
+    function openDelConfirm(message) {
+        if (_delCr) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            _delCr = resolve;
+            delCm.innerText = message;
+            delCd.classList.add('open');
+        });
+    }
+    document.getElementById('delConfirmOk')?.addEventListener('click', function () {
+        if (!_delCr) return; var r = _delCr; _delCr = null; delCd.classList.remove('open'); r(true);
+    });
+    document.getElementById('delConfirmCancel')?.addEventListener('click', function () {
+        if (!_delCr) return; var r = _delCr; _delCr = null; delCd.classList.remove('open'); r(false);
+    });
+
     function flash(msg, ok) {
         var b = document.createElement('div');
         b.className = 'del-flash ' + (ok ? 'del-flash-ok' : 'del-flash-err');
@@ -177,7 +195,7 @@ $count = count($items);
         setTimeout(function () { b.remove(); }, 3500);
     }
 
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', async function (e) {
         var restoreBtn = e.target.closest('.del-btn-restore');
         var permaBtn   = e.target.closest('.del-btn-perma');
 
@@ -208,7 +226,7 @@ $count = count($items);
             var row  = permaBtn.closest('tr');
             var id   = permaBtn.dataset.id;
             var name = (row.cells[1] && row.cells[1].textContent.trim()) || 'this record';
-            if (!confirm('Permanently delete "' + name + '"? This cannot be undone.')) return;
+            if (!await openDelConfirm('Permanently delete "' + name + '"? This cannot be undone.')) return;
             permaBtn.disabled = true;
             permaBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Deleting…';
             post(BASE + 'trash/permanent-delete', { trash_id: id })
@@ -231,5 +249,20 @@ $count = count($items);
     });
 }());
 </script>
+
+<div id="delConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon">delete_forever</span>
+            <p class="confirm-hdr-title">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="delConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="delConfirmOk"     class="confirm-btn confirm-btn-action">Delete</button>
+            <button id="delConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
 
 <?= $this->endSection() ?>

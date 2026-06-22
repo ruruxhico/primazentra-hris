@@ -734,10 +734,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         wdbEditForm.style.display = 'none';
                         wdbEditBtn.style.display = '';
                     } else {
-                        alert('Could not save: ' + (data.message || 'Unknown error'));
+                        showFormToast('Could not save: ' + (data.message || 'Unknown error'), 'error');
                     }
                 })
-                .catch(function () { alert('Network error — warehouse address not saved.'); })
+                .catch(function () { showFormToast('Network error — warehouse address not saved.', 'error'); })
                 .finally(function () { wdbSaveBtn.disabled = false; wdbSaveBtn.textContent = 'Save'; });
         });
     }
@@ -750,8 +750,16 @@ document.addEventListener('DOMContentLoaded', function () {
 <script>
 if (window.location.hostname === 'localhost') {
     console.warn('[PrimaZentra] GOOGLE_MAPS_BROWSER_KEY is not set. Equipment map picker is disabled.');
+    function showFormToast(msg, type) {
+        var t = document.getElementById('formToastEl');
+        if (!t) return;
+        t.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+        t.innerText = msg;
+        setTimeout(function () { t.className = 'custom-toast'; }, 3000);
+    }
 }
 </script>
+<div id="formToastEl" class="custom-toast" aria-live="polite"></div>
 <?php endif; ?>
 
 <?= $this->endSection() ?>

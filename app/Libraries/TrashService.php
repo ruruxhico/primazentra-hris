@@ -38,11 +38,19 @@ class TrashService
             if (!$doc->exists()) continue;
             $d = $doc->data();
             if (($d['module'] ?? '') !== $module) continue;
-            if (($d['expires_at'] ?? 0) < $now) continue;
+            if ($this->toUnix($d['expires_at'] ?? 0) < $now) continue;
             $items[] = ['id' => $doc->id()] + $d;
         }
-        usort($items, fn($a, $b) => ($b['deleted_at'] ?? 0) <=> ($a['deleted_at'] ?? 0));
+        usort($items, fn($a, $b) => $this->toUnix($b['deleted_at'] ?? 0) <=> $this->toUnix($a['deleted_at'] ?? 0));
         return $items;
+    }
+
+    private function toUnix(mixed $value): int
+    {
+        if ($value instanceof \Google\Cloud\Core\Timestamp) {
+            return $value->get()->getTimestamp();
+        }
+        return (int) $value;
     }
 
     public function getTrashDoc(string $trashId): array

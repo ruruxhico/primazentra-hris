@@ -492,7 +492,7 @@
     // ── "My Location" button ───────────────────────────
     document.getElementById('locateMeBtn').addEventListener('click', function () {
         if (!navigator.geolocation) {
-            alert('Geolocation is not supported by your browser.');
+            window._pzToast && _pzToast('Geolocation is not supported by your browser.', 'error');
             return;
         }
         this.disabled = true;
@@ -507,7 +507,7 @@
                 btn.disabled = false;
             },
             function () {
-                alert('Unable to retrieve your location. Please check your browser permissions.');
+                window._pzToast && _pzToast('Unable to retrieve your location. Please check your browser permissions.', 'error');
                 btn.disabled = false;
             }
         );
@@ -548,27 +548,51 @@ if (window.location.hostname === 'localhost') {
 <!-- ── Attachment input JS ───────────────────────────────── -->
 <script>
 (function () {
-    var input   = document.getElementById('attachments');
-    var textEl  = document.getElementById('attachmentsText');
-    var listEl  = document.getElementById('attachmentsList');
+    var input  = document.getElementById('attachments');
+    var textEl = document.getElementById('attachmentsText');
+    var listEl = document.getElementById('attachmentsList');
     if (!input) return;
 
-    input.addEventListener('change', function () {
-        var files = Array.from(this.files);
-        if (files.length === 0) {
+    var allFiles = [];
+
+    function syncInput() {
+        var dt = new DataTransfer();
+        allFiles.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+    }
+
+    function renderList() {
+        if (allFiles.length === 0) {
             textEl.textContent = 'Choose files…';
             listEl.innerHTML = '';
             return;
         }
-        textEl.textContent = files.length + ' file' + (files.length > 1 ? 's' : '') + ' selected';
-        listEl.innerHTML = files.map(function (f) {
+        textEl.textContent = allFiles.length + ' file' + (allFiles.length > 1 ? 's' : '') + ' selected';
+        listEl.innerHTML = allFiles.map(function (f, i) {
             var kb = (f.size / 1024).toFixed(1);
             return '<div class="file-upload-item">' +
                 '<span class="material-symbols-outlined">description</span>' +
                 '<span class="file-upload-name">' + f.name + '</span>' +
                 '<span class="file-upload-size">' + kb + ' KB</span>' +
+                '<button type="button" class="file-remove-btn" data-idx="' + i + '" title="Remove">✕</button>' +
                 '</div>';
         }).join('');
+        listEl.querySelectorAll('.file-remove-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                allFiles.splice(parseInt(this.dataset.idx, 10), 1);
+                syncInput();
+                renderList();
+            });
+        });
+    }
+
+    input.addEventListener('change', function () {
+        Array.from(this.files).forEach(function (f) {
+            var dupe = allFiles.some(function (ef) { return ef.name === f.name && ef.size === f.size; });
+            if (!dupe) allFiles.push(f);
+        });
+        syncInput();
+        renderList();
     });
 }());
 </script>
@@ -609,6 +633,29 @@ if (window.location.hostname === 'localhost') {
             { name: 'SP', weight: 30, qty: 6  },
             { name: 'L',  weight: 20, qty: 1  },
             { name: 'BP', weight: 10           },
+        ],
+        'COLOCATION': [
+            { name: 'Site Layout',                              weight: 4.8 },
+            { name: 'Trenching, Excavation',                    weight: 4.8 },
+            { name: 'Order of Materials and Delivery',          weight: 4.8 },
+            { name: 'Lean Concrete',                            weight: 4.8 },
+            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8 },
+            { name: 'Formworks Inst',                           weight: 4.8 },
+            { name: 'Rebar Inst',                               weight: 4.8 },
+            { name: 'Casting(Bot) + Curing',                    weight: 4.8 },
+            { name: 'CHB Laying',                               weight: 4.8 },
+            { name: 'Backfill (1st and 2nd Layer)',              weight: 4.8 },
+            { name: 'Casting(Top) + Curing',                    weight: 4.8 },
+            { name: 'Plastering',                               weight: 4.8 },
+            { name: 'Trenching (Electrical +FOC)',               weight: 4.8 },
+            { name: 'Cable Tray Inst',                          weight: 4.8 },
+            { name: 'Panel Board Inst',                         weight: 4.8 },
+            { name: 'CEF',                                      weight: 4.8 },
+            { name: 'Electrical Works',                         weight: 4.8 },
+            { name: 'Grounding',                                weight: 4.8 },
+            { name: 'Wire Termination',                         weight: 4.8 },
+            { name: 'Site Clearing',                            weight: 4.8 },
+            { name: 'Site Development',                         weight: 4.0 },
         ],
         'CONVERSION': [
             { name: 'SKOM',                      weight: 5  },
@@ -771,13 +818,14 @@ if (window.location.hostname === 'localhost') {
 
     // ── Auto-fill milestones when tower type changes ───────────
     if (projectTypeEl) {
-        projectTypeEl.addEventListener('change', function () {
+        projectTypeEl.addEventListener('change', async function () {
             if (!this.value) return;
+            var self = this;
             var existing = container.querySelectorAll('.phase-card').length;
             if (existing > 0) {
-                if (!confirm('Auto-fill will replace the current milestone schedule. Continue?')) return;
+                if (!await window.openConfirmForm('Auto-fill will replace the current milestone schedule. Continue?', 'warning')) return;
             }
-            var template = TEMPLATES[this.value] || TEMPLATES['_DEFAULT'];
+            var template = TEMPLATES[self.value] || TEMPLATES['_DEFAULT'];
             container.innerHTML = '';
             template.forEach(function (phase, pi) {
                 container.appendChild(buildPhaseItem(pi, phase));
@@ -971,6 +1019,56 @@ document.getElementById('projectForm').addEventListener('input', function (e) {
         e.target.setSelectionRange(pos, pos);
     }
 });
+</script>
+
+<div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="confirmIcon">warning</span>
+            <p class="confirm-hdr-title" id="confirmTitle">Confirm</p>
+        </div>
+        <div class="confirm-content"><p id="confirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="confirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="confirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="pzToast" class="custom-toast" aria-live="polite"></div>
+<script>
+(function () {
+    var toast = document.getElementById('pzToast');
+    window._pzToast = function (msg, type) {
+        if (!toast) return;
+        toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+        toast.innerText = msg;
+        setTimeout(function () { toast.className = 'custom-toast'; }, 3000);
+    };
+    var cd = document.getElementById('confirmDialog');
+    var cm = document.getElementById('confirmMessage');
+    var _cr = null;
+    window.openConfirmForm = function (message, type) {
+        if (_cr) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            _cr = resolve;
+            var isArchive = type === 'archive';
+            cd.classList.toggle('confirm-archive', isArchive);
+            var icon  = document.getElementById('confirmIcon');
+            var title = document.getElementById('confirmTitle');
+            if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'warning';
+            if (title) title.textContent = isArchive ? 'Archive' : 'Confirm';
+            cm.innerText = message;
+            cd.classList.add('open');
+        });
+    };
+    document.getElementById('confirmOk')?.addEventListener('click', function () {
+        if (!_cr) return; var r = _cr; _cr = null; cd.classList.remove('open'); r(true);
+    });
+    document.getElementById('confirmCancel')?.addEventListener('click', function () {
+        if (!_cr) return; var r = _cr; _cr = null; cd.classList.remove('open'); r(false);
+    });
+})();
 </script>
 
 <?= $this->endSection() ?>

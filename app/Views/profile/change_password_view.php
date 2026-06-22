@@ -23,6 +23,7 @@
             <div class="pw-field">
                 <label>New Password *</label>
                 <input type="password" name="password" id="newPw" required autocomplete="new-password">
+                <small id="pwLenHint" style="display:none;color:#c0392b;font-size:.85rem">Password must be at least 8 characters.</small>
                 <div class="pw-hint">At least 8 characters.</div>
             </div>
             <div class="pw-field">
@@ -61,7 +62,8 @@
     document.getElementById('changePwForm').addEventListener('submit', function (e) {
         if (pw1.value.length < 8) {
             e.preventDefault();
-            alert('New password must be at least 8 characters.');
+            var pwHint = document.getElementById('pwLenHint');
+            if (pwHint) { pwHint.style.display = ''; } else { hint.textContent = 'New password must be at least 8 characters.'; hint.style.display = ''; }
             pw1.focus();
             return;
         }

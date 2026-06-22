@@ -706,17 +706,34 @@ class Resources extends BaseController
                     strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
             }
 
+            $perPage     = config('Pager')->perPage;
+            $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $itemsTotal  = count($items);
+            $pager       = service('pager');
+            $pager->store('items', $itemsPage, $perPage, $itemsTotal);
+            $pagerOffset = ($itemsPage - 1) * $perPage;
+            $items       = array_slice($items, $pagerOffset, $perPage);
+
             return view('resources/resource_items', [
-                'pageTitle'     => 'Resource Items',
-                'resource'      => $resource,
-                'items'         => $items,
-                'activeFilters' => [
+                'pageTitle'               => 'Resource Items',
+                'resource'                => $resource,
+                'resourceId'              => $resourceId,
+                'items'                   => $items,
+                'itemsTotal'              => $itemsTotal,
+                'perPage'                 => $perPage,
+                'pagerOffset'             => $pagerOffset,
+                'itemsTotalPages'         => $itemsTotal > 0 ? (int)ceil($itemsTotal / $perPage) : 1,
+                'activeFilters'           => [
                     'brand'     => $filterBrand,
                     'model_no'  => $filterModelNo,
                     'condition' => $filterCondition,
                     'status'    => $filterStatus,
                     'loc_type'  => $filterLocType,
                 ],
+                'defaultWarehouseAddress'  => $this->getDefaultWarehouseAddress(),
+                'savedWarehouseLocations'  => $this->getSavedWarehouseLocations(),
+                'warehouseLocations'       => $this->getWarehouseLocationOptions(),
+                'mapsKey'                  => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role'     => session()->get('role') ?? 'User',
             ]);
@@ -746,29 +763,46 @@ class Resources extends BaseController
             $status  = trim((string)($this->request->getPost('status')           ?? ''));
             $locType = trim((string)($this->request->getPost('location_type')    ?? ''));
             $locAddr = trim((string)($this->request->getPost('location_address') ?? ''));
+            $qty     = max(1, (int)($this->request->getPost('quantity') ?? 1));
 
-            if ($serial === '' || $cond === '' || $status === '') {
-                return redirect()->back()->with('error', 'Serial number, condition, and status are required.');
+            if ($cond === '' || $status === '') {
+                return redirect()->back()->with('error', 'Condition and status are required.');
             }
 
-            $now = time();
-            $itemData = [
-                'serial_number' => $serial,
-                'brand'         => $brand,
-                'model_number'  => $modelNo,
-                'condition'     => $cond,
-                'status'        => $status,
-                'location'      => ['type' => $locType, 'address' => $locAddr],
-                'created_at'    => $now,
-                'updated_at'    => $now,
+            $base = [
+                'brand'       => $brand,
+                'model_number'=> $modelNo,
+                'condition'   => $cond,
+                'status'      => $status,
+                'location'    => ['type' => $locType, 'address' => $locAddr],
             ];
 
-            $this->model->createResourceItem($resourceId, $itemData);
+            for ($i = 0; $i < $qty; $i++) {
+                $now = time();
+                $itemSerial = $this->_deriveSerial($serial, $i);
+                $this->model->createResourceItem($resourceId, array_merge($base, [
+                    'serial_number' => $itemSerial,
+                    'created_at'    => $now,
+                    'updated_at'    => $now,
+                ]));
+            }
 
-            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Item added successfully!');
+            $msg = $qty > 1 ? "{$qty} units added successfully!" : 'Unit added successfully!';
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', $msg);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error adding item: ' . $e->getMessage());
         }
+    }
+
+    private function _deriveSerial(string $base, int $offset): string
+    {
+        if ($base === '') return '';
+        if ($offset === 0) return $base;
+        if (preg_match('/^(.*-)(\d+)$/', $base, $m)) {
+            $n = (int)$m[2] + $offset;
+            return $m[1] . str_pad($n, strlen($m[2]), '0', STR_PAD_LEFT);
+        }
+        return $base . '-' . str_pad($offset + 1, 3, '0', STR_PAD_LEFT);
     }
 
     public function updateItem($resourceId = null, $itemId = null)
@@ -836,6 +870,120 @@ class Resources extends BaseController
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error deleting unit: ' . $e->getMessage());
         }
+    }
+
+    public function archiveItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false, 'message' => 'Access denied.']);
+
+        try {
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+            if (!$snap->exists()) return $this->response->setJSON(['success' => false, 'message' => 'Unit not found.']);
+
+            $data = $snap->data();
+            $data['id']          = $itemId;
+            $data['resource_id'] = $resourceId;
+
+            $name = ($data['serial_number'] ?? '') ?: $itemId;
+
+            $trashService = new \App\Libraries\TrashService($this->firestore);
+            $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
+
+            $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function itemsDeleted($resourceId = null): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $resource = $this->model->getResourceById($resourceId);
+        if (!$resource) return redirect()->to('resources')->with('error', 'Resource not found.');
+
+        $trash = new \App\Libraries\TrashService($this->firestore);
+        $all   = $trash->getTrashItems('resource_item');
+        $items = array_values(array_filter($all, fn($r) => ($r['data']['resource_id'] ?? '') === $resourceId));
+
+        return view('shared/module_deleted', [
+            'pageTitle'  => ($resource['name'] ?? 'Resource') . ' — Deleted Units',
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'resource_item',
+            'title'      => ($resource['name'] ?? 'Resource') . ' — Deleted Units',
+            'backUrl'    => base_url('resources/viewItems/' . $resourceId),
+            'items'      => $items,
+        ]);
+    }
+
+    public function itemsArchived($resourceId = null): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $resource = $this->model->getResourceById($resourceId);
+        if (!$resource) return redirect()->to('resources')->with('error', 'Resource not found.');
+
+        $arch  = new \App\Libraries\ArchiveService($this->firestore);
+        $all   = $arch->getArchivedItems('resource_item');
+        $items = array_values(array_filter($all, fn($r) => ($r['data']['resource_id'] ?? '') === $resourceId));
+
+        return view('shared/module_archived', [
+            'pageTitle'  => ($resource['name'] ?? 'Resource') . ' — Archived Units',
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'resource_item',
+            'title'      => ($resource['name'] ?? 'Resource') . ' — Archived Units',
+            'backUrl'    => base_url('resources/viewItems/' . $resourceId),
+            'items'      => $items,
+        ]);
+    }
+
+    public function bulkDeleteItems($resourceId = null)
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false]);
+
+        $ids = $this->request->getPost('ids') ?? [];
+        $db  = $this->firestore->getDb();
+        $deleted = 0;
+        foreach ((array)$ids as $itemId) {
+            try {
+                $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+                $deleted++;
+            } catch (\Throwable) {}
+        }
+        return $this->response->setJSON(['success' => true, 'deleted' => $deleted]);
+    }
+
+    public function bulkArchiveItems($resourceId = null)
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false]);
+
+        $ids  = $this->request->getPost('ids') ?? [];
+        $db   = $this->firestore->getDb();
+        $trashService = new \App\Libraries\TrashService($this->firestore);
+        $done = 0;
+        foreach ((array)$ids as $itemId) {
+            try {
+                $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+                if (!$snap->exists()) continue;
+                $data = $snap->data(); $data['id'] = $itemId; $data['resource_id'] = $resourceId;
+                $name = ($data['serial_number'] ?? '') ?: $itemId;
+                $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
+                $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+                $done++;
+            } catch (\Throwable) {}
+        }
+        return $this->response->setJSON(['success' => true, 'archived' => $done]);
     }
 
     private function buildResourcePayload(): array

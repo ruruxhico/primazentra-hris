@@ -753,7 +753,7 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) { renderDetail(d, dateStr); setState('detail'); })
-            .catch(function () { alert('Failed to load report.'); });
+            .catch(function () { showToast('Failed to load report.', 'error'); });
     };
 
     function renderDetail(d, dateStr) {
@@ -898,9 +898,9 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.success) { fetchDates(); setState('cal'); }
-                else alert(d.error || 'Failed to save report.');
+                else showToast(d.error || 'Failed to save report.', 'error');
             })
-            .catch(function () { alert('Failed to save report.'); });
+            .catch(function () { showToast('Failed to save report.', 'error'); });
     };
 
     // Helper: HTML-escape a string

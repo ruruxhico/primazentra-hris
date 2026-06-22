@@ -226,187 +226,6 @@
         </button>
     </div>
 
-    <!-- ── Progress tracking (milestones / S-curve) ─────────────── -->
-    <?php if (!$hasMilestones): ?>
-    <div class="ms-card">
-        <div class="ms-empty">
-            <span class="material-symbols-outlined" style="font-size:2rem;color:#e8d9a8;display:block;margin-bottom:.5rem">flag</span>
-            No milestones defined. Edit the project and add a schedule to enable progress tracking.
-        </div>
-    </div>
-
-    <?php else: ?>
-
-    <!-- Overall Progress -->
-    <div class="ms-card">
-        <p class="ms-card-title">
-            <span class="material-symbols-outlined">trending_up</span>
-            Overall Progress
-            <span style="margin-left:auto;font-size:.75rem;font-weight:400;color:#999">as of <?= esc($reportDate) ?></span>
-        </p>
-
-        <?php if ($undatedCount > 0): ?>
-        <div class="ms-undated-badge">
-            <span class="material-symbols-outlined" style="font-size:.9rem">info</span>
-            <?= $undatedCount ?> of <?= $totalMilestones ?> milestone<?= $totalMilestones !== 1 ? 's' : '' ?> scheduled
-            — planned figure reflects scheduled scope only
-        </div>
-        <?php endif; ?>
-
-        <?php if ($curveWarning): ?>
-        <div class="ms-warning">
-            <span class="material-symbols-outlined">warning</span>
-            <?= esc($curveWarning) ?>
-        </div>
-        <?php endif; ?>
-
-        <div class="ms-metrics">
-            <?php if ($hasCurve): ?>
-            <div class="ms-metric">
-                <div class="ms-metric-label">Planned to Date</div>
-                <div class="ms-metric-value neutral"><?= number_format($plannedToDate, 1) ?>%</div>
-            </div>
-            <?php endif; ?>
-            <div class="ms-metric">
-                <div class="ms-metric-label">Actual to Date</div>
-                <div class="ms-metric-value neutral"><?= number_format($actualToDate, 1) ?>%</div>
-            </div>
-            <?php if ($variance !== null): ?>
-            <div class="ms-metric">
-                <div class="ms-metric-label">Variance</div>
-                <div class="ms-metric-value <?= $variance >= 0 ? 'positive' : 'negative' ?>">
-                    <?= ($variance >= 0 ? '+' : '') . number_format($variance, 1) ?>%
-                </div>
-            </div>
-            <?php endif; ?>
-            <?php if ($ewd !== null): ?>
-            <div class="ms-metric">
-                <div class="ms-metric-label">Equiv. Work Days</div>
-                <div class="ms-metric-value <?= $ewd >= 0 ? 'positive' : 'negative' ?>">
-                    <?= ($ewd >= 0 ? '+' : '') . number_format($ewd, 1) ?> d
-                </div>
-            </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <?php if ($hasCurve && !empty($weeklyTargets)): ?>
-    <!-- Weekly Progress Summary -->
-    <div class="ms-card">
-        <p class="ms-card-title">
-            <span class="material-symbols-outlined">calendar_view_week</span>
-            Weekly Progress Summary
-        </p>
-        <div class="ms-table-wrap">
-            <table class="ms-table">
-                <thead>
-                    <tr>
-                        <th>Week Ending</th>
-                        <th class="num">Target %</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php $displayWeeks = array_slice($weeklyTargets, -26); ?>
-                <?php foreach ($displayWeeks as $row): ?>
-                    <tr>
-                        <td>
-                            <?php if ($row['hasMilestone']): ?>
-                                <span class="ms-milestone-marker" title="Milestone due this week"></span>
-                            <?php endif; ?>
-                            <?= esc(date('d M Y', strtotime($row['weekEnd']))) ?>
-                        </td>
-                        <td class="num"><?= number_format($row['target'], 1) ?>%</td>
-                        <td>
-                            <?php if ($row['hasMilestone']): ?>
-                                <span style="font-size:.75rem;color:#8c701c;font-weight:600">milestone due</span>
-                            <?php endif; ?>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                <?php if (count($weeklyTargets) > 26): ?>
-                    <tr>
-                        <td colspan="3" class="muted" style="font-size:.8rem;text-align:center">
-                            Showing most recent 26 weeks of <?= count($weeklyTargets) ?> total
-                        </td>
-                    </tr>
-                <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Milestone Summary -->
-    <div class="ms-card">
-        <p class="ms-card-title">
-            <span class="material-symbols-outlined">flag</span>
-            Milestone Summary
-        </p>
-        <?php if (empty($milestoneSummary)): ?>
-        <div class="ms-empty">No milestone data available.</div>
-        <?php else: ?>
-        <div class="ms-table-wrap">
-            <table class="ms-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Milestone</th>
-                        <th>Target Date</th>
-                        <th class="num">Planned %</th>
-                        <th class="num">Actual %</th>
-                        <th class="num">Variance</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php foreach ($milestoneSummary as $i => $row): ?>
-                    <?php
-                        $statusClass = 'ms-status-pending';
-                        $statusLower = strtolower($row['status']);
-                        if (in_array($statusLower, ['done', 'completed'], true)) {
-                            $statusClass = 'ms-status-done';
-                        } elseif ($statusLower === 'in progress') {
-                            $statusClass = 'ms-status-inprogress';
-                        }
-                    ?>
-                    <tr>
-                        <td class="muted"><?= $i + 1 ?></td>
-                        <td><?= esc($row['name']) ?></td>
-                        <td>
-                            <?= $row['targetDate']
-                                ? esc(date('d M Y', strtotime($row['targetDate'])))
-                                : '<span class="muted">—</span>' ?>
-                        </td>
-                        <td class="num">
-                            <?= $row['plannedPct'] !== null
-                                ? number_format($row['plannedPct'], 1) . '%'
-                                : '<span class="muted">—</span>' ?>
-                        </td>
-                        <td class="num"><?= number_format($row['actualPct'], 1) ?>%</td>
-                        <td class="num">
-                            <?php if ($row['variance'] !== null): ?>
-                                <span class="<?= $row['variance'] >= 0 ? 'pos' : 'neg' ?>">
-                                    <?= ($row['variance'] >= 0 ? '+' : '') . number_format($row['variance'], 1) ?>%
-                                </span>
-                            <?php else: ?>
-                                <span class="muted">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <span class="ms-status <?= $statusClass ?>">
-                                <?= esc(ucwords(strtolower($row['status']))) ?>
-                            </span>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php endif; ?>
-    </div>
-
-    <?php endif; /* hasMilestones */ ?>
 
 </div><!-- /.pd-shell -->
 
@@ -550,7 +369,7 @@
         fetch(url, { credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) { renderDetail(d, dateStr); setState('detail'); })
-            .catch(function () { alert('Failed to load report.'); });
+            .catch(function () { showToast('Failed to load report.', 'error'); });
     };
 
     function h(str) {
@@ -696,9 +515,9 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
                 if (d.success) { fetchDates(); setState('cal'); }
-                else alert(d.error || 'Failed to save report.');
+                else showToast(d.error || 'Failed to save report.', 'error');
             })
-            .catch(function () { alert('Failed to save report.'); });
+            .catch(function () { showToast('Failed to save report.', 'error'); });
     };
 
     // ── Summary (Weekly / Overall) ────────────────────────────────────────

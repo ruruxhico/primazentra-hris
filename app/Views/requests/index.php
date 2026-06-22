@@ -34,7 +34,7 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
     <div class="rv-search-wrap">
         <span class="material-symbols-outlined">search</span>
         <input type="text" class="rv-search" id="rrSearch"
-               placeholder="Search requests…"
+               placeholder=""
                value="<?= esc($filterSearch) ?>">
     </div>
     <button type="button" class="rv-btn rv-btn-filter" id="rrFilterToggle">
@@ -143,7 +143,20 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
 </div>
 
 <div class="pager-wrapper">
+    <?php
+        $showingFrom = $requestsTotal > 0 ? $pagerOffset + 1 : 0;
+        $showingTo   = min($pagerOffset + $perPage, $requestsTotal);
+    ?>
+    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $requestsTotal ?> records</span>
     <?= service('pager')->links('requests', 'bootstrap_full') ?>
+    <?php if ($requestsTotalPages > 1): ?>
+    <div class="pager-jump">
+        Go to page
+        <input type="number" class="pager-jump-input" min="1" max="<?= $requestsTotalPages ?>"
+               data-total-pages="<?= $requestsTotalPages ?>" data-page-param="page" placeholder="—">
+        <span>of <?= $requestsTotalPages ?></span>
+    </div>
+    <?php endif; ?>
 </div>
 
 <?= $this->endSection() ?>

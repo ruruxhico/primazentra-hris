@@ -163,7 +163,8 @@ document.getElementById('profile_picture').addEventListener('change', function (
     const file = this.files[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-        alert('File is too large. Maximum size is 2 MB.');
+        var t = document.getElementById('sfToast');
+        if (t) { t.className = 'custom-toast show error'; t.innerText = 'File is too large. Maximum size is 2 MB.'; setTimeout(function(){t.className='custom-toast';},3000); }
         this.value = '';
         return;
     }
@@ -185,4 +186,5 @@ if (fnInput) {
     });
 }
 </script>
+<div id="sfToast" class="custom-toast" aria-live="polite"></div>
 <?= $this->endSection() ?>
