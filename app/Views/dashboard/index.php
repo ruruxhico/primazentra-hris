@@ -491,10 +491,6 @@ function db_render_card(array $p, string $context = 'summary'): string
                     title="Progress Reports">
                 <span class="material-symbols-outlined">description</span>
             </button>
-            <a href="<?= base_url('projects/' . esc($p['id'] ?? '') . '/schedule') ?>"
-               class="db-icon-btn" title="Milestone Schedule" style="text-decoration:none">
-                <span class="material-symbols-outlined">calendar_month</span>
-            </a>
             <button class="db-btn-locate"
                     data-lat="<?= $lat !== null ? (float)$lat : '' ?>"
                     data-lng="<?= $lng !== null ? (float)$lng : '' ?>"
