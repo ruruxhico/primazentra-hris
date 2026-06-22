@@ -4,7 +4,7 @@
  */
 ?>
 
-<?php if (isset($pager) && ($pager->hasPrevious() || $pager->hasNext())) : ?>
+<?php $pager->setSurroundCount(2) ?>
 <nav aria-label="Page navigation">
     <ul class="pager-list">
 
@@ -36,4 +36,3 @@
 
     </ul>
 </nav>
-<?php endif ?>

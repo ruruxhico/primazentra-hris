@@ -2,18 +2,24 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ArchiveService;
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
+use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
+use Config\GoogleMaps;
 
 class Resources extends BaseController
 {
     protected $model;
     protected $manpowerModel;
+    protected FirestoreService $firestore;
 
     public function __construct()
     {
         $this->model = new Model_Resources();
         $this->manpowerModel = new Model_Manpower();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     /**
@@ -50,7 +56,7 @@ class Resources extends BaseController
                 // fail gracefully; leave manpower empty
             }
 
-            // — Read and apply equipment/tools sort filters —
+            // â€” Read and apply equipment/tools sort filters â€”
             $eqSort    = trim((string) ($this->request->getGet('eq_sort')    ?? ''));
             $toolsSort = trim((string) ($this->request->getGet('tools_sort') ?? ''));
 
@@ -66,7 +72,7 @@ class Resources extends BaseController
                 usort($tools, fn($a, $b) => ($b['available_units_display'] ?? 0) <=> ($a['available_units_display'] ?? 0));
             }
 
-            // — Read and apply manpower filters —
+            // â€” Read and apply manpower filters â€”
             $mpRole   = trim((string) ($this->request->getGet('mp_role')   ?? ''));
             $mpSpec   = trim((string) ($this->request->getGet('mp_spec')   ?? ''));
             $mpStatus = trim((string) ($this->request->getGet('mp_status') ?? ''));
@@ -84,16 +90,52 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
+            // ── Pagination (separate per table) ─────────────────────────────
+            $perPage = config('Pager')->perPage;
+            $pager   = service('pager');
+
+            $eqPage    = max(1, (int)($this->request->getGet('page_equipment') ?? 1));
+            $eqTotal   = count($equipment);
+            $pager->store('equipment', $eqPage, $perPage, $eqTotal);
+            $eqOffset  = ($eqPage - 1) * $perPage;
+            $equipment = array_slice($equipment, $eqOffset, $perPage);
+
+            $toolsPage    = max(1, (int)($this->request->getGet('page_tools') ?? 1));
+            $toolsTotal   = count($tools);
+            $pager->store('tools', $toolsPage, $perPage, $toolsTotal);
+            $toolsOffset  = ($toolsPage - 1) * $perPage;
+            $tools        = array_slice($tools, $toolsOffset, $perPage);
+
+            $mpPage    = max(1, (int)($this->request->getGet('page_manpower') ?? 1));
+            $mpTotal   = count($manpower);
+            $pager->store('manpower', $mpPage, $perPage, $mpTotal);
+            $mpOffset  = ($mpPage - 1) * $perPage;
+            $manpower  = array_slice($manpower, $mpOffset, $perPage);
+
+            $trashService = new TrashService($this->firestore);
+            $recentlyDeletedResources = $trashService->getTrashItems('resource');
+            $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
+
             return view('resources/resources_view', [
-                'equipment'             => $equipment,
-                'tools'                 => $tools,
-                'manpower'              => $manpower,
-                'activeEquipFilters'    => ['eq_sort'    => $eqSort],
-                'activeToolFilters'     => ['tools_sort' => $toolsSort],
-                'activeManpowerFilters' => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
-                'activeTab'             => $this->request->getGet('tab') ?? 'equipment',
-                'userName'           => session()->get('userName') ?? 'User',
-                'role'               => session()->get('role') ?? 'User',
+                'pageTitle'                 => 'Resources',
+                'equipment'                 => $equipment,
+                'eqTotal'                   => $eqTotal,
+                'eqOffset'                  => $eqOffset,
+                'tools'                     => $tools,
+                'toolsTotal'                => $toolsTotal,
+                'toolsOffset'               => $toolsOffset,
+                'manpower'                  => $manpower,
+                'mpTotal'                   => $mpTotal,
+                'mpOffset'                  => $mpOffset,
+                'perPage'                   => $perPage,
+                'activeEquipFilters'        => ['eq_sort'    => $eqSort],
+                'activeToolFilters'         => ['tools_sort' => $toolsSort],
+                'activeManpowerFilters'     => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
+                'activeTab'                 => $this->request->getGet('tab') ?? 'equipment',
+                'recentlyDeletedResources'  => $recentlyDeletedResources,
+                'recentlyDeletedManpower'   => $recentlyDeletedManpower,
+                'userName'                  => session()->get('userName') ?? 'User',
+                'role'                      => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error loading resources: ' . $e->getMessage());
@@ -105,7 +147,12 @@ class Resources extends BaseController
      */
     public function create()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         $category = $this->request->getGet('category') ?? '';
+        $mapsKey = (new GoogleMaps())->browserKey;
 
         if ($category === 'Manpower') {
             return redirect()->to('manpower/create');
@@ -113,6 +160,7 @@ class Resources extends BaseController
 
         if ($category === 'Equipment') {
             return view('resources/equipments_form', [
+                'pageTitle' => 'Add Equipment',
                 'resource' => [
                     'category' => 'Equipment',
                     'status' => 'Available',
@@ -126,6 +174,9 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -133,6 +184,7 @@ class Resources extends BaseController
 
         if ($category === 'Tools') {
             return view('resources/tools_form', [
+                'pageTitle' => 'Add Tools',
                 'resource' => [
                     'category' => 'Tools',
                     'status' => 'Available',
@@ -146,12 +198,16 @@ class Resources extends BaseController
                 'items' => [],
                 'projectSites' => $this->getProjectSiteOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => $mapsKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
         }
 
         return view('resources/resources_form', [
+            'pageTitle' => 'Add Resource',
             'resource' => [
                 'category' => $category,
                 'status' => 'Available',
@@ -171,6 +227,10 @@ class Resources extends BaseController
      */
     public function store()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             $data = $this->buildResourcePayload();
 
@@ -219,12 +279,17 @@ class Resources extends BaseController
                 ? 'resources/equipments_form'
                 : ($category === 'Tools' ? 'resources/tools_form' : 'resources/resources_form');
 
+            $editTitle = $category === 'Equipment' ? 'Edit Equipment' : ($category === 'Tools' ? 'Edit Tools' : 'Edit Resource');
             return view($view, [
+                'pageTitle' => $editTitle,
                 'resource' => $resource,
                 'items' => $isManpower ? [] : $this->model->getResourceItems($id),
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
+                'savedWarehouseLocations' => $this->getSavedWarehouseLocations(),
+                'defaultWarehouseAddress' => $this->getDefaultWarehouseAddress(),
+                'mapsKey' => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role' => session()->get('role') ?? 'User'
             ]);
@@ -238,6 +303,10 @@ class Resources extends BaseController
      */
     public function update($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             // Try resource collection first, then manpower
             $existing = $this->model->getResourceById($id);
@@ -284,11 +353,138 @@ class Resources extends BaseController
         }
     }
 
+    public function deleted(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $tab   = $this->request->getGet('tab') ?? 'equipment';
+        $trash = new TrashService($this->firestore);
+
+        if ($tab === 'manpower') {
+            $items  = $trash->getTrashItems('manpower');
+            $module = 'manpower';
+            $title  = 'Deleted Manpower';
+        } else {
+            $all      = $trash->getTrashItems('resource');
+            $category = $tab === 'tools' ? 'Tools' : 'Equipment';
+            $items    = array_values(array_filter($all, fn($r) =>
+                strcasecmp((string)($r['data']['category'] ?? ''), $category) === 0
+            ));
+            $module = 'resource';
+            $title  = 'Deleted ' . $category;
+        }
+
+        return view('shared/module_deleted', [
+            'pageTitle'  => $title,
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => $module,
+            'title'      => $title,
+            'backUrl'    => base_url('resources?tab=' . $tab),
+            'tab'        => $tab,
+            'items'      => $items,
+        ]);
+    }
+
+    public function archived(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $tab    = $this->request->getGet('tab') ?? 'equipment';
+        $arch   = new ArchiveService($this->firestore);
+
+        if ($tab === 'manpower') {
+            $items  = $arch->getArchivedItems('manpower');
+            $module = 'manpower';
+            $title  = 'Archived Manpower';
+        } else {
+            $all      = $arch->getArchivedItems('resource');
+            $category = $tab === 'tools' ? 'Tools' : 'Equipment';
+            $items    = array_values(array_filter($all, fn($r) =>
+                strcasecmp((string)($r['data']['category'] ?? ''), $category) === 0
+            ));
+            $module = 'resource';
+            $title  = 'Archived ' . $category;
+        }
+
+        return view('shared/module_archived', [
+            'pageTitle'  => $title,
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => $module,
+            'title'      => $title,
+            'backUrl'    => base_url('resources?tab=' . $tab),
+            'tab'        => $tab,
+            'items'      => $items,
+        ]);
+    }
+
+    public function archive(): object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) {
+            return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+        }
+        try {
+            $id = trim((string)($this->request->getPost('id') ?? ''));
+            if (!$id) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
+
+            $res = $this->model->getResourceById($id);
+            if ($res) {
+                $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
+                $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;
+                $name    = (string)($rawData['name'] ?? $id);
+
+                // Snapshot items subcollection so they restore with the record
+                $items = [];
+                foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                    if ($itemDoc->exists()) {
+                        $items[] = ['__id' => $itemDoc->id()] + $itemDoc->data();
+                    }
+                }
+
+                (new ArchiveService($this->firestore))->moveToArchive(
+                    'resource', $id, $name, $rawData,
+                    ['items' => $items],
+                    session()->get('userName')
+                );
+
+                $this->deleteResourceItems($id);
+                $this->model->deleteResource($id);
+            } else {
+                $mpData = $this->manpowerModel->getManpowerById($id);
+                if ($mpData) {
+                    $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                    (new ArchiveService($this->firestore))->moveToArchive(
+                        'manpower', $id, $mpName, $mpData, [],
+                        session()->get('userName')
+                    );
+                }
+                $this->manpowerModel->deleteManpower($id);
+            }
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Resources::archive - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
+        }
+    }
+
     /**
-     * Delete a resource
+     * Delete a resource (soft-delete via TrashService before hard-delete)
      */
     public function delete($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+            }
+            return redirect()->to('resources')->with('error', 'Access denied.');
+        }
+
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
                 $id = $this->request->getPost('id') ?? $id;
@@ -300,9 +496,36 @@ class Resources extends BaseController
                 // delete from resource or manpower collection depending where it exists
                 $res = $this->model->getResourceById($id);
                 if ($res) {
+                    // Snapshot raw Firestore data
+                    $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
+                    $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;
+                    $name    = (string) ($rawData['name'] ?? $id);
+
+                    // Read items subcollection with __id preserved
+                    $items = [];
+                    foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                        if ($itemDoc->exists()) {
+                            $items[] = ['__id' => $itemDoc->id()] + $itemDoc->data();
+                        }
+                    }
+
+                    (new TrashService($this->firestore))->moveToTrash(
+                        'resource', $id, $name, $rawData,
+                        ['items' => $items],
+                        session()->get('userName')
+                    );
+
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
+                    $mpData = $this->manpowerModel->getManpowerById($id);
+                    if ($mpData) {
+                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        (new TrashService($this->firestore))->moveToTrash(
+                            'manpower', $id, $mpName, $mpData, [],
+                            session()->get('userName')
+                        );
+                    }
                     $this->manpowerModel->deleteManpower($id);
                 }
 
@@ -312,9 +535,34 @@ class Resources extends BaseController
             if ($id) {
                 $res = $this->model->getResourceById($id);
                 if ($res) {
+                    $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
+                    $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;
+                    $name    = (string) ($rawData['name'] ?? $id);
+
+                    $items = [];
+                    foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                        if ($itemDoc->exists()) {
+                            $items[] = ['__id' => $itemDoc->id()] + $itemDoc->data();
+                        }
+                    }
+
+                    (new TrashService($this->firestore))->moveToTrash(
+                        'resource', $id, $name, $rawData,
+                        ['items' => $items],
+                        session()->get('userName')
+                    );
+
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
+                    $mpData = $this->manpowerModel->getManpowerById($id);
+                    if ($mpData) {
+                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        (new TrashService($this->firestore))->moveToTrash(
+                            'manpower', $id, $mpName, $mpData, [],
+                            session()->get('userName')
+                        );
+                    }
                     $this->manpowerModel->deleteManpower($id);
                 }
                 return redirect()->to('resources')->with('success', 'Resource deleted successfully!');
@@ -345,11 +593,63 @@ class Resources extends BaseController
 
             $resource = $this->normalizeResourceForView($resource);
 
+            // For equipment/tools: auto-heal any items whose assigned_project_id
+            // references a project that no longer exists (deleted projects).
+            $items = [];
+            if (!$isManpower) {
+                $db                 = $this->firestore->getDb();
+                $deleteField        = \Google\Cloud\Firestore\FieldValue::deleteField();
+                $projectExistsCache = [];
+
+                foreach ($this->model->getResourceItems($id) as $item) {
+                    $apid = $item['assigned_project_id'] ?? null;
+                    $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $apid->id()
+                        : (string)($apid ?? '');
+
+                    if ($pid !== '') {
+                        if (!array_key_exists($pid, $projectExistsCache)) {
+                            try {
+                                $projectExistsCache[$pid] = $db
+                                    ->collection('project')->document($pid)
+                                    ->snapshot()->exists();
+                            } catch (\Throwable) {
+                                $projectExistsCache[$pid] = true; // assume exists on error
+                            }
+                        }
+
+                        if (!$projectExistsCache[$pid]) {
+                            // Auto-heal Firestore — clear orphaned reference and reset status
+                            $unitId = $item['__id'] ?? $item['id'] ?? '';
+                            if ($unitId !== '') {
+                                try {
+                                    $db->collection('resource')->document($id)
+                                       ->collection('items')->document($unitId)
+                                       ->update([
+                                           ['path' => 'assigned_project_id', 'value' => $deleteField],
+                                           ['path' => 'status',              'value' => 'In-Storage'],
+                                       ]);
+                                } catch (\Throwable $e) {
+                                    log_message('warning', 'Resources::show auto-heal - ' . $e->getMessage());
+                                }
+                            }
+                            // Fix display data immediately so the page shows correct values
+                            unset($item['assigned_project_id']);
+                            $item['status']      = 'In-Storage';
+                            $item['assigned_to'] = '';
+                        }
+                    }
+
+                    $items[] = $item;
+                }
+            }
+
             return view('resources/resources_show', [
-                'resource' => $resource,
-                'items' => $isManpower ? [] : $this->model->getResourceItems($id),
-                'userName' => session()->get('userName') ?? 'User',
-                'role' => session()->get('role') ?? 'User'
+                'pageTitle' => 'Resource Detail',
+                'resource'  => $resource,
+                'items'     => $items,
+                'userName'  => session()->get('userName') ?? 'User',
+                'role'      => session()->get('role') ?? 'User',
             ]);
         } catch (\Exception $e) {
             return redirect()->to('resources')->with('error', 'Error loading resource: ' . $e->getMessage());
@@ -377,14 +677,14 @@ class Resources extends BaseController
             // Ensure derived fields (like name from manpower_details) are present
             $resource = $this->normalizeResourceForView($resource);
 
-            // — Read unit-level filters —
+            // â€” Read unit-level filters â€”
             $filterBrand     = trim((string) ($this->request->getGet('brand')     ?? ''));
             $filterModelNo   = trim((string) ($this->request->getGet('model_no')  ?? ''));
             $filterCondition = trim((string) ($this->request->getGet('condition') ?? ''));
             $filterStatus    = trim((string) ($this->request->getGet('status')    ?? ''));
             $filterLocType   = trim((string) ($this->request->getGet('loc_type')  ?? ''));
 
-            // — Apply filters —
+            // â€” Apply filters â€”
             if ($filterBrand !== '') {
                 $items = array_values(array_filter($items, fn($i) =>
                     str_contains(strtolower((string) ($i['brand'] ?? '')), strtolower($filterBrand))));
@@ -406,16 +706,34 @@ class Resources extends BaseController
                     strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
             }
 
+            $perPage     = config('Pager')->perPage;
+            $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $itemsTotal  = count($items);
+            $pager       = service('pager');
+            $pager->store('items', $itemsPage, $perPage, $itemsTotal);
+            $pagerOffset = ($itemsPage - 1) * $perPage;
+            $items       = array_slice($items, $pagerOffset, $perPage);
+
             return view('resources/resource_items', [
-                'resource'      => $resource,
-                'items'         => $items,
-                'activeFilters' => [
+                'pageTitle'               => 'Resource Items',
+                'resource'                => $resource,
+                'resourceId'              => $resourceId,
+                'items'                   => $items,
+                'itemsTotal'              => $itemsTotal,
+                'perPage'                 => $perPage,
+                'pagerOffset'             => $pagerOffset,
+                'itemsTotalPages'         => $itemsTotal > 0 ? (int)ceil($itemsTotal / $perPage) : 1,
+                'activeFilters'           => [
                     'brand'     => $filterBrand,
                     'model_no'  => $filterModelNo,
                     'condition' => $filterCondition,
                     'status'    => $filterStatus,
                     'loc_type'  => $filterLocType,
                 ],
+                'defaultWarehouseAddress'  => $this->getDefaultWarehouseAddress(),
+                'savedWarehouseLocations'  => $this->getSavedWarehouseLocations(),
+                'warehouseLocations'       => $this->getWarehouseLocationOptions(),
+                'mapsKey'                  => (new GoogleMaps())->browserKey,
                 'userName' => session()->get('userName') ?? 'User',
                 'role'     => session()->get('role') ?? 'User',
             ]);
@@ -429,25 +747,243 @@ class Resources extends BaseController
      */
     public function addItem($resourceId = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
         try {
             if (!$resourceId) {
                 return redirect()->back()->with('error', 'Missing resource id');
             }
 
-            $itemData = [
-                'unit_id' => $this->request->getPost('unit_id'),
-                'serial_number' => $this->request->getPost('serial_number'),
-                'condition' => $this->request->getPost('condition'),
-                'status' => $this->request->getPost('status'),
-                'assigned_to' => $this->request->getPost('assigned_to')
+            $serial  = trim((string)($this->request->getPost('serial_number')    ?? ''));
+            $brand   = trim((string)($this->request->getPost('brand')            ?? ''));
+            $modelNo = trim((string)($this->request->getPost('model_number')     ?? ''));
+            $cond    = trim((string)($this->request->getPost('condition')        ?? ''));
+            $status  = trim((string)($this->request->getPost('status')           ?? ''));
+            $locType = trim((string)($this->request->getPost('location_type')    ?? ''));
+            $locAddr = trim((string)($this->request->getPost('location_address') ?? ''));
+            $qty     = max(1, (int)($this->request->getPost('quantity') ?? 1));
+
+            if ($cond === '' || $status === '') {
+                return redirect()->back()->with('error', 'Condition and status are required.');
+            }
+
+            $base = [
+                'brand'       => $brand,
+                'model_number'=> $modelNo,
+                'condition'   => $cond,
+                'status'      => $status,
+                'location'    => ['type' => $locType, 'address' => $locAddr],
             ];
 
-            $this->model->createResourceItem($resourceId, $itemData);
+            for ($i = 0; $i < $qty; $i++) {
+                $now = time();
+                $itemSerial = $this->_deriveSerial($serial, $i);
+                $this->model->createResourceItem($resourceId, array_merge($base, [
+                    'serial_number' => $itemSerial,
+                    'created_at'    => $now,
+                    'updated_at'    => $now,
+                ]));
+            }
 
-            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Item added successfully!');
+            $msg = $qty > 1 ? "{$qty} units added successfully!" : 'Unit added successfully!';
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', $msg);
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error adding item: ' . $e->getMessage());
         }
+    }
+
+    private function _deriveSerial(string $base, int $offset): string
+    {
+        if ($base === '') return '';
+        if ($offset === 0) return $base;
+        if (preg_match('/^(.*-)(\d+)$/', $base, $m)) {
+            $n = (int)$m[2] + $offset;
+            return $m[1] . str_pad($n, strlen($m[2]), '0', STR_PAD_LEFT);
+        }
+        return $base . '-' . str_pad($offset + 1, 3, '0', STR_PAD_LEFT);
+    }
+
+    public function updateItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
+        try {
+            if (!$resourceId || !$itemId) {
+                return redirect()->back()->with('error', 'Missing resource or item id');
+            }
+
+            $serial   = trim((string)($this->request->getPost('serial_number') ?? ''));
+            $brand    = trim((string)($this->request->getPost('brand')         ?? ''));
+            $modelNo  = trim((string)($this->request->getPost('model_number')  ?? ''));
+            $cond     = trim((string)($this->request->getPost('condition')     ?? ''));
+            $status   = trim((string)($this->request->getPost('status')        ?? ''));
+            $locType  = trim((string)($this->request->getPost('location_type') ?? ''));
+            $locAddr  = trim((string)($this->request->getPost('location_address') ?? ''));
+
+            if ($serial === '' || $cond === '' || $status === '') {
+                return redirect()->back()->with('error', 'Serial number, condition, and status are required.');
+            }
+
+            $data = [
+                'serial_number' => $serial,
+                'condition'     => $cond,
+                'status'        => $status,
+            ];
+            if ($brand   !== '') $data['brand']        = $brand;
+            if ($modelNo !== '') $data['model_number'] = $modelNo;
+            if ($locType !== '' || $locAddr !== '') {
+                $data['location'] = ['type' => $locType, 'address' => $locAddr];
+            }
+
+            $this->firestore->getDb()
+                ->collection('resource')->document($resourceId)
+                ->collection('items')->document($itemId)
+                ->set($data, ['merge' => true]);
+
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit updated successfully!');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error updating unit: ' . $e->getMessage());
+        }
+    }
+
+    public function deleteItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return redirect()->to('resources')->with('error', 'Access denied.');
+
+        try {
+            if (!$resourceId || !$itemId) {
+                return redirect()->back()->with('error', 'Missing resource or item id');
+            }
+
+            $this->firestore->getDb()
+                ->collection('resource')->document($resourceId)
+                ->collection('items')->document($itemId)
+                ->delete();
+
+            return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit deleted successfully.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Error deleting unit: ' . $e->getMessage());
+        }
+    }
+
+    public function archiveItem($resourceId = null, $itemId = null)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false, 'message' => 'Access denied.']);
+
+        try {
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+            if (!$snap->exists()) return $this->response->setJSON(['success' => false, 'message' => 'Unit not found.']);
+
+            $data = $snap->data();
+            $data['id']          = $itemId;
+            $data['resource_id'] = $resourceId;
+
+            $name = ($data['serial_number'] ?? '') ?: $itemId;
+
+            $trashService = new \App\Libraries\TrashService($this->firestore);
+            $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
+
+            $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    public function itemsDeleted($resourceId = null): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $resource = $this->model->getResourceById($resourceId);
+        if (!$resource) return redirect()->to('resources')->with('error', 'Resource not found.');
+
+        $trash = new \App\Libraries\TrashService($this->firestore);
+        $all   = $trash->getTrashItems('resource_item');
+        $items = array_values(array_filter($all, fn($r) => ($r['data']['resource_id'] ?? '') === $resourceId));
+
+        return view('shared/module_deleted', [
+            'pageTitle'  => ($resource['name'] ?? 'Resource') . ' — Deleted Units',
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'resource_item',
+            'title'      => ($resource['name'] ?? 'Resource') . ' — Deleted Units',
+            'backUrl'    => base_url('resources/viewItems/' . $resourceId),
+            'items'      => $items,
+        ]);
+    }
+
+    public function itemsArchived($resourceId = null): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $resource = $this->model->getResourceById($resourceId);
+        if (!$resource) return redirect()->to('resources')->with('error', 'Resource not found.');
+
+        $arch  = new \App\Libraries\ArchiveService($this->firestore);
+        $all   = $arch->getArchivedItems('resource_item');
+        $items = array_values(array_filter($all, fn($r) => ($r['data']['resource_id'] ?? '') === $resourceId));
+
+        return view('shared/module_archived', [
+            'pageTitle'  => ($resource['name'] ?? 'Resource') . ' — Archived Units',
+            'activePage' => 'resources',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'resource_item',
+            'title'      => ($resource['name'] ?? 'Resource') . ' — Archived Units',
+            'backUrl'    => base_url('resources/viewItems/' . $resourceId),
+            'items'      => $items,
+        ]);
+    }
+
+    public function bulkDeleteItems($resourceId = null)
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false]);
+
+        $ids = $this->request->getPost('ids') ?? [];
+        $db  = $this->firestore->getDb();
+        $deleted = 0;
+        foreach ((array)$ids as $itemId) {
+            try {
+                $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+                $deleted++;
+            } catch (\Throwable) {}
+        }
+        return $this->response->setJSON(['success' => true, 'deleted' => $deleted]);
+    }
+
+    public function bulkArchiveItems($resourceId = null)
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('add_edit_resources')) return $this->response->setJSON(['success' => false]);
+
+        $ids  = $this->request->getPost('ids') ?? [];
+        $db   = $this->firestore->getDb();
+        $trashService = new \App\Libraries\TrashService($this->firestore);
+        $done = 0;
+        foreach ((array)$ids as $itemId) {
+            try {
+                $snap = $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->snapshot();
+                if (!$snap->exists()) continue;
+                $data = $snap->data(); $data['id'] = $itemId; $data['resource_id'] = $resourceId;
+                $name = ($data['serial_number'] ?? '') ?: $itemId;
+                $trashService->moveToTrash('resource_item', $itemId, $name, $data, [], session()->get('userName') ?? 'System');
+                $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
+                $done++;
+            } catch (\Throwable) {}
+        }
+        return $this->response->setJSON(['success' => true, 'archived' => $done]);
     }
 
     private function buildResourcePayload(): array
@@ -928,6 +1464,103 @@ class Resources extends BaseController
         }
 
         return $warehouses;
+    }
+
+    private function getDefaultWarehouseAddress(): string
+    {
+        try {
+            $doc = $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->snapshot();
+            if ($doc->exists()) {
+                return trim((string) ($doc->data()['default_address'] ?? ''));
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::getDefaultWarehouseAddress - ' . $e->getMessage());
+        }
+        return '';
+    }
+
+    private function getSavedWarehouseLocations(): array
+    {
+        try {
+            $doc = $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->snapshot();
+            if ($doc->exists()) {
+                $locs = $doc->data()['saved_locations'] ?? [];
+                return is_array($locs) ? array_values($locs) : [];
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::getSavedWarehouseLocations - ' . $e->getMessage());
+        }
+        return [];
+    }
+
+    public function saveWarehouseLocation()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON([]);
+        }
+        $name    = trim((string)($this->request->getPost('name') ?? ''));
+        $address = trim((string)($this->request->getPost('address') ?? ''));
+        if ($address === '') {
+            return $this->response->setJSON(['success' => false, 'message' => 'Address is required']);
+        }
+        try {
+            $docRef = $this->firestore->getDb()->collection('app_settings')->document('warehouse');
+            $snap   = $docRef->snapshot();
+            $existing = $snap->exists() ? ($snap->data()['saved_locations'] ?? []) : [];
+            if (!is_array($existing)) $existing = [];
+            // Remove any existing entry with same address (upsert)
+            $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
+            $existing[] = ['name' => $name !== '' ? $name : $address, 'address' => $address];
+            $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::saveWarehouseLocation - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to save']);
+        }
+    }
+
+    public function deleteWarehouseLocation()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON([]);
+        }
+        $address = trim((string)($this->request->getPost('address') ?? ''));
+        try {
+            $docRef = $this->firestore->getDb()->collection('app_settings')->document('warehouse');
+            $snap   = $docRef->snapshot();
+            $existing = $snap->exists() ? ($snap->data()['saved_locations'] ?? []) : [];
+            if (!is_array($existing)) $existing = [];
+            $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
+            $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::deleteWarehouseLocation - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to delete']);
+        }
+    }
+
+    public function saveWarehouseDefault()
+    {
+        try {
+            $address = trim((string) ($this->request->getPost('warehouse_default_address') ?? ''));
+            if ($address === '') {
+                return $this->response->setJSON(['success' => false, 'message' => 'Address cannot be empty']);
+            }
+            $this->firestore->getDb()
+                ->collection('app_settings')
+                ->document('warehouse')
+                ->set(['default_address' => $address, 'updated_at' => time()], ['merge' => true]);
+            return $this->response->setJSON(['success' => true, 'address' => $address]);
+        } catch (\Exception $e) {
+            log_message('error', 'Resources::saveWarehouseDefault - ' . $e->getMessage());
+            return $this->response->setJSON(['success' => false, 'message' => 'Failed to save']);
+        }
     }
 
     private function getPrimaryConditionLabel($summary): string

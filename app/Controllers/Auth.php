@@ -9,7 +9,7 @@ class Auth extends BaseController {
     protected FirestoreService $firestore;
 
     public function __construct() {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
     }
 
     public function login() {
@@ -160,8 +160,19 @@ class Auth extends BaseController {
             return redirect()->back()->withInput()->with('error', 'Unable to reset password: ' . $e->getMessage());
         }
 
-        // Do not touch must_change_password here; that flag is used for non-admin role policy.
-        // The password itself lives only in Firebase Auth, so there is no Firestore password data to sync.
+        // Clear the temporary-password flags so the user is not bounced to /change-password on next login
+        try {
+            $fbUser = $this->firestore->getAuth()->getUserByEmail($email);
+            $uid    = (string) $fbUser->uid;
+            if ($uid !== '') {
+                $this->firestore->getDb()->collection('users')->document($uid)->update([
+                    ['path' => 'must_change_password',     'value' => false],
+                    ['path' => 'temp_password_expires_at', 'value' => null],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'processResetPassword: failed to clear must_change_password for ' . $email . ': ' . $e->getMessage());
+        }
 
         return redirect()->to('/login')->with('success', 'Your password has been reset successfully. You may now sign in.');
     }
@@ -216,16 +227,113 @@ class Auth extends BaseController {
 
         $userData = $user['data'];
 
+        // Block unverified staff accounts
+        if (isset($userData['is_verified']) && $userData['is_verified'] === false) {
+            return redirect()->back()->withInput()->with('error', 'Please verify your account via the email sent to you before logging in.');
+        }
+
+        // Check if this is a first-time login with a temporary password
+        if (!empty($userData['must_change_password'])) {
+            $expiresAt = $userData['temp_password_expires_at'] ?? null;
+            if ($expiresAt !== null) {
+                if (is_object($expiresAt) && method_exists($expiresAt, 'get')) {
+                    $expiresTs = $expiresAt->get()->getTimestamp();
+                } elseif (is_object($expiresAt) && method_exists($expiresAt, 'getTimestamp')) {
+                    $expiresTs = $expiresAt->getTimestamp();
+                } else {
+                    $expiresTs = (int) $expiresAt;
+                }
+
+                if (time() > $expiresTs) {
+                    return redirect()->back()->withInput()->with('error',
+                        'Your temporary password has expired. <a href="' . base_url('forgot-password') . '" style="color:#7b1f1f;font-weight:700;text-decoration:underline;">Use Forgot Password</a> to set a new one, or contact your administrator.');
+                }
+            }
+
+            // Valid temp password — log in with the force-change flag
+            $picPath = (string)($userData['profile_picture'] ?? '');
+            session()->set([
+                'isLoggedIn'              => true,
+                'userId'                  => $user['id'],
+                'userEmail'               => (string)($userData['email'] ?? $email),
+                'userName'                => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
+                'role'                    => $userData['role'],
+                'login_time'              => time(),
+                'remember_me'             => $rememberMe,
+                'force_change_password'   => true,
+                'temp_password_expires_at'=> $expiresTs ?? null,
+                'profilePicture'          => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
+            ]);
+
+            return redirect()->to('/change-password');
+        }
+
+        $picPath = (string)($userData['profile_picture'] ?? '');
         session()->set([
-            'isLoggedIn' => true,
-            'userId'     => $user['id'],
-            'userName'   => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
-            'role'       => $userData['role'],
+            'isLoggedIn'     => true,
+            'userId'         => $user['id'],
+            'userEmail'      => (string)($userData['email'] ?? $email),
+            'userName'       => trim((string) ($userData['first_name'] ?? '') . ' ' . (string) ($userData['last_name'] ?? '')),
+            'role'           => $userData['role'],
+            'login_time'     => time(),
+            'remember_me'    => $rememberMe,
+            'profilePicture' => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);
 
         return redirect()->to('/dashboard');
+    }
+
+    public function changePassword()
+    {
+        if (!session()->get('isLoggedIn') || !session()->get('force_change_password')) {
+            return redirect()->to(session()->get('isLoggedIn') ? '/dashboard' : '/login');
+        }
+
+        return view('auth/change_password', [
+            'tempPasswordExpiresAt' => session()->get('temp_password_expires_at'),
+        ]);
+    }
+
+    public function processChangePassword()
+    {
+        if (!session()->get('isLoggedIn') || !session()->get('force_change_password')) {
+            return redirect()->to('/login');
+        }
+
+        $newPassword     = (string) $this->request->getPost('password');
+        $confirmPassword = (string) $this->request->getPost('confirm_password');
+
+        if (strlen($newPassword) < 8) {
+            return redirect()->back()->with('error', 'Password must be at least 8 characters long.');
+        }
+
+        if ($newPassword !== $confirmPassword) {
+            return redirect()->back()->with('error', 'Passwords do not match.');
+        }
+
+        $uid = (string) session()->get('userId');
+
+        try {
+            $this->firestore->getAuth()->updateUser($uid, ['password' => $newPassword]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::processChangePassword - Firebase update failed: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to update password. Please try again.');
+        }
+
+        try {
+            $this->firestore->getDb()->collection('users')->document($uid)->set([
+                'must_change_password'     => false,
+                'temp_password_expires_at' => null,
+            ], ['merge' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::processChangePassword - Firestore update failed: ' . $e->getMessage());
+        }
+
+        session()->destroy();
+
+        return redirect()->to('/login')->with('success', 'Password changed successfully. Please log in with your new password.');
     }
 
     public function register() {

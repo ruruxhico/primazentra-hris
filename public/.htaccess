@@ -3,7 +3,7 @@
 </IfModule>
 
 <IfModule mod_php.c>
-    php_value memory_limit 256M
+    php_value memory_limit 1G
 </IfModule>
 
 <IfModule mod_rewrite.c>

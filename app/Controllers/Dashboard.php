@@ -2,10 +2,13 @@
 
 namespace App\Controllers;
 
+use App\Libraries\MLServiceClient;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
 use App\Models\Model_Users;
 use App\Models\Model_Manpower;
+use App\Models\Model_ResourceRequests;
+use Config\Services;
 
 class Dashboard extends BaseController
 {
@@ -13,6 +16,7 @@ class Dashboard extends BaseController
     protected $resourceModel;
     protected $userModel;
     protected $manpowerModel;
+    protected $requestModel;
 
     public function __construct()
     {
@@ -20,6 +24,7 @@ class Dashboard extends BaseController
         $this->resourceModel = new Model_Resources();
         $this->userModel     = new Model_Users();
         $this->manpowerModel = new Model_Manpower();
+        $this->requestModel  = new Model_ResourceRequests();
     }
 
     public function index()
@@ -34,28 +39,31 @@ class Dashboard extends BaseController
 
             // ── Projects ────────────────────────────────────────────
             $rawProjects = $this->projectModel->getActiveProjects();
-            $activeProjects = [];
-            foreach ($rawProjects as $p) {
-                $activeProjects[] = $this->enrichProject($p);
+
+            // Build lookup of pending transfer requests so pills can be marked on load
+            $pendingMap     = []; // "pid::resId"        => reqId
+            $pendingNameMap = []; // "pid::lower(name)"  => reqId
+            try {
+                foreach ($this->requestModel->getAll([]) as $r) {
+                    if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary', 'Pending Secondary Approval'])) continue;
+                    $srcPid = $r['source_project_id'] ?? '';
+                    if (!$srcPid) continue;
+                    $rid   = $r['resource_id'] ?? '';
+                    $rname = strtolower(trim($r['resource_name'] ?? ''));
+                    $reqId = $r['id'];
+                    if ($rid)   $pendingMap[$srcPid . '::' . $rid]         = $reqId;
+                    if ($rname) $pendingNameMap[$srcPid . '::' . $rname]   = $reqId;
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: pending requests - ' . $e->getMessage());
             }
 
-            // ── Group projects by Philippine island group ────────────
-            $projectsByRegion = [];
-            foreach ($activeProjects as $p) {
-                $projectsByRegion[$p['_region']][] = $p;
-            }
-            ksort($projectsByRegion);
-
-            // ── Blockers: low progress or halted ────────────────────
-            $blockers = array_values(array_filter($activeProjects, function ($p) {
-                return ($p['_progress'] < 30) || (($p['status'] ?? '') === 'Halted');
-            }));
-
-            // ── Resources ───────────────────────────────────────────
-            $totalResources    = $this->resourceModel->countResources();
-            $availableResources = $this->resourceModel->getAvailableResources();
-            $deployedResources  = $this->resourceModel->getDeployedResources();
-            $availableTools     = $this->resourceModel->getAvailableResources();
+            // ── Resources — single fetch, derive everything in PHP ───
+            $allResources       = $this->resourceModel->getAllResources();
+            $totalResources     = count($allResources);
+            $availableResources = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Available'));
+            $deployedResources  = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Deployed'));
+            $availableTools     = $availableResources; // same data, no extra call
 
             // ── Manpower ─────────────────────────────────────────────
             $allManpower = [];
@@ -68,12 +76,248 @@ class Dashboard extends BaseController
                 return ($m['status'] ?? '') === 'Available';
             }));
 
+            // ── Build project → assigned-resource maps ────────────────
+            // Must be built BEFORE the activeProjects loop so enrichProject sees them.
+
+            // Manpower: assigned_project_id is a plain string doc ID
+            $manpowerByProject = [];
+            foreach ($allManpower as $m) {
+                $apid = trim((string)($m['assigned_project_id'] ?? ''));
+                if ($apid === '') continue;
+                $fn   = trim((string)($m['first_name'] ?? ''));
+                $ln   = trim((string)($m['last_name']  ?? ''));
+                $name = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper($m['name'] ?? '');
+                if ($name === '') continue;
+                $manpowerByProject[$apid][] = ['name' => $name, 'id' => $m['id'], 'unit_id' => ''];
+            }
+
+            // Equipment + Tools: reuse $allResources — no second getAllResources() call
+            $equipmentByProject = [];
+            $toolsByProject     = [];
+            try {
+                foreach ($allResources as $res) {
+                    $resId    = $res['id'];
+                    $resName  = strtoupper(trim((string)($res['name'] ?? '')));
+                    $category = $res['category'] ?? '';
+
+                    foreach ($this->resourceModel->getResourceItems($resId) as $item) {
+                        $apid = $item['assigned_project_id'] ?? null;
+                        $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $apid->id()
+                            : trim((string)($apid ?? ''));
+                        if ($itemPid === '') continue;
+
+                        $unitId = $item['__id'] ?? $item['id'] ?? '';
+                        $pill   = ['name' => $resName, 'id' => $resId, 'unit_id' => $unitId];
+
+                        if ($category === 'Tools') {
+                            $toolsByProject[$itemPid][] = $pill;
+                        } else {
+                            $equipmentByProject[$itemPid][] = $pill;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: resource item scan failed - ' . $e->getMessage());
+            }
+
+            $activeProjects = [];
+            foreach ($rawProjects as $p) {
+                $pid = $p['id'] ?? '';
+                $assignedResources = [
+                    'equipment' => $equipmentByProject[$pid] ?? [],
+                    'tools'     => $toolsByProject[$pid]     ?? [],
+                    'manpower'  => $manpowerByProject[$pid]  ?? [],
+                ];
+                $enriched = $this->enrichProject($p, $assignedResources);
+                $pid = $enriched['id'] ?? '';
+                foreach (['_equipment', '_tools', '_manpower'] as $key) {
+                    $enriched[$key] = array_map(function (array $pill) use ($pid, $pendingMap, $pendingNameMap): array {
+                        $rid   = $pill['id'] ?? '';
+                        $rname = strtolower($pill['name'] ?? '');
+                        $reqId = ($rid   !== '' && isset($pendingMap[$pid . '::' . $rid]))
+                               ? $pendingMap[$pid . '::' . $rid]
+                               : (($rname !== '' && isset($pendingNameMap[$pid . '::' . $rname]))
+                                  ? $pendingNameMap[$pid . '::' . $rname]
+                                  : null);
+                        $pill['pending'] = $reqId !== null;
+                        $pill['req_id']  = $reqId ?? '';
+                        return $pill;
+                    }, $enriched[$key]);
+                }
+                $activeProjects[] = $enriched;
+            }
+
+            // ── For Project Manager: monitor only shows their assigned projects ──
+            $uid = (string)(session()->get('userId') ?? '');
+            $monitorProjects = pz_is('Project Manager')
+                ? array_values(array_filter($activeProjects, function ($p) use ($uid) {
+                    return ($p['_pm_uid'] ?? '') === $uid || ($p['_se_uid'] ?? '') === $uid;
+                }))
+                : $activeProjects;
+
+            // ── Group projects by Philippine island group ────────────
+            $projectsByRegion = [];
+            foreach ($monitorProjects as $p) {
+                $projectsByRegion[$p['_region']][] = $p;
+            }
+            $regionOrder = ['LUZON' => 0, 'VISAYAS' => 1, 'MINDANAO' => 2];
+            uksort($projectsByRegion, function ($a, $b) use ($regionOrder) {
+                return ($regionOrder[$a] ?? 99) - ($regionOrder[$b] ?? 99);
+            });
+
+            // ── Blockers: low progress or halted ────────────────────
+            $blockers = array_values(array_filter($activeProjects, function ($p) {
+                return ($p['_progress'] < 30) || (($p['status'] ?? '') === 'Halted');
+            }));
+
+            // ── ML Predicted Blockers & Delays ───────────────────────
+            // Single batch call replaces per-project loop to avoid N×timeout penalty.
+            $mlBlockers  = [];
+            $mlAvailable = true;
+            try {
+                $mlService = new MLServiceClient();
+                // Probe availability with first project only; skip rest if service is down.
+                foreach ($activeProjects as $p) {
+                    if (!$mlAvailable) break;
+                    try {
+                        $features = [
+                            'project_id'              => (string)($p['id'] ?? ''),
+                            'progress_percent'        => (float)($p['_progress'] ?? 0),
+                            'planned_progress_percent'=> (float)($p['planned_progress'] ?? 50),
+                            'days_elapsed'            => (int)($p['days_elapsed'] ?? 0),
+                            'days_remaining'          => (int)($p['days_remaining'] ?? 0),
+                            'workers_present'         => (int)($p['workers_present'] ?? 0),
+                            'workers_planned'         => (int)($p['workers_planned'] ?? 1),
+                            'equipment_utilization'   => (float)($p['equipment_utilization'] ?? 1.0),
+                            'weather_severity'        => (int)($p['weather_severity'] ?? 0),
+                            'site_access_issues'      => (int)($p['site_access_issues'] ?? 0),
+                            'avg_progress_3d'         => (float)($p['avg_progress_3d'] ?? 0),
+                            'progress_trend_3d'       => (float)($p['progress_trend_3d'] ?? 0),
+                            'consecutive_low_days'    => (int)($p['consecutive_low_days'] ?? 0),
+                            'budget_utilization'      => (float)($p['budget_utilization'] ?? 0),
+                            'cost_variance_ratio'     => (float)($p['cost_variance_ratio'] ?? 0),
+                            'active_blocker_count'    => (int)($p['active_blocker_count'] ?? 0),
+                            'days_since_last_blocker' => (int)($p['days_since_last_blocker'] ?? 999),
+                        ];
+
+                        $blockerPrediction = $mlService->predictBlockers($features);
+
+                        // If we got an error response, stop trying subsequent projects
+                        if (isset($blockerPrediction['error'])) {
+                            $mlAvailable = false;
+                            break;
+                        }
+
+                        $delayPrediction = method_exists($mlService, 'predictDelay')
+                            ? $mlService->predictDelay($features)
+                            : null;
+
+                        $rawBlocker       = $blockerPrediction['blocker_type'] ?? $blockerPrediction['predicted_blocker'] ?? $blockerPrediction['prediction'] ?? 'No Blocker';
+                        $predictedBlocker = ($rawBlocker === 'Unknown') ? 'No Blocker' : $rawBlocker;
+
+                        $estimatedDelay = 0;
+                        if ($delayPrediction && !isset($delayPrediction['error'])) {
+                            $estimatedDelay = $delayPrediction['predicted_delay_days'] ?? $delayPrediction['delay_days'] ?? $delayPrediction['prediction'] ?? 0;
+                        } elseif ($blockerPrediction) {
+                            $estimatedDelay = $blockerPrediction['predicted_delay_days'] ?? $blockerPrediction['delay_days'] ?? 0;
+                        }
+
+                        $mlBlockers[] = [
+                            'project_name'         => $p['project_name'] ?? 'Unknown Project',
+                            'predicted'            => $predictedBlocker,
+                            'estimated_delay_days' => (int) round((float) $estimatedDelay),
+                        ];
+                    } catch (\Throwable $e) {
+                        // First failure means service is down — abort all remaining calls
+                        $mlAvailable = false;
+                        log_message('warning', 'Dashboard: ML unavailable, skipping remaining projects - ' . $e->getMessage());
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: ML service init failed - ' . $e->getMessage());
+            }
+
+            // ── FastAPI MCDA Tool Availability (optional, falls back to Firestore data) ──
+            $availableToolsMcda = [];
+            try {
+                // Use first geolocated project as the reference site; fall back to PH centre
+                $siteLat = 14.5995;
+                $siteLng = 120.9842;
+                foreach ($activeProjects as $_ap) {
+                    if ($_ap['_lat'] !== null && $_ap['_lng'] !== null) {
+                        $siteLat = (float)$_ap['_lat'];
+                        $siteLng = (float)$_ap['_lng'];
+                        break;
+                    }
+                }
+
+                $releasedToolsPayload = [];
+                foreach ($activeProjects as $p) {
+                    $toolCount = count($p['_tools'] ?? []);
+                    if ($p['_lat'] !== null && $p['_lng'] !== null && $toolCount >= 1) {
+                        $releasedToolsPayload[] = [
+                            'project_id'    => (string)($p['id'] ?? ''),
+                            'project_name'  => $p['project_name'] ?? 'Unknown',
+                            'lat'           => (float)$p['_lat'],
+                            'lng'           => (float)$p['_lng'],
+                            'tool_category' => 'Construction Equipment',
+                            'units_released'=> $toolCount,
+                        ];
+                    }
+                }
+
+                $mcdaPayload = [
+                    'tool_category'  => 'Construction Equipment',
+                    'site_lat'       => $siteLat,
+                    'site_lng'       => $siteLng,
+                    'radius_km'      => 50,
+                    'weights'        => null,
+                    'released_tools' => !empty($releasedToolsPayload) ? $releasedToolsPayload : null,
+                ];
+
+                $fastApiResp = Services::curlrequest()->request('POST', 'http://127.0.0.1:8000/predict/tool-availability', [
+                    'headers'         => ['Content-Type' => 'application/json', 'Accept' => 'application/json'],
+                    'json'            => $mcdaPayload,
+                    'timeout'         => 2,
+                    'connect_timeout' => 1,
+                ]);
+
+                if ($fastApiResp->getStatusCode() === 200) {
+                    $apiData   = json_decode($fastApiResp->getBody(), true);
+                    $toolsList = $apiData['optimized_tools'] ?? $apiData['tools'] ?? $apiData['predictions'] ?? [];
+                    if (is_array($toolsList)) {
+                        // Urgency-based next deployment: project with lowest progress gets tools first
+                        $nextDeploymentSite = 'Unassigned Depot';
+                        $highestUrgency     = -1;
+                        foreach ($activeProjects as $proj) {
+                            $urgency = 100 - $proj['_progress'];
+                            if ($urgency > $highestUrgency) {
+                                $highestUrgency     = $urgency;
+                                $nextDeploymentSite = $proj['project_name'] ?? 'Unknown';
+                            }
+                        }
+                        foreach ($toolsList as $key => $value) {
+                            $toolName = isset($value['name']) ? $value['name'] : (!is_array($value) ? $key : 'UNKNOWN');
+                            $qty      = isset($value['qty'])  ? (int)$value['qty']  : (!is_array($value) ? (int)$value : 0);
+                            $availableToolsMcda[] = [
+                                'name'            => strtoupper(str_replace('_', ' ', $toolName)),
+                                'qty'             => $qty,
+                                'next_deployment' => $nextDeploymentSite,
+                            ];
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Dashboard: MCDA tool availability failed - ' . $e->getMessage());
+            }
+
             // ── Staff ────────────────────────────────────────────────
             $staffCount = $this->userModel->countStaff();
 
             // Build a flat list of project locations for the monitor map JS
             $projectLocations = [];
-            foreach ($activeProjects as $p) {
+            foreach ($monitorProjects as $p) {
                 if ($p['_lat'] !== null && $p['_lng'] !== null) {
                     $projectLocations[] = [
                         'id'   => $p['id'] ?? '',
@@ -81,6 +325,7 @@ class Dashboard extends BaseController
                         'addr' => $p['location']['address'] ?? '',
                         'lat'  => $p['_lat'],
                         'lng'  => $p['_lng'],
+                        'type' => $p['_project_type'] ?? '',
                     ];
                 }
             }
@@ -97,7 +342,9 @@ class Dashboard extends BaseController
                 'projectsByRegion'    => $projectsByRegion,
                 'projectLocations'    => $projectLocations,
                 'blockers'            => $blockers,
+                'mlBlockers'          => $mlBlockers,
                 'availableTools'      => $availableTools,
+                'availableToolsMcda'  => $availableToolsMcda,
                 'availableResources'  => $availableResources,
                 'deployedResources'   => $deployedResources,
                 'availableManpower'   => $availableManpower,
@@ -119,19 +366,21 @@ class Dashboard extends BaseController
                 'staffCount'       => 0,
                 'activeProjects'   => [],
                 'projectsByRegion' => [],
-                'blockers'         => [],
-                'availableTools'   => [],
+                'blockers'            => [],
+                'mlBlockers'          => [],
+                'availableTools'      => [],
+                'availableToolsMcda'  => [],
                 'availableResources'  => [],
                 'deployedResources'   => [],
                 'availableManpower'   => [],
-                'errorMessage'     => 'Unable to load dashboard right now.',
+                'errorMessage'        => 'Unable to load dashboard right now.',
             ]);
         }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
 
-    private function enrichProject(array $p): array
+    private function enrichProject(array $p, array $assignedResources = []): array
     {
         // Normalise the location field so downstream helpers always get a plain array
         $p['location'] = $this->normaliseLocation($p['location'] ?? null);
@@ -143,31 +392,76 @@ class Dashboard extends BaseController
         [$p['_lat'], $p['_lng']] = $this->extractLatLng($p);
         $p['_maps_url']  = $this->mapsUrl($p);
 
-        // Resource pills: prefer project-embedded list, fall back to personnel
-        $tools    = [];
-        $manpower = [];
+        // Resource pills — merge mobile-app inline resources with web-assigned resources.
+        // PM/SE are intentionally excluded; only real resources are shown.
+        $equipment = [];
+        $tools     = [];
+        $manpower  = [];
 
+        // Source 1: inline resources field (written by mobile drag-and-drop)
         if (!empty($p['resources']) && is_array($p['resources'])) {
             foreach ($p['resources'] as $res) {
-                $cat  = strtolower($res['category'] ?? 'tool');
+                $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
                 $name = strtoupper(trim((string)($res['name'] ?? '')));
                 if ($name === '') continue;
-                if ($cat === 'manpower') $manpower[] = $name;
-                else $tools[] = $name;
+                $pill = [
+                    'name'    => $name,
+                    'id'      => (string)($res['ref_id']  ?? ''),
+                    'unit_id' => (string)($res['unit_id'] ?? ''),
+                ];
+                if ($cat === 'manpower')      $manpower[]  = $pill;
+                elseif ($cat === 'equipment') $equipment[] = $pill;
+                else                          $tools[]     = $pill;
             }
         }
 
-        if (empty($manpower)) {
-            $pm = trim((string)($p['project_manager_name'] ?? ''));
-            $se = trim((string)($p['site_engineer_name']   ?? ''));
-            if ($pm && $pm !== 'N/A') $manpower[] = strtoupper($pm);
-            if ($se && $se !== 'N/A') $manpower[] = strtoupper($se);
-        }
+        // Source 2: web-assigned resources (assigned_project_id on manpower/item docs)
+        // Deduplicate by name+unit_id to avoid double-counting
+        $seen = [];
+        $merge = function (array &$target, array $incoming) use (&$seen): void {
+            foreach ($incoming as $pill) {
+                $key = ($pill['id'] ?? '') . '|' . ($pill['unit_id'] ?? '') . '|' . strtolower($pill['name'] ?? '');
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+                $target[] = $pill;
+            }
+        };
 
-        $p['_tools']    = $tools;
-        $p['_manpower'] = $manpower;
+        // Seed seen set with pills already added from Source 1
+        foreach ($equipment as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+        foreach ($tools     as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+        foreach ($manpower  as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+
+        $merge($equipment, $assignedResources['equipment'] ?? []);
+        $merge($tools,     $assignedResources['tools']     ?? []);
+        $merge($manpower,  $assignedResources['manpower']  ?? []);
+
+        $p['_equipment']    = $equipment;
+        $p['_tools']        = $tools;
+        $p['_manpower']     = $manpower;
+        $p['_client']       = strtoupper(trim((string)($p['client_name'] ?? '')));
+        $p['_project_type'] = strtoupper(trim((string)($p['project_type'] ?? '')));
+        $rawStatus          = strtoupper(trim((string)($p['status'] ?? '')));
+        $p['_status']       = in_array($rawStatus, ['COMPLETED', 'DONE']) ? 'DONE' : 'ONGOING';
+
+        // Normalize PM/SE UIDs for role-based monitor filtering
+        $pmRaw = $p['personnel']['project_manager_id'] ?? $p['project_manager_id'] ?? null;
+        $seRaw = $p['personnel']['site_engineer_id']   ?? $p['site_engineer_id']   ?? null;
+        $p['_pm_uid'] = $this->extractPersonnelUid($pmRaw);
+        $p['_se_uid'] = $this->extractPersonnelUid($seRaw);
 
         return $p;
+    }
+
+    private function extractPersonnelUid(mixed $value): string
+    {
+        if ($value === null) return '';
+        if (is_object($value) && method_exists($value, 'id')) {
+            try { return (string)$value->id(); } catch (\Throwable $e) {}
+        }
+        $str = is_string($value) ? $value : '';
+        // strip "users/" path prefix if present
+        return preg_replace('#^.+/#', '', trim($str)) ?: trim($str);
     }
 
     // ── Normalise a raw Firestore location value into a plain PHP array ──

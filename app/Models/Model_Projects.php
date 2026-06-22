@@ -53,13 +53,14 @@ class Model_Projects extends Model_BaseFirestore
     }
 
     /**
-     * Get active projects (On-going or Planned)
+     * Get monitorable projects: On-going, Planned, and Completed (excludes Past Deadline / Archived).
+     * Old-casing variants included for backward compatibility with existing Firestore records.
      */
     public function getActiveProjects()
     {
         $db = $this->firestore->getDb();
         $collection = $db->collection($this->collection);
-        $query = $collection->where('status', 'in', ['On-going', 'Planned']);
+        $query = $collection->where('status', 'in', ['On-going', 'Planned', 'Completed', 'Past Deadline', 'ON-GOING', 'PLANNED', 'COMPLETED', 'PAST DEADLINE']);
         $documents = $query->documents();
 
         $projects = [];

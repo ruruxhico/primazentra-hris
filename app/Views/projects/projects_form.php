@@ -1,4 +1,4 @@
-<?= $this->extend('layouts/main') ?>
+﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('content') ?>
 <?php
@@ -16,33 +16,63 @@
 ?>
 
 <?php if (session()->getFlashdata('error')): ?>
-    <div class="alert-error">✗ <?= session()->getFlashdata('error') ?></div>
+    <div class="pz-alert pz-alert-error">
+        <span class="material-symbols-outlined" style="font-size:1rem">error</span>
+        <?= session()->getFlashdata('error') ?>
+    </div>
 <?php endif; ?>
 
-<h2><?= $isEdit ? 'Projects - Edit' : 'Projects - Add' ?></h2>
+<a href="<?= base_url('projects') ?>" class="pz-back-link">
+    <span class="material-symbols-outlined">arrow_back</span> Projects
+</a>
 
-<style>
-#projectForm input[type="text"]:not([readonly]) { text-transform: uppercase; }
-</style>
+<div class="pz-page-header">
+    <h1><?= $isEdit ? 'Edit Project' : 'Add Project' ?></h1>
+</div>
 
-<div class="form-container project-form-container">
-    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm">
+
+<div id="formToast"></div>
+<div class="pz-form-container">
+    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data">
         <?= csrf_field() ?>
 
-        <div class="form-section">
+        <div class="pz-form-section">
+            <p class="pz-form-section-title">Project Information</p>
 
-            <div class="form-group">
-                <label for="project_name">Project Name *</label>
-                <input type="text" id="project_name" name="project_name"
-                       value="<?= esc($project['project_name'] ?? '') ?>" required>
+            <div class="pz-form-row cols-2">
+                <div class="pz-form-group">
+                    <label for="project_name">Project Name *</label>
+                    <input type="text" id="project_name" name="project_name"
+                           value="<?= esc($project['project_name'] ?? '') ?>" required>
+                </div>
+                <div class="pz-form-group">
+                    <label for="client_name">Client Name</label>
+                <?php
+                $predefinedClients = ['ATC', 'COMMTREND', 'EDGEPOINT', 'FTAP', 'ITP', 'LDIC', 'SMSGT', 'SMART'];
+                $allClientSuggestions = array_unique(array_merge(
+                    $predefinedClients,
+                    array_map('strtoupper', $existingClients ?? [])
+                ));
+                sort($allClientSuggestions);
+                ?>
+                <input type="text" id="client_name" name="client_name"
+                       value="<?= esc($project['client_name'] ?? '') ?>"
+                       list="clientSuggestions" autocomplete="off"
+                       placeholder="e.g. SMART">
+                <datalist id="clientSuggestions">
+                    <?php foreach ($allClientSuggestions as $c): ?>
+                    <option value="<?= esc($c) ?>">
+                    <?php endforeach; ?>
+                </datalist>
             </div>
+            </div><!-- /cols-2 -->
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="project_type">Project Type *</label>
+            <div class="pz-form-row" style="max-width:320px;margin-top:.65rem">
+                <div class="pz-form-group">
+                    <label for="project_type">Tower Type *</label>
                     <select id="project_type" name="project_type" required>
-                        <option value="">SELECT TYPE</option>
-                        <?php foreach (['RESIDENTIAL','TOWERS','COMMERCIAL'] as $type): ?>
+                        <option value="">Select Type</option>
+                        <?php foreach (['BUILD-TO-SUIT','RETROFITTING','COLOCATION', 'CONVERSION'] as $type): ?>
                             <option value="<?= esc($type) ?>"
                                 <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
                                 <?= esc($type) ?>
@@ -50,23 +80,10 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label for="status">Status *</label>
-                    <select id="status" name="status" required>
-                        <option value="">SELECT STATUS</option>
-                        <?php foreach (['PLANNED','ON-GOING','COMPLETED','HALTED'] as $status): ?>
-                            <option value="<?= esc($status) ?>"
-                                <?= ($project['status'] ?? '') === $status ? 'selected' : '' ?>>
-                                <?= esc($status) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
             </div>
 
             <!-- ── Location field with Maps integration ──────── -->
-            <div class="form-group">
+            <div class="pz-form-group" style="margin-top:.65rem">
                 <label for="location_address">Address *</label>
                 <div class="location-wrap">
                     <div class="location-input-row">
@@ -109,11 +126,11 @@
             </div>
             <!-- ── /Location ──────────────────────────────────── -->
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="project_manager_id">Project Manager *</label>
                     <select id="project_manager_id" name="project_manager_id" required>
-                        <option value="">SELECT PROJECT MANAGER</option>
+                        <option value="">Select Project Manager</option>
                         <?php foreach ($projectManagers ?? [] as $mgr): ?>
                             <?php $label = trim(($mgr['first_name'] ?? '') . ' ' . ($mgr['last_name'] ?? '')); ?>
                             <option value="<?= esc($mgr['id'] ?? '') ?>"
@@ -124,10 +141,10 @@
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label for="site_engineer_id">Site Engineer *</label>
                     <select id="site_engineer_id" name="site_engineer_id" required>
-                        <option value="">SELECT SITE ENGINEER</option>
+                        <option value="">Select Site Engineer</option>
                         <?php foreach ($siteEngineers ?? [] as $eng): ?>
                             <?php $label = trim(($eng['first_name'] ?? '') . ' ' . ($eng['last_name'] ?? '')); ?>
                             <option value="<?= esc($eng['id'] ?? '') ?>"
@@ -139,8 +156,8 @@
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
                     <label for="start_date">Start Date</label>
                     <div class="date-picker" data-target="start">
                         <input type="text" id="start_date_display" class="date-display"
@@ -154,7 +171,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="pz-form-group">
                     <label for="end_date">End Date</label>
                     <div class="date-picker" data-target="end">
                         <input type="text" id="end_date_display" class="date-display"
@@ -169,17 +186,52 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label for="budget">Budget *</label>
-                <input type="number" id="budget" name="budget"
-                       min="0" step="0.01"
-                       value="<?= esc($project['budget'] ?? '') ?>" required>
+            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+                <div class="pz-form-group">
+                    <label for="budget">Budget *</label>
+                    <input type="number" id="budget" name="budget"
+                           min="0" step="0.01"
+                           value="<?= esc($project['budget'] ?? '') ?>" required>
+                </div>
+
+                <div class="pz-form-group">
+                    <label for="attachments">Attachments</label>
+                    <label class="file-upload-label" for="attachments">
+                        <span class="material-symbols-outlined file-upload-icon">upload_file</span>
+                        <span class="file-upload-text" id="attachmentsText">Choose files…</span>
+                        <input type="file" id="attachments" name="attachments[]"
+                               multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                               style="display:none">
+                    </label>
+                    <div class="file-upload-list" id="attachmentsList"></div>
+                    <?php
+                        $existingAttachments = is_array($project['attachments'] ?? null) ? $project['attachments'] : [];
+                    ?>
+                    <?php if (!empty($existingAttachments)): ?>
+                    <div class="file-existing-list">
+                        <div class="file-existing-label">Saved attachments</div>
+                        <?php foreach ($existingAttachments as $att): ?>
+                        <div class="file-upload-item">
+                            <span class="material-symbols-outlined">description</span>
+                            <a class="file-upload-name"
+                               href="<?= esc($att['url'] ?? '#') ?>"
+                               target="_blank" rel="noopener">
+                                <?= esc($att['name'] ?? 'file') ?>
+                            </a>
+                            <span class="file-upload-size">
+                                <?= isset($att['size']) ? number_format($att['size'] / 1024, 1) . ' KB' : '' ?>
+                            </span>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
 
-        </div><!-- /form-section -->
+        </div><!-- /pz-form-section -->
 
         <!-- ── Project Schedule (phase accordion) ─────────── -->
-        <div class="form-section">
+        <div class="pz-form-section">
             <?php $hasSavedPhases = !empty($phases); ?>
 
             <div class="form-group add-tasks-toggle">
@@ -202,91 +254,86 @@
 
                 <!-- Schedule table -->
                 <div class="phase-schedule">
-                    <div class="schedule-hdr">
-                        <span>PHASE</span>
-                        <span>WEIGHT %</span>
-                        <span></span>
-                    </div>
+                    <div class="schedule-hdr">Milestone Schedule</div>
 
                     <div id="phasesContainer">
-                        <?php foreach ($phases as $pIdx => $phase): ?>
-                        <div class="phase-item" data-pidx="<?= $pIdx ?>">
-                            <div class="phase-hdr-row">
-                                <input type="text"   name="phases[<?= $pIdx ?>][name]"
-                                       class="phase-name-inp"
-                                       value="<?= esc($phase['name'] ?? '') ?>"
-                                       placeholder="Phase name">
-                                <div class="phase-weight-cell">
+                        <?php
+                        $units = ['pcs','hrs','days','sqm','cbm','lm','lot','set','kgs'];
+                        foreach ($phases as $pIdx => $phase):
+                            $phaseQty      = $phase['qty']       ?? 1;
+                            $phaseUnit     = $phase['unit']      ?? 'pcs';
+                            $phaseSiteDate = $phase['site_date'] ?? '';
+                        ?>
+                        <div class="phase-card" data-pidx="<?= $pIdx ?>" draggable="true">
+                            <span class="phase-drag-handle material-symbols-outlined" title="Drag to reorder">drag_indicator</span>
+                            <input type="text" name="phases[<?= $pIdx ?>][name]"
+                                   class="phase-card-name-inp"
+                                   value="<?= esc($phase['name'] ?? '') ?>"
+                                   placeholder="Milestone name">
+                            <div class="phase-field f-weight">
+                                <span class="phase-field-lbl">Weight %</span>
+                                <div class="phase-weight-group">
                                     <input type="number" name="phases[<?= $pIdx ?>][weight]"
                                            class="phase-weight-inp"
                                            value="<?= esc(number_format((float)($phase['weight'] ?? 0), 1)) ?>"
                                            min="0" max="100" step="0.1">
-                                    <span class="pct-label">%</span>
-                                </div>
-                                <div class="phase-actions">
-                                    <button type="button" class="phase-del-btn" title="Delete phase">
-                                        <span class="material-symbols-outlined">delete</span>
-                                    </button>
-                                    <button type="button" class="phase-toggle-btn" title="Toggle tasks">
-                                        <span class="material-symbols-outlined">keyboard_arrow_down</span>
-                                    </button>
+                                    <span class="phase-weight-unit">%</span>
                                 </div>
                             </div>
-                            <div class="phase-tasks-wrap" style="display:none">
-                                <?php foreach (($phase['tasks'] ?? []) as $tIdx => $task): ?>
-                                <div class="phase-task-row">
-                                    <input type="hidden" name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][id]"
-                                           value="<?= esc($task['id'] ?? '') ?>">
-                                    <input type="text"
-                                           name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][task_name]"
-                                           class="task-name-inp"
-                                           value="<?= esc($task['task_name'] ?? '') ?>"
-                                           placeholder="Task name">
-                                    <div class="task-meta-row">
-                                        <span class="task-field-label">Qty:</span>
-                                        <input type="number"
-                                               name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][qty]"
-                                               class="task-qty-inp" placeholder="0" min="0"
-                                               value="<?= esc($task['qty'] ?? 0) ?>">
-                                        <span class="task-field-label">Unit:</span>
-                                        <select name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][unit]"
-                                                class="task-unit-sel">
-                                            <?php foreach (['pcs','hrs','sqm','lm','lot','set'] as $u): ?>
-                                            <option value="<?= $u ?>" <?= ($task['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= $u ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <select name="phases[<?= $pIdx ?>][tasks][<?= $tIdx ?>][status]"
-                                                class="task-status-sel">
-                                            <?php foreach (['Pending','In Progress','Done'] as $s): ?>
-                                            <option value="<?= $s ?>" <?= ($task['status'] ?? 'Pending') === $s ? 'selected' : '' ?>><?= $s ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                        <button type="button" class="task-del-btn" title="Remove task">
-                                            <span class="material-symbols-outlined">close</span>
-                                        </button>
+                            <button type="button" class="phase-del-btn" title="Delete milestone">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>
+                            <div class="phase-row2">
+                                <div class="phase-field f-qty">
+                                    <span class="phase-field-lbl">Qty</span>
+                                    <input type="number" name="phases[<?= $pIdx ?>][qty]"
+                                           class="phase-card-inp"
+                                           value="<?= esc($phaseQty) ?>" min="0">
+                                </div>
+                                <div class="phase-field f-unit">
+                                    <span class="phase-field-lbl">Unit</span>
+                                    <select name="phases[<?= $pIdx ?>][unit]" class="phase-card-sel">
+                                        <?php foreach ($units as $u): ?>
+                                        <option value="<?= $u ?>" <?= $phaseUnit === $u ? 'selected' : '' ?>><?= $u ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="phase-field f-date">
+                                    <span class="phase-field-lbl">Target Date</span>
+                                    <div class="date-picker phase-card-date-picker">
+                                        <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
+                                        <input type="hidden" name="phases[<?= $pIdx ?>][site_date]" value="<?= esc($phaseSiteDate) ?>">
+                                        <button type="button" class="date-toggle">📅</button>
+                                        <div class="calendar-popup" aria-hidden="true"></div>
                                     </div>
                                 </div>
-                                <?php endforeach; ?>
-                                <button type="button" class="btn-add-task">+ Add Task</button>
                             </div>
                         </div>
                         <?php endforeach; ?>
                     </div>
 
                     <div class="schedule-total-row">
-                        <span>TOTAL</span>
+                        <span>Total</span>
                         <span id="totalWeightDisplay">0.0%</span>
-                        <span></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
+        <div class="form-group add-tasks-toggle">
+            <label class="checkbox-label">
+                <input type="checkbox" id="add_resources_now" name="add_resources_now">
+                <span class="checkbox-custom"></span>
+                Add resources now
+            </label>
+        </div>
+
+        <div class="pz-form-actions">
+            <button type="submit" class="pz-btn pz-btn-primary">
+                <span class="material-symbols-outlined">save</span>
                 <?= $isEdit ? 'Update Project' : 'Create Project' ?>
             </button>
-            <a href="<?= base_url('projects') ?>" class="btn btn-secondary">Cancel</a>
+            <a href="<?= base_url('projects') ?>" class="pz-btn pz-btn-cancel">Cancel</a>
         </div>
     </form>
 </div>
@@ -445,7 +492,7 @@
     // ── "My Location" button ───────────────────────────
     document.getElementById('locateMeBtn').addEventListener('click', function () {
         if (!navigator.geolocation) {
-            alert('Geolocation is not supported by your browser.');
+            window._pzToast && _pzToast('Geolocation is not supported by your browser.', 'error');
             return;
         }
         this.disabled = true;
@@ -460,7 +507,7 @@
                 btn.disabled = false;
             },
             function () {
-                alert('Unable to retrieve your location. Please check your browser permissions.');
+                window._pzToast && _pzToast('Unable to retrieve your location. Please check your browser permissions.', 'error');
                 btn.disabled = false;
             }
         );
@@ -498,35 +545,160 @@ if (window.location.hostname === 'localhost') {
 </script>
 <?php endif; ?>
 
+<!-- ── Attachment input JS ───────────────────────────────── -->
+<script>
+(function () {
+    var input  = document.getElementById('attachments');
+    var textEl = document.getElementById('attachmentsText');
+    var listEl = document.getElementById('attachmentsList');
+    if (!input) return;
+
+    var allFiles = [];
+
+    function syncInput() {
+        var dt = new DataTransfer();
+        allFiles.forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+    }
+
+    function renderList() {
+        if (allFiles.length === 0) {
+            textEl.textContent = 'Choose files…';
+            listEl.innerHTML = '';
+            return;
+        }
+        textEl.textContent = allFiles.length + ' file' + (allFiles.length > 1 ? 's' : '') + ' selected';
+        listEl.innerHTML = allFiles.map(function (f, i) {
+            var kb = (f.size / 1024).toFixed(1);
+            return '<div class="file-upload-item">' +
+                '<span class="material-symbols-outlined">description</span>' +
+                '<span class="file-upload-name">' + f.name + '</span>' +
+                '<span class="file-upload-size">' + kb + ' KB</span>' +
+                '<button type="button" class="file-remove-btn" data-idx="' + i + '" title="Remove">✕</button>' +
+                '</div>';
+        }).join('');
+        listEl.querySelectorAll('.file-remove-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                allFiles.splice(parseInt(this.dataset.idx, 10), 1);
+                syncInput();
+                renderList();
+            });
+        });
+    }
+
+    input.addEventListener('change', function () {
+        Array.from(this.files).forEach(function (f) {
+            var dupe = allFiles.some(function (ef) { return ef.name === f.name && ef.size === f.size; });
+            if (!dupe) allFiles.push(f);
+        });
+        syncInput();
+        renderList();
+    });
+}());
+</script>
+
 <!-- ── Phase Schedule JS ──────────────────────────────────── -->
 <script>
 (function () {
-    // ── Predefined phase templates (same structure for all types) ──
-    var PHASE_TEMPLATE = [
-        { name: 'Mobilization & Site Setup',  weight: 9.7  },
-        { name: 'Concrete Floor Polishing',   weight: 9.1  },
-        { name: 'Plumbing',                   weight: 3.3  },
-        { name: 'CHB & Drywall Works',        weight: 11.4 },
-        { name: 'HVAC',                       weight: 15.9 },
-        { name: 'FDAS',                       weight: 4.7  },
-        { name: 'Electrical',                 weight: 15.6 },
-        { name: 'Electronics',                weight: 2.4  },
-        { name: 'Ceiling Works',              weight: 10.2 },
-        { name: 'Floor Tiles',                weight: 3.1  },
-        { name: 'Painting Works',             weight: 4.5  },
-        { name: 'Doors & Glazing',            weight: 4.5  },
-        { name: 'Cabinetry',                  weight: 1.6  },
-        { name: 'Furniture Installation',     weight: 3.4  },
-        { name: 'Testing & Commissioning',    weight: 0.6  },
-    ];
+    var UNITS = ['pcs','hrs','days','sqm','cbm','lm','lot','set','kgs'];
 
-    var container      = document.getElementById('phasesContainer');
+    // ── Milestone templates keyed by tower type ────────────────
+    var TEMPLATES = {
+        'BUILD-TO-SUIT': [
+            { name: 'Skom',                       weight: 3  },
+            { name: 'Mobilization/Site Clearing', weight: 5  },
+            { name: 'Site Layout/Excavation',     weight: 5  },
+            { name: 'Lean Concrete',              weight: 4  },
+            { name: 'Rebars Installation',        weight: 5  },
+            { name: 'ABST Installation',          weight: 5  },
+            { name: 'Formworks Installation',     weight: 5  },
+            { name: 'Tower Foundation Casting',   weight: 6  },
+            { name: 'Backfilling',                weight: 4  },
+            { name: 'Tower On Site',              weight: 3  },
+            { name: 'Tower Erection',             weight: 8  },
+            { name: 'BTS Pad',                    weight: 4  },
+            { name: 'DG Pad',                     weight: 4  },
+            { name: 'SEP',                        weight: 4  },
+            { name: 'CEF',                        weight: 4  },
+            { name: 'Perimeter Fence',            weight: 6  },
+            { name: 'Gate',                       weight: 4  },
+            { name: 'Grounding Systems',          weight: 4  },
+            { name: 'E-Wall',                     weight: 5  },
+            { name: 'Panel Board Installation',   weight: 5  },
+            { name: 'Site Development',           weight: 5  },
+            { name: 'PrePAT',                     weight: 2  },
+        ],
+        'RETROFITTING': [
+            { name: 'RM', weight: 40, qty: 14 },
+            { name: 'SP', weight: 30, qty: 6  },
+            { name: 'L',  weight: 20, qty: 1  },
+            { name: 'BP', weight: 10           },
+        ],
+        'COLOCATION': [
+            { name: 'Site Layout',                              weight: 4.8 },
+            { name: 'Trenching, Excavation',                    weight: 4.8 },
+            { name: 'Order of Materials and Delivery',          weight: 4.8 },
+            { name: 'Lean Concrete',                            weight: 4.8 },
+            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8 },
+            { name: 'Formworks Inst',                           weight: 4.8 },
+            { name: 'Rebar Inst',                               weight: 4.8 },
+            { name: 'Casting(Bot) + Curing',                    weight: 4.8 },
+            { name: 'CHB Laying',                               weight: 4.8 },
+            { name: 'Backfill (1st and 2nd Layer)',              weight: 4.8 },
+            { name: 'Casting(Top) + Curing',                    weight: 4.8 },
+            { name: 'Plastering',                               weight: 4.8 },
+            { name: 'Trenching (Electrical +FOC)',               weight: 4.8 },
+            { name: 'Cable Tray Inst',                          weight: 4.8 },
+            { name: 'Panel Board Inst',                         weight: 4.8 },
+            { name: 'CEF',                                      weight: 4.8 },
+            { name: 'Electrical Works',                         weight: 4.8 },
+            { name: 'Grounding',                                weight: 4.8 },
+            { name: 'Wire Termination',                         weight: 4.8 },
+            { name: 'Site Clearing',                            weight: 4.8 },
+            { name: 'Site Development',                         weight: 4.0 },
+        ],
+        'CONVERSION': [
+            { name: 'SKOM',                      weight: 5  },
+            { name: 'Site Lay-out',              weight: 5  },
+            { name: 'Excavation',                weight: 8  },
+            { name: 'Grounding',                 weight: 7  },
+            { name: 'Lean Concrete',             weight: 7  },
+            { name: 'Rebars Installation',       weight: 8  },
+            { name: 'ABST Installation',         weight: 8  },
+            { name: 'Formworks Installation',    weight: 7  },
+            { name: 'Tower Foundation Casting',  weight: 8  },
+            { name: 'Backfilling',               weight: 6  },
+            { name: 'Tower Erection',            weight: 9  },
+            { name: 'Electrical Works',          weight: 8  },
+            { name: 'Cable Ladder Installation', weight: 7  },
+            { name: 'Site Development',          weight: 7  },
+        ],
+        '_DEFAULT': [
+            { name: 'Mobilization & Site Setup',  weight: 9.7  },
+            { name: 'Concrete Floor Polishing',   weight: 9.1  },
+            { name: 'Plumbing',                   weight: 3.3  },
+            { name: 'CHB & Drywall Works',        weight: 11.4 },
+            { name: 'HVAC',                       weight: 15.9 },
+            { name: 'FDAS',                       weight: 4.7  },
+            { name: 'Electrical',                 weight: 15.6 },
+            { name: 'Electronics',                weight: 2.4  },
+            { name: 'Ceiling Works',              weight: 10.2 },
+            { name: 'Floor Tiles',                weight: 3.1  },
+            { name: 'Painting Works',             weight: 4.5  },
+            { name: 'Doors & Glazing',            weight: 4.5  },
+            { name: 'Cabinetry',                  weight: 1.6  },
+            { name: 'Furniture Installation',     weight: 3.4  },
+            { name: 'Testing & Commissioning',    weight: 0.6  },
+        ],
+    };
+
+    var container       = document.getElementById('phasesContainer');
     var scheduleSection = document.getElementById('scheduleSection');
-    var totalDisplay   = document.getElementById('totalWeightDisplay');
-    var progressInput  = document.getElementById('overall_progress');
-    var checkbox       = document.getElementById('add_tasks_now');
-    var addPhaseBtn    = document.getElementById('addPhaseBtn');
-    var projectTypeEl  = document.getElementById('project_type');
+    var totalDisplay    = document.getElementById('totalWeightDisplay');
+    var progressInput   = document.getElementById('overall_progress');
+    var checkbox        = document.getElementById('add_tasks_now');
+    var addPhaseBtn     = document.getElementById('addPhaseBtn');
+    var projectTypeEl   = document.getElementById('project_type');
 
     // ── Show / hide schedule section ──────────────────────────
     function setSectionVisible(v) {
@@ -537,21 +709,12 @@ if (window.location.hostname === 'localhost') {
         checkbox.addEventListener('change', function () { setSectionVisible(this.checked); });
     }
 
-    // ── Reindex all phase/task name attributes ─────────────────
+    // ── Reindex all phase name attributes ─────────────────────
     function reindex() {
-        container.querySelectorAll('.phase-item').forEach(function (phase, pi) {
-            phase.dataset.pidx = pi;
-            phase.querySelectorAll('[name]').forEach(function (el) {
-                el.name = el.name
-                    .replace(/phases\[\d+\]/, 'phases[' + pi + ']')
-                    .replace(/tasks\[\d+\]/, function (m, offset, str) {
-                        // find which task row this belongs to
-                        var taskRow = el.closest('.phase-task-row');
-                        if (!taskRow) return m;
-                        var siblings = Array.from(taskRow.parentElement.querySelectorAll('.phase-task-row'));
-                        var ti = siblings.indexOf(taskRow);
-                        return 'tasks[' + ti + ']';
-                    });
+        container.querySelectorAll('.phase-card').forEach(function (card, pi) {
+            card.dataset.pidx = pi;
+            card.querySelectorAll('[name]').forEach(function (el) {
+                el.name = el.name.replace(/phases\[\d+\]/, 'phases[' + pi + ']');
             });
         });
     }
@@ -565,158 +728,106 @@ if (window.location.hostname === 'localhost') {
         total = Math.round(total * 10) / 10;
         if (totalDisplay) {
             totalDisplay.textContent = total.toFixed(1) + '%';
-            totalDisplay.style.color = (Math.abs(total - 100) < 0.2) ? '#4caf50' : '#e53935';
+            totalDisplay.style.color = total > 100.05 ? '#e53935' : Math.abs(total - 100) < 0.2 ? '#4caf50' : '#e53935';
         }
-        if (progressInput) progressInput.value = 0; // recalculated server-side
+        if (progressInput) progressInput.value = 0;
     }
 
-    // ── Build a task row element ───────────────────────────────
-    function buildTaskRow(pi, ti, data) {
-        data = data || {};
-        var units = ['pcs','hrs','days','sqm','lm','lot','set', 'kgs'];
-        var statuses = ['Pending','In Progress','Done'];
-
-        var row = document.createElement('div');
-        row.className = 'phase-task-row';
-        row.innerHTML =
-            '<input type="hidden" name="phases[' + pi + '][tasks][' + ti + '][id]" value="' + (data.id || '') + '">' +
-            '<input type="text" name="phases[' + pi + '][tasks][' + ti + '][task_name]" class="task-name-inp" placeholder="Task name" value="' + escHtml(data.task_name || '') + '">' +
-            '<div class="task-meta-row">' +
-                '<span class="task-field-label">Qty:</span>' +
-                '<input type="number" name="phases[' + pi + '][tasks][' + ti + '][qty]" class="task-qty-inp" placeholder="0" min="0" value="' + (data.qty || 0) + '">' +
-                '<span class="task-field-label">Unit:</span>' +
-                '<select name="phases[' + pi + '][tasks][' + ti + '][unit]" class="task-unit-sel">' +
-                    units.map(function(u){ return '<option value="' + u + '"' + (data.unit === u ? ' selected' : '') + '>' + u + '</option>'; }).join('') +
-                '</select>' +
-                '<select name="phases[' + pi + '][tasks][' + ti + '][status]" class="task-status-sel">' +
-                    statuses.map(function(s){ return '<option value="' + s + '"' + ((data.status || 'Pending') === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
-                '</select>' +
-                '<button type="button" class="task-del-btn" title="Remove task"><span class="material-symbols-outlined">close</span></button>' +
-            '</div>';
-
-        row.querySelector('.task-del-btn').addEventListener('click', function () {
-            row.remove(); reindex(); updateTotal();
-        });
-        return row;
+    // ── Form toast ─────────────────────────────────────────────
+    var _toastTimer = null;
+    function showFormToast(msg) {
+        var t = document.getElementById('formToast');
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add('show');
+        clearTimeout(_toastTimer);
+        _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 4500);
     }
 
-    // ── Build a full phase item element ────────────────────────
+    // ── Build a milestone card element ─────────────────────────
     function buildPhaseItem(pi, data) {
         data = data || {};
-        var item = document.createElement('div');
-        item.className = 'phase-item';
-        item.dataset.pidx = pi;
-        item.innerHTML =
-            '<div class="phase-hdr-row">' +
-                '<input type="text" name="phases[' + pi + '][name]" class="phase-name-inp" placeholder="Phase name" value="' + escHtml(data.name || '') + '">' +
-                '<div class="phase-weight-cell">' +
+        var unitOpts = UNITS.map(function (u) {
+            return '<option value="' + u + '"' + ((data.unit || 'pcs') === u ? ' selected' : '') + '>' + u + '</option>';
+        }).join('');
+
+        var card = document.createElement('div');
+        card.className  = 'phase-card';
+        card.dataset.pidx = pi;
+        card.setAttribute('draggable', 'true');
+        card.innerHTML =
+            '<span class="phase-drag-handle material-symbols-outlined" title="Drag to reorder">drag_indicator</span>' +
+            '<input type="text" name="phases[' + pi + '][name]" class="phase-card-name-inp" placeholder="Milestone name" value="' + escHtml(data.name || '') + '">' +
+            '<div class="phase-field f-weight">' +
+                '<span class="phase-field-lbl">Weight %</span>' +
+                '<div class="phase-weight-group">' +
                     '<input type="number" name="phases[' + pi + '][weight]" class="phase-weight-inp" min="0" max="100" step="0.1" value="' + (data.weight != null ? data.weight : '') + '">' +
-                    '<span class="pct-label">%</span>' +
-                '</div>' +
-                '<div class="phase-actions">' +
-                    '<button type="button" class="phase-del-btn" title="Delete phase"><span class="material-symbols-outlined">delete</span></button>' +
-                    '<button type="button" class="phase-toggle-btn" title="Toggle tasks"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>' +
+                    '<span class="phase-weight-unit">%</span>' +
                 '</div>' +
             '</div>' +
-            '<div class="phase-tasks-wrap" style="display:none">' +
-                '<button type="button" class="btn-add-task">+ Add Task</button>' +
+            '<button type="button" class="phase-del-btn" title="Delete milestone"><span class="material-symbols-outlined">delete</span></button>' +
+            '<div class="phase-row2">' +
+                '<div class="phase-field f-qty">' +
+                    '<span class="phase-field-lbl">Qty</span>' +
+                    '<input type="number" name="phases[' + pi + '][qty]" class="phase-card-inp" min="0" value="' + (data.qty != null ? data.qty : 1) + '">' +
+                '</div>' +
+                '<div class="phase-field f-unit">' +
+                    '<span class="phase-field-lbl">Unit</span>' +
+                    '<select name="phases[' + pi + '][unit]" class="phase-card-sel">' + unitOpts + '</select>' +
+                '</div>' +
+                '<div class="phase-field f-date">' +
+                    '<span class="phase-field-lbl">Target Date</span>' +
+                    '<div class="date-picker phase-card-date-picker">' +
+                        '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
+                        '<input type="hidden" name="phases[' + pi + '][site_date]" value="' + escHtml(data.site_date || '') + '">' +
+                        '<button type="button" class="date-toggle">\u{1F4C5}</button>' +
+                        '<div class="calendar-popup" aria-hidden="true"></div>' +
+                    '</div>' +
+                '</div>' +
             '</div>';
 
-        var tasksWrap = item.querySelector('.phase-tasks-wrap');
-        var addTaskBtn2 = item.querySelector('.btn-add-task');
-
-        // Pre-populate tasks
-        if (data.tasks && data.tasks.length) {
-            data.tasks.forEach(function (t, ti) {
-                tasksWrap.insertBefore(buildTaskRow(pi, ti, t), addTaskBtn2);
-            });
+        if (typeof window.initPhaseDatePicker === 'function') {
+            window.initPhaseDatePicker(card.querySelector('.date-picker'));
         }
 
-        // Weight input → update total
-        item.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
-
-        // Delete phase
-        item.querySelector('.phase-del-btn').addEventListener('click', function () {
-            item.remove(); reindex(); updateTotal();
+        card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        card.querySelector('.phase-del-btn').addEventListener('click', function () {
+            card.remove(); reindex(); updateTotal();
         });
-
-        // Toggle expand / collapse
-        item.querySelector('.phase-toggle-btn').addEventListener('click', function () {
-            var wrap = item.querySelector('.phase-tasks-wrap');
-            var icon = this.querySelector('.material-symbols-outlined');
-            var open = wrap.style.display === 'none';
-            wrap.style.display = open ? '' : 'none';
-            icon.textContent = open ? 'keyboard_arrow_up' : 'keyboard_arrow_down';
-        });
-
-        // Add task button
-        addTaskBtn2.addEventListener('click', function () {
-            var ti = tasksWrap.querySelectorAll('.phase-task-row').length;
-            var newRow = buildTaskRow(pi, ti, {});
-            tasksWrap.insertBefore(newRow, addTaskBtn2);
-            reindex();
-        });
-
-        return item;
+        return card;
     }
 
-    // ── Attach events to PHP-rendered phase items ──────────────
-    function attachExistingPhase(item) {
-        var pi = parseInt(item.dataset.pidx, 10);
-        var tasksWrap = item.querySelector('.phase-tasks-wrap');
-        var addTaskBtn2 = item.querySelector('.btn-add-task');
-
-        item.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
-
-        item.querySelector('.phase-del-btn').addEventListener('click', function () {
-            item.remove(); reindex(); updateTotal();
-        });
-
-        item.querySelector('.phase-toggle-btn').addEventListener('click', function () {
-            var wrap = item.querySelector('.phase-tasks-wrap');
-            var icon = this.querySelector('.material-symbols-outlined');
-            var open = wrap.style.display === 'none';
-            wrap.style.display = open ? '' : 'none';
-            icon.textContent = open ? 'keyboard_arrow_up' : 'keyboard_arrow_down';
-        });
-
-        if (addTaskBtn2) {
-            addTaskBtn2.addEventListener('click', function () {
-                var ti = tasksWrap.querySelectorAll('.phase-task-row').length;
-                var newRow = buildTaskRow(pi, ti, {});
-                tasksWrap.insertBefore(newRow, addTaskBtn2);
-                reindex();
-            });
-        }
-
-        tasksWrap.querySelectorAll('.task-del-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                btn.closest('.phase-task-row').remove(); reindex(); updateTotal();
-            });
+    // ── Attach events to PHP-rendered cards (edit mode) ────────
+    function attachExistingCard(card) {
+        card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        card.querySelector('.phase-del-btn').addEventListener('click', function () {
+            card.remove(); reindex(); updateTotal();
         });
     }
-    container.querySelectorAll('.phase-item').forEach(attachExistingPhase);
+    container.querySelectorAll('.phase-card').forEach(attachExistingCard);
 
     // ── Add Phase button ───────────────────────────────────────
     if (addPhaseBtn) {
         addPhaseBtn.addEventListener('click', function () {
             if (checkbox && !checkbox.checked) { checkbox.checked = true; setSectionVisible(true); }
-            var pi = container.querySelectorAll('.phase-item').length;
+            var pi = container.querySelectorAll('.phase-card').length;
             container.appendChild(buildPhaseItem(pi, {}));
             updateTotal();
         });
     }
 
-    // ── Auto-fill phases when project type changes ─────────────
+    // ── Auto-fill milestones when tower type changes ───────────
     if (projectTypeEl) {
-        projectTypeEl.addEventListener('change', function () {
+        projectTypeEl.addEventListener('change', async function () {
             if (!this.value) return;
-            var existing = container.querySelectorAll('.phase-item').length;
+            var self = this;
+            var existing = container.querySelectorAll('.phase-card').length;
             if (existing > 0) {
-                if (!confirm('Auto-fill will replace the current phase schedule. Continue?')) return;
+                if (!await window.openConfirmForm('Auto-fill will replace the current milestone schedule. Continue?', 'warning')) return;
             }
+            var template = TEMPLATES[self.value] || TEMPLATES['_DEFAULT'];
             container.innerHTML = '';
-            PHASE_TEMPLATE.forEach(function (phase, pi) {
+            template.forEach(function (phase, pi) {
                 container.appendChild(buildPhaseItem(pi, phase));
             });
             if (checkbox && !checkbox.checked) { checkbox.checked = true; setSectionVisible(true); }
@@ -724,11 +835,81 @@ if (window.location.hostname === 'localhost') {
         });
     }
 
+    // ── Drag-sort (Notion-style) ───────────────────────────────
+    function enableDragSort(cont) {
+        var dragged      = null;
+        var fromHandle   = false;
+        var dropLine     = document.createElement('div');
+        dropLine.className = 'phase-drop-line';
+
+        // dragstart fires on the card element (.phase-card), so e.target is the card,
+        // not the handle. Track mousedown separately to know the drag origin.
+        cont.addEventListener('mousedown', function (e) {
+            fromHandle = !!e.target.closest('.phase-drag-handle');
+        });
+
+        cont.addEventListener('dragstart', function (e) {
+            var card = e.target.closest('.phase-card');
+            if (!card || !fromHandle) { e.preventDefault(); return; }
+            dragged = card;
+            e.dataTransfer.effectAllowed = 'move';
+            setTimeout(function () { if (dragged) dragged.classList.add('pz-dragging'); }, 0);
+        });
+
+        cont.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            var card = e.target.closest('.phase-card');
+            if (!card || card === dragged) return;
+            var rect = card.getBoundingClientRect();
+            if (e.clientY < rect.top + rect.height / 2) {
+                card.parentNode.insertBefore(dropLine, card);
+            } else {
+                card.parentNode.insertBefore(dropLine, card.nextSibling);
+            }
+        });
+
+        cont.addEventListener('dragleave', function (e) {
+            if (!cont.contains(e.relatedTarget)) dropLine.remove();
+        });
+
+        cont.addEventListener('drop', function (e) {
+            e.preventDefault();
+            if (!dragged || !dropLine.parentNode) return;
+            dropLine.parentNode.insertBefore(dragged, dropLine);
+            dropLine.remove();
+            dragged.classList.remove('pz-dragging');
+            dragged = null;
+            reindex();
+        });
+
+        cont.addEventListener('dragend', function () {
+            if (dragged) dragged.classList.remove('pz-dragging');
+            dropLine.remove();
+            dragged = null;
+        });
+    }
+
+    // ── Submit: block when total > 100% ───────────────────────
+    document.getElementById('projectForm').addEventListener('submit', function (e) {
+        if (!checkbox || !checkbox.checked) return;
+        var total = 0;
+        container.querySelectorAll('.phase-weight-inp').forEach(function (inp) {
+            total += parseFloat(inp.value) || 0;
+        });
+        total = Math.round(total * 10) / 10;
+        if (Math.abs(total - 100) > 0.5) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            showFormToast('Total milestone weight is ' + total.toFixed(1) + '% — must equal 100%. Adjust before saving.');
+        }
+    }, true);
+
     // ── Escape helper ──────────────────────────────────────────
     function escHtml(str) {
         return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    enableDragSort(container);
     updateTotal();
 }());
 </script>
@@ -815,7 +996,7 @@ document.addEventListener('DOMContentLoaded', function () {
         render();
     }
 
-    document.querySelectorAll('.date-picker').forEach(function (wrapper) {
+    function initDatePickerWrapper(wrapper) {
         var hidden = wrapper.querySelector('input[type="hidden"]');
         var display = wrapper.querySelector('.date-display');
         var toggle = wrapper.querySelector('.date-toggle');
@@ -823,7 +1004,10 @@ document.addEventListener('DOMContentLoaded', function () {
         createCalendar(popup, hidden, display);
         toggle.addEventListener('click', function () { var open = popup.classList.toggle('open'); popup.setAttribute('aria-hidden', !open); });
         document.addEventListener('click', function (e) { if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); } });
-    });
+    }
+
+    document.querySelectorAll('.date-picker').forEach(initDatePickerWrapper);
+    window.initPhaseDatePicker = initDatePickerWrapper;
 });
 </script>
 
@@ -835,6 +1019,56 @@ document.getElementById('projectForm').addEventListener('input', function (e) {
         e.target.setSelectionRange(pos, pos);
     }
 });
+</script>
+
+<div id="confirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="confirmIcon">warning</span>
+            <p class="confirm-hdr-title" id="confirmTitle">Confirm</p>
+        </div>
+        <div class="confirm-content"><p id="confirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="confirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="confirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+<div id="pzToast" class="custom-toast" aria-live="polite"></div>
+<script>
+(function () {
+    var toast = document.getElementById('pzToast');
+    window._pzToast = function (msg, type) {
+        if (!toast) return;
+        toast.className = 'custom-toast show ' + (type === 'error' ? 'error' : 'success');
+        toast.innerText = msg;
+        setTimeout(function () { toast.className = 'custom-toast'; }, 3000);
+    };
+    var cd = document.getElementById('confirmDialog');
+    var cm = document.getElementById('confirmMessage');
+    var _cr = null;
+    window.openConfirmForm = function (message, type) {
+        if (_cr) return Promise.resolve(false);
+        return new Promise(function (resolve) {
+            _cr = resolve;
+            var isArchive = type === 'archive';
+            cd.classList.toggle('confirm-archive', isArchive);
+            var icon  = document.getElementById('confirmIcon');
+            var title = document.getElementById('confirmTitle');
+            if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'warning';
+            if (title) title.textContent = isArchive ? 'Archive' : 'Confirm';
+            cm.innerText = message;
+            cd.classList.add('open');
+        });
+    };
+    document.getElementById('confirmOk')?.addEventListener('click', function () {
+        if (!_cr) return; var r = _cr; _cr = null; cd.classList.remove('open'); r(true);
+    });
+    document.getElementById('confirmCancel')?.addEventListener('click', function () {
+        if (!_cr) return; var r = _cr; _cr = null; cd.classList.remove('open'); r(false);
+    });
+})();
 </script>
 
 <?= $this->endSection() ?>

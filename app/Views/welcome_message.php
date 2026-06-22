@@ -2,7 +2,6 @@
 
 <?= $this->section('head') ?>
     <meta name="description" content="The small framework with powerful features">
-    <link rel="shortcut icon" type="image/png" href="/favicon.ico">
     <!-- Styles moved to public/css/styles.css (welcome_message rules) -->
     </style>
 <?= $this->endSection() ?>

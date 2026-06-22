@@ -2,7 +2,9 @@
 
 namespace App\Controllers;
 
+use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
+use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use Google\Cloud\Core\Timestamp;
 
@@ -12,12 +14,16 @@ class Staff extends BaseController
     protected \App\Models\Model_Users $usersModel;
 
     public function __construct() {
-        $this->firestore = new FirestoreService();
+        $this->firestore = FirestoreService::getInstance();
         $this->usersModel = new Model_Users();
     }
 
     public function index()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('view_staff')) return redirect()->to('dashboard');
+
         try {
             // Fetch staff from Firestore, order by created_at ascending so new records appear at the bottom
             $db = $this->firestore->getDb();
@@ -105,18 +111,24 @@ class Staff extends BaseController
             $offset    = ($currentPage - 1) * $perPage;
             $pagedStaff = array_slice($staff, $offset, $perPage);
 
+            $trashService    = new TrashService($this->firestore);
+            $recentlyDeleted = $trashService->getTrashItems('staff');
+
             $data = [
-                'pageTitle'     => 'Staff',
-                'activePage'    => 'staff',
-                'staff'         => $pagedStaff,
-                'pagerOffset'   => $offset,
-                'roleOptions'   => $roleOptions,
-                'activeFilters' => [
+                'pageTitle'       => 'Staff',
+                'activePage'      => 'staff',
+                'staff'           => $pagedStaff,
+                'staffTotal'      => $total,
+                'perPage'         => $perPage,
+                'pagerOffset'     => $offset,
+                'roleOptions'     => $roleOptions,
+                'activeFilters'   => [
                     'ln_range'    => $filterLnRange,
                     'role_filter' => $filterRole,
                 ],
-                'userName' => session()->get('userName') ?? 'User',
-                'role'     => session()->get('role') ?? 'Staff',
+                'recentlyDeleted' => $recentlyDeleted,
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
             ];
 
             return view('staff/staff_view', $data);
@@ -124,15 +136,16 @@ class Staff extends BaseController
             log_message('error', 'Staff::index - ' . $e->getMessage());
 
             $data = [
-                'pageTitle'     => 'Staff',
-                'activePage'    => 'staff',
-                'staff'         => [],
-                'pagerOffset'   => 0,
-                'roleOptions'   => [],
-                'activeFilters' => [],
-                'userName'      => session()->get('userName') ?? 'User',
-                'role'          => session()->get('role') ?? 'Staff',
-                'error'         => 'Unable to fetch staff',
+                'pageTitle'       => 'Staff',
+                'activePage'      => 'staff',
+                'staff'           => [],
+                'pagerOffset'     => 0,
+                'roleOptions'     => [],
+                'activeFilters'   => [],
+                'recentlyDeleted' => [],
+                'userName'        => session()->get('userName') ?? 'User',
+                'role'            => session()->get('role') ?? 'Staff',
+                'error'           => 'Unable to fetch staff',
             ];
 
             return view('staff/staff_view', $data);
@@ -141,6 +154,10 @@ class Staff extends BaseController
 
     public function create()
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('create_staff')) return redirect()->to('staff')->with('error', 'Only Administrators may create new user accounts.');
+
         if (strtolower($this->request->getMethod()) === 'post') {
             // Validate using named rule group 'staff'
             if (! $this->validate('staff')) {
@@ -175,6 +192,20 @@ class Staff extends BaseController
 
                 // Use explicit ID so we can reliably trace new documents
                 $newId = bin2hex(random_bytes(8));
+
+                // Handle profile picture upload
+                $pic = $this->request->getFile('profile_picture');
+                if ($pic && $pic->isValid() && !$pic->hasMoved()) {
+                    $ext = strtolower($pic->getClientExtension());
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
+                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        $filename = $newId . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+                        $pic->move($uploadDir, $filename);
+                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
+                    }
+                }
+
                 $docRef = $this->firestore->getDb()->collection('users')->document($newId);
                 $docRef->set($data);
 
@@ -204,6 +235,10 @@ class Staff extends BaseController
 
     public function update($id)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_staff')) return redirect()->to('staff')->with('error', 'Access denied.');
+
         try {
             if (strtolower($this->request->getMethod()) === 'post') {
                 // Validate using Config\Validation 'staff' group
@@ -227,6 +262,23 @@ class Staff extends BaseController
                     $existing = $this->usersModel->getUserByEmail($newEmail);
                     if ($existing && $existing['id'] !== $id) {
                         return redirect()->back()->withInput()->with('error', 'Email is already in use by another staff member.');
+                    }
+                }
+
+                // Handle profile picture upload
+                $pic = $this->request->getFile('profile_picture');
+                if ($pic && $pic->isValid() && !$pic->hasMoved()) {
+                    $ext = strtolower($pic->getClientExtension());
+                    if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
+                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
+                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                        // Remove any previous photo for this user (any extension)
+                        foreach (glob($uploadDir . DIRECTORY_SEPARATOR . $id . '.*') ?: [] as $old) {
+                            @unlink($old);
+                        }
+                        $filename = $id . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
+                        $pic->move($uploadDir, $filename);
+                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
                     }
                 }
 
@@ -276,8 +328,111 @@ class Staff extends BaseController
         }
     }
 
+    public function resendCredentials($id)
+    {
+        try {
+            $doc = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
+            if (!$doc->exists()) {
+                return redirect()->to('staff')->with('error', 'Staff member not found.');
+            }
+
+            $data      = $doc->data();
+            $email     = $data['email']      ?? '';
+            $firstName = $data['first_name'] ?? 'Staff';
+
+            if ($email === '') {
+                return redirect()->back()->with('error', 'Staff member has no email on record.');
+            }
+
+            $tempPassword = $this->generateTempPassword();
+
+            // Update Firebase Auth password
+            $firebaseAuth = $this->firestore->getAuth();
+            $firebaseAuth->updateUser($id, ['password' => $tempPassword]);
+
+            // Reset must_change_password + fresh 15-minute expiry
+            $this->firestore->getDb()->collection('users')->document($id)->update([
+                ['path' => 'must_change_password',     'value' => true],
+                ['path' => 'temp_password_expires_at', 'value' => time() + (15 * 60)],
+            ]);
+
+            $this->sendWelcomeEmail($email, $firstName, $tempPassword);
+
+            return redirect()->to('staff/show/' . $id)->with('success', 'New credentials sent to ' . $email . '. The temporary password expires in 15 minutes.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Staff::resendCredentials - ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to resend credentials: ' . $e->getMessage());
+        }
+    }
+
+    public function deleted(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new TrashService($this->firestore))->getTrashItems('staff');
+        return view('shared/module_deleted', [
+            'pageTitle'  => 'Deleted Staff',
+            'activePage' => 'staff',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'staff',
+            'title'      => 'Deleted Staff',
+            'backUrl'    => base_url('staff'),
+            'items'      => $items,
+        ]);
+    }
+
+    public function archived(): string|object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        $items = (new ArchiveService($this->firestore))->getArchivedItems('staff');
+        return view('shared/module_archived', [
+            'pageTitle'  => 'Archived Staff',
+            'activePage' => 'staff',
+            'userName'   => session()->get('userName') ?? 'User',
+            'role'       => session()->get('role') ?? 'Staff',
+            'module'     => 'staff',
+            'title'      => 'Archived Staff',
+            'backUrl'    => base_url('staff'),
+            'items'      => $items,
+        ]);
+    }
+
+    public function archive(): object
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_staff')) {
+            return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+        }
+        try {
+            $id = trim((string)($this->request->getPost('id') ?? ''));
+            if (!$id) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
+
+            $snap = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
+            $data = $snap->exists() ? $snap->data() : [];
+            $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $id);
+
+            (new ArchiveService($this->firestore))->moveToArchive('staff', $id, $name, $data, [], session()->get('userName'));
+            $this->firestore->getDb()->collection('users')->document($id)->delete();
+
+            return $this->response->setJSON(['success' => true, 'name' => $name]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Staff::archive - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
+        }
+    }
+
     public function delete($id = null)
     {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+        helper('access');
+        if (!pz_can('edit_staff')) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+            }
+            return redirect()->to('staff')->with('error', 'Access denied.');
+        }
+
         // If this is an AJAX/POST request, expect the ID in POST and return JSON
         if (strtolower($this->request->getMethod()) === 'post') {
             try {
@@ -292,9 +447,23 @@ class Staff extends BaseController
                     return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
                 }
 
+                // Soft-delete: snapshot then move to trash (do NOT delete Firebase Auth here)
+                $snap = $this->firestore->getDb()->collection('users')->document($idFromPost)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $idFromPost);
+                $trashId = (new TrashService($this->firestore))->moveToTrash('staff', $idFromPost, $name, $data, [], session()->get('userName'));
+
+                // Only delete the Firestore doc (Auth deletion deferred to permanent delete)
                 $this->firestore->getDb()->collection('users')->document($idFromPost)->delete();
 
-                return $this->response->setJSON(['success' => true, 'message' => 'Staff member deleted']);
+                return $this->response->setJSON([
+                    'success'    => true,
+                    'message'    => 'Staff member deleted',
+                    'trash_id'   => $trashId,
+                    'name'       => $name,
+                    'deleted_by' => session()->get('userName') ?? 'System',
+                    'deleted_at' => time(),
+                ]);
             } catch (\Exception $e) {
                 log_message('error', 'Staff::delete (ajax) - ' . $e->getMessage());
                 return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Failed to delete staff member']);
@@ -304,6 +473,12 @@ class Staff extends BaseController
         // Fallback: traditional GET with segment - redirect back to staff list
         if ($id !== null) {
             try {
+                // Soft-delete: snapshot then move to trash (do NOT delete Firebase Auth here)
+                $snap = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
+                $data = $snap->exists() ? $snap->data() : [];
+                $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $id);
+                (new TrashService($this->firestore))->moveToTrash('staff', $id, $name, $data, [], session()->get('userName'));
+
                 $this->firestore->getDb()->collection('users')->document($id)->delete();
                 return redirect()->to('staff')->with('success', 'Staff member deleted successfully!');
             } catch (\Exception $e) {
