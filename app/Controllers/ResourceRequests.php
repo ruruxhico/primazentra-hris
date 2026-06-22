@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
+use App\Libraries\MLServiceClient;
 use App\Libraries\TrashService;
 use App\Models\Model_ResourceRequests;
 use App\Models\Model_Projects;
@@ -100,21 +101,98 @@ class ResourceRequests extends BaseController
         try {
             $raw = $this->projectModel->getAllProjects();
             foreach ($raw as $p) {
+                $geopoint = $p['location']['geopoint'] ?? [];
                 $projects[] = [
                     'id'    => $p['id'],
                     'label' => strtoupper(trim($p['project_name'] ?? $p['id'])),
+                    'lat'   => isset($geopoint['lat']) ? (float)$geopoint['lat'] : null,
+                    'lng'   => isset($geopoint['lng']) ? (float)$geopoint['lng'] : null,
                 ];
             }
         } catch (\Throwable $e) {
             log_message('warning', 'ResourceRequests::show projects - ' . $e->getMessage());
         }
 
+        $recommendedBest    = null;
+        $recommendedNearest = null;
+
+        if (in_array(strtolower($req['status'] ?? ''), ['pending', 'pending secondary', 'pending secondary approval'])) {
+            try {
+                $mlService = new MLServiceClient();
+                $destPid   = $req['destination_project_id'] ?? '';
+                $siteLat   = 14.5995;
+                $siteLng   = 120.9842;
+
+                if ($destPid) {
+                    foreach ($projects as $proj) {
+                        if ($proj['id'] === $destPid) {
+                            $siteLat = (float)($proj['lat'] ?? $siteLat);
+                            $siteLng = (float)($proj['lng'] ?? $siteLng);
+                            break;
+                        }
+                    }
+                }
+
+                $releasedPayload = [];
+                foreach ($projects as $proj) {
+                    if ($proj['id'] !== $destPid) {
+                        $releasedPayload[] = [
+                            'project_id'     => $proj['id'],
+                            'project_name'   => $proj['label'],
+                            'lat'            => (float)($proj['lat'] ?? 14.5995),
+                            'lng'            => (float)($proj['lng'] ?? 120.9842),
+                            'tool_category'  => $req['category'] ?? 'Equipment',
+                            'units_released' => 1,
+                        ];
+                    }
+                }
+
+                if (!empty($releasedPayload)) {
+                    $mlCfg = new \Config\MLService();
+                    $result = $mlService->predictToolAvailability([
+                        'tool_category'  => $req['category'] ?? 'Equipment',
+                        'site_lat'       => $siteLat,
+                        'site_lng'       => $siteLng,
+                        'radius_km'      => 500,
+                        'weights'        => [
+                            'distance_weight'     => $mlCfg->mcdaDistanceWeight,
+                            'availability_weight' => $mlCfg->mcdaAvailabilityWeight,
+                        ],
+                        'released_tools' => $releasedPayload,
+                    ]);
+
+                    $siteList = $result['optimized_tools'] ?? $result['predictions'] ?? (isset($result[0]) ? $result : []);
+                    if (!empty($siteList) && !isset($result['error'])) {
+                        $highestScore   = -1;
+                        $lowestDistance = 999999;
+                        foreach ($siteList as $site) {
+                            $score    = (float)($site['score'] ?? $site['overall_score'] ?? 0);
+                            $distance = (float)($site['distance_km'] ?? $site['distance'] ?? 999);
+                            $pid      = $site['project_id'] ?? '';
+                            if ($score > $highestScore) {
+                                $highestScore   = $score;
+                                $recommendedBest = ['project_id' => $pid, 'project_name' => $site['project_name'] ?? 'Unknown', 'score' => round($score, 2), 'distance_km' => round($distance, 1)];
+                            }
+                            if ($distance < $lowestDistance) {
+                                $lowestDistance     = $distance;
+                                $recommendedNearest = ['project_id' => $pid, 'project_name' => $site['project_name'] ?? 'Unknown', 'distance_km' => round($distance, 1)];
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'ResourceRequests::show MCDA - ' . $e->getMessage());
+            }
+        }
+
         return view('requests/show', [
-            'pageTitle'  => 'Request Details',
-            'activePage' => 'resources',
-            'request'    => $req,
-            'projects'   => $projects,
-            'role'       => session()->get('role') ?? '',
+            'pageTitle'          => 'Request Details',
+            'activePage'         => 'resources',
+            'request'            => $req,
+            'projects'           => $projects,
+            'role'               => session()->get('role') ?? '',
+            'recommended_best'   => $recommendedBest,
+            'recommended_nearest'=> $recommendedNearest,
         ]);
     }
 

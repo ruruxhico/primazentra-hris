@@ -44,4 +44,19 @@ class MLServiceClient
             return ['error' => $e->getMessage()];
         }
     }
+
+    public function predictToolAvailability(array $sourcingData): array
+    {
+        try {
+            $response = Services::curlrequest()->post($this->baseUrl . '/predict/tool-availability', [
+                'json'            => $sourcingData,
+                'headers'         => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
+                'timeout'         => $this->timeout,
+                'connect_timeout' => 1,
+            ]);
+            return json_decode($response->getBody(), true) ?? [];
+        } catch (\Throwable $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
 }

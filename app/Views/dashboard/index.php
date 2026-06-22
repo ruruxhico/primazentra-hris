@@ -154,22 +154,37 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     <div class=”pz-sc-row” style=”display:flex;gap:.75rem;align-items:flex-start;”>
 
         <!-- Available Tools -->
+        <?php
+        $usingMcdaTools = !empty($availableToolsMcda);
+        $toolsDisplay   = $usingMcdaTools ? $availableToolsMcda : $availableTools;
+        ?>
         <div style=”flex:1 1 0;min-width:0;”>
             <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:0;”>
-                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Available Tools</div>
-                <?php if (empty($availableTools)): ?>
+                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>
+                    Available Tools
+                    <?php if ($usingMcdaTools): ?>
+                        <span style=”font-size:.68rem;font-weight:600;color:#1e6b45;margin-left:6px;letter-spacing:0;”>AI-Optimized</span>
+                    <?php endif; ?>
+                </div>
+                <?php if (empty($toolsDisplay)): ?>
                     <p style=”text-align:center;font-style:italic;color:#888;margin:.6rem;font-size:.82rem;”>No tools available.</p>
                 <?php else: ?>
                 <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
                     <thead><tr>
                         <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Name</th>
                         <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:3.5rem;text-align:center;”>Qty</th>
+                        <?php if ($usingMcdaTools): ?>
+                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Next Deployment</th>
+                        <?php endif; ?>
                     </tr></thead>
                     <tbody>
-                    <?php foreach ($availableTools as $t): ?>
+                    <?php foreach ($toolsDisplay as $t): ?>
                     <tr>
                         <td style=”font-weight:700;”><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
-                        <td style=”text-align:center;color:#5a3e00;”><?= esc((string)($t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                        <td style=”text-align:center;color:#5a3e00;”><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                        <?php if ($usingMcdaTools): ?>
+                        <td style=”color:#5a3e00;font-size:.75rem;”><?= esc($t['next_deployment'] ?? '—') ?></td>
+                        <?php endif; ?>
                     </tr>
                     <?php endforeach; ?>
                     </tbody>
