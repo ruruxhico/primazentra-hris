@@ -22,6 +22,15 @@ class Messages extends BaseController
     {
         if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
 
+        $uid = (string)(session()->get('userId') ?? '');
+        if ($uid) {
+            try {
+                (new \App\Services\NotificationService())->markTypeAsRead($uid, 'messageSent');
+            } catch (\Throwable $e) {
+                log_message('error', 'Messages::index markTypeAsRead: ' . $e->getMessage());
+            }
+        }
+
         return view('messages/index', [
             'pageTitle' => 'Messages',
             'role'      => session()->get('role') ?? '',

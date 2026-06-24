@@ -15,7 +15,8 @@ class TrashService
         string $module, string $originalId, string $name,
         array $data, array $subcollections = [], ?string $deletedBy = null
     ): string {
-        $now = time();
+        $now       = new \Google\Cloud\Core\Timestamp(new \DateTime());
+        $expiresAt = new \Google\Cloud\Core\Timestamp(new \DateTime('@' . (time() + 30 * 86400)));
         $ref = $this->db->collection('recently_deleted')->newDocument();
         $ref->set([
             'original_id'    => $originalId,
@@ -25,7 +26,7 @@ class TrashService
             'subcollections' => $subcollections,
             'deleted_at'     => $now,
             'deleted_by'     => $deletedBy ?? 'System',
-            'expires_at'     => $now + (30 * 86400),
+            'expires_at'     => $expiresAt,
         ]);
         return $ref->id();
     }

@@ -56,6 +56,24 @@ class NotificationService
         if ($count > 0) $batch->commit();
     }
 
+    public function markTypeAsRead(string $userId, string $type): void
+    {
+        $docs = $this->db->collection('notifications')->document($userId)
+            ->collection('items')
+            ->where('isRead', '=', false)
+            ->where('type', '=', $type)
+            ->documents();
+
+        $batch = $this->db->batch();
+        $count = 0;
+        foreach ($docs as $doc) {
+            if (!$doc->exists()) continue;
+            $batch->update($doc->reference(), [['path' => 'isRead', 'value' => true]]);
+            $count++;
+        }
+        if ($count > 0) $batch->commit();
+    }
+
     public function getRecent(string $userId, int $limit = 20): array
     {
         $docs = $this->db->collection('notifications')->document($userId)

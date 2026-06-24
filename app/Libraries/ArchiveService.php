@@ -22,7 +22,7 @@ class ArchiveService
             'name'           => $name,
             'data'           => $data,
             'subcollections' => $subcollections,
-            'archived_at'    => time(),
+            'archived_at'    => new \Google\Cloud\Core\Timestamp(new \DateTime()),
             'archived_by'    => $archivedBy ?? 'System',
         ]);
         return $ref->id();
@@ -37,8 +37,18 @@ class ArchiveService
             if (($d['module'] ?? '') !== $module) continue;
             $items[] = ['id' => $doc->id()] + $d;
         }
-        usort($items, fn($a, $b) => ($b['archived_at'] ?? 0) <=> ($a['archived_at'] ?? 0));
+        usort($items, fn($a, $b) =>
+            $this->toUnix($b['archived_at'] ?? 0) <=> $this->toUnix($a['archived_at'] ?? 0)
+        );
         return $items;
+    }
+
+    private function toUnix(mixed $value): int
+    {
+        if ($value instanceof \Google\Cloud\Core\Timestamp) {
+            return $value->get()->getTimestamp();
+        }
+        return (int) $value;
     }
 
     public function getArchivedDoc(string $archiveId): array

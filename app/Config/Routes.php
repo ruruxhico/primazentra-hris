@@ -22,7 +22,10 @@ $routes->post('auth/logout', 'Auth::logout');
 $routes->get('change-password', 'Auth::changePassword');
 $routes->post('auth/processChangePassword', 'Auth::processChangePassword');
 
+$routes->get('auth/firebase-token', 'Auth::firebaseToken');
+
 $routes->get('dashboard', 'Dashboard::index');
+$routes->get('dashboard/live', 'Dashboard::live');
 
 // Google Maps API proxy (server-side; keeps API key out of the browser)
 $routes->get('maps/geocode',  'Maps::geocode');
@@ -83,7 +86,8 @@ $routes->get('requests/(:segment)',               'ResourceRequests::show/$1');
 $routes->post('requests/store',                   'ResourceRequests::store');
 $routes->post('requests/approve/(:segment)',       'ResourceRequests::approve/$1');
 $routes->post('requests/approve-secondary/(:segment)', 'ResourceRequests::approveSecondary/$1');
-$routes->post('requests/reject/(:segment)',        'ResourceRequests::reject/$1');
+$routes->post('requests/reject/(:segment)',          'ResourceRequests::reject/$1');
+$routes->post('requests/accept-delivery/(:segment)', 'ResourceRequests::acceptDelivery/$1');
 
 // Resources Routes
 $routes->get('resources/deleted',  'Resources::deleted');

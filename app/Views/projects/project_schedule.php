@@ -59,15 +59,15 @@
                     <span class="material-symbols-outlined ps-ms-drag">drag_indicator</span>
                     <input type="text" class="ps-ms-name"
                            name="milestones[<?= $i ?>][name]"
-                           value="<?= esc($m['name'] ?? '') ?>"
+                           value="<?= esc($m['milestone_name'] ?? $m['name'] ?? '') ?>"
                            placeholder="Milestone name" required>
                     <input type="number" class="ps-ms-num weight-input"
                            name="milestones[<?= $i ?>][weight]"
-                           value="<?= esc($m['weight'] ?? 0) ?>"
+                           value="<?= esc($m['weight_percent'] ?? $m['weight'] ?? 0) ?>"
                            step="0.1" min="0" max="100" placeholder="0">
                     <input type="number" class="ps-ms-num"
                            name="milestones[<?= $i ?>][qty]"
-                           value="<?= esc($m['qty'] ?? 1) ?>"
+                           value="<?= esc($m['target_quantity'] ?? $m['qty'] ?? 1) ?>"
                            step="1" min="1" placeholder="1">
                     <select class="ps-ms-select" name="milestones[<?= $i ?>][unit]">
                         <?php foreach ($units as $u): ?>
@@ -76,7 +76,7 @@
                     </select>
                     <input type="date" class="ps-ms-date"
                            name="milestones[<?= $i ?>][target_date]"
-                           value="<?= esc($m['targetDate'] ?? '') ?>">
+                           value="<?= esc($m['target_date'] ?? $m['targetDate'] ?? '') ?>">
                     <button type="button" class="ps-ms-del" onclick="removeRow(this)" title="Remove">
                         <span class="material-symbols-outlined">delete</span>
                     </button>

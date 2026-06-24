@@ -29,12 +29,12 @@
     <!-- ── Assigned Resources ──────────────────────────────────── -->
     <p class="pres-section-label">Assigned Resources</p>
 
-    <?php if (empty($assignedManpower) && empty($assignedEqGroups)): ?>
-        <p class="pres-empty">No resources assigned to this project yet.</p>
-    <?php else: ?>
-    <div class="pres-assigned-grid">
+    <div id="assignedSection">
+    <p class="pres-empty" id="assignedEmpty"<?php if (!empty($assignedManpower) || !empty($assignedEqGroups)): ?> style="display:none"<?php endif; ?>>No resources assigned to this project yet.</p>
+    <?php if (!empty($assignedManpower) || !empty($assignedEqGroups)): ?>
+    <div class="pres-assigned-grid" id="assignedGrid">
         <?php foreach ($assignedEqGroups as $g): ?>
-        <div class="pres-assigned-card">
+        <div class="pres-assigned-card" data-ref-id="eq:<?= esc($g['id']) ?>">
             <span class="material-symbols-outlined pres-assigned-icon">build</span>
             <div>
                 <div class="pres-assigned-name"><?= esc(strtoupper($g['name'])) ?></div>
@@ -43,7 +43,7 @@
         </div>
         <?php endforeach; ?>
         <?php foreach ($assignedManpower as $a): ?>
-        <div class="pres-assigned-card">
+        <div class="pres-assigned-card" data-ref-id="mp:<?= esc($a['id']) ?>">
             <span class="material-symbols-outlined pres-assigned-icon">person</span>
             <div>
                 <div class="pres-assigned-name"><?= esc(strtoupper($a['name'])) ?></div>
@@ -52,6 +52,7 @@
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
+    </div>
 
     <hr class="pres-divider">
 
@@ -78,6 +79,7 @@
             <button class="pres-role-chip active" id="roleChipAll" data-role="">ALL</button>
             <button class="pres-role-chip" id="roleChipFW" data-role="FIELD WORKER">FIELD WORKER</button>
             <button class="pres-role-chip" id="roleChipFM" data-role="FOREMAN">FOREMAN</button>
+            <input type="text" id="mpResSearch" placeholder="Search name…" style="margin-left:auto;padding:5px 10px;border:1px solid #d4c185;border-radius:6px;font-size:0.8rem;width:180px;outline:none;">
         </div>
 
         <?php if (empty($allManpower)): ?>
@@ -110,7 +112,7 @@
             <button class="pres-btn pres-btn-remove"
                     data-action="unassign"
                     data-assignment-id="<?= esc($assignmentId) ?>">REMOVE</button>
-            <?php elseif ($mpStatus === 'Available'): ?>
+            <?php elseif (strtoupper($mpStatus) === 'AVAILABLE'): ?>
             <button class="pres-btn pres-btn-assign"
                     data-action="assign"
                     data-type="manpower"
@@ -128,6 +130,7 @@
 
     <!-- ── EQUIPMENT panel ────────────────────────────────────── -->
     <div class="pres-tab-panel" id="panel-equipment">
+        <input type="text" id="eqResSearch" placeholder="Search equipment…" style="display:block;width:100%;box-sizing:border-box;margin-bottom:10px;padding:6px 12px;border:1px solid #d4c185;border-radius:6px;font-size:0.82rem;outline:none;">
         <?php if (empty($allEquipment)): ?>
         <p class="pres-empty">No equipment found.</p>
         <?php else: ?>
@@ -137,11 +140,11 @@
             $eqName    = strtoupper($eq['name'] ?? '');
             $eqStats   = $resourceItemStats[$eqId] ?? ['total' => 0, 'available' => 0, 'assigned' => 0];
         ?>
-        <div class="pres-res-card pres-res-card-col">
+        <div class="pres-res-card pres-res-card-col" data-res-id="<?= esc($eqId) ?>">
             <div class="pres-res-info">
                 <div class="pres-res-name"><?= esc($eqName) ?></div>
                 <div class="pres-res-sub">Equipment model</div>
-                <div class="pres-res-sub">&bull; <?= (int)$eqStats['assigned'] ?> assigned unit(s)</div>
+                <div class="pres-res-sub pres-res-assigned">&bull; <?= (int)$eqStats['assigned'] ?> assigned unit(s)</div>
                 <div class="pres-res-sub pres-res-avail">&bull; <?= (int)$eqStats['available'] ?> available unit(s)</div>
             </div>
             <div class="pres-res-actions">
@@ -164,6 +167,7 @@
 
     <!-- ── TOOLS panel ────────────────────────────────────────── -->
     <div class="pres-tab-panel" id="panel-tools">
+        <input type="text" id="toolResSearch" placeholder="Search tools…" style="display:block;width:100%;box-sizing:border-box;margin-bottom:10px;padding:6px 12px;border:1px solid #d4c185;border-radius:6px;font-size:0.82rem;outline:none;">
         <?php if (empty($allTools)): ?>
         <p class="pres-empty">No tools found.</p>
         <?php else: ?>
@@ -173,11 +177,11 @@
             $toolName  = strtoupper($tool['name'] ?? '');
             $toolStats = $resourceItemStats[$toolId] ?? ['total' => 0, 'available' => 0, 'assigned' => 0];
         ?>
-        <div class="pres-res-card pres-res-card-col">
+        <div class="pres-res-card pres-res-card-col" data-res-id="<?= esc($toolId) ?>">
             <div class="pres-res-info">
                 <div class="pres-res-name"><?= esc($toolName) ?></div>
                 <div class="pres-res-sub">Tool</div>
-                <div class="pres-res-sub">&bull; <?= (int)$toolStats['assigned'] ?> assigned unit(s)</div>
+                <div class="pres-res-sub pres-res-assigned">&bull; <?= (int)$toolStats['assigned'] ?> assigned unit(s)</div>
                 <div class="pres-res-sub pres-res-avail">&bull; <?= (int)$toolStats['available'] ?> available unit(s)</div>
             </div>
             <div class="pres-res-actions">
@@ -297,10 +301,10 @@
 
 <script>
 (function () {
-    var PID      = '<?= esc($projectId) ?>';
-    var CSRF_N   = '<?= csrf_token() ?>';
-    var CSRF_V   = '<?= csrf_hash() ?>';
-    var BASE     = '<?= base_url() ?>';
+    var PID    = '<?= esc($projectId) ?>';
+    var CSRF_N = '<?= csrf_token() ?>';
+    var CSRF_V = '<?= csrf_hash() ?>';
+    var BASE   = '<?= base_url() ?>';
 
     /* ── Client-side grid pager ── */
     var mpPager, eqPager, toolsPager;
@@ -392,14 +396,50 @@
         });
     }());
 
-    /* ── Tabs ── */
+    /* ── Resource card live search ── */
+    (function () {
+        function wireCardSearch(inputId, gridId, pagerRef) {
+            var inp  = document.getElementById(inputId);
+            var grid = document.getElementById(gridId);
+            if (!inp || !grid) return;
+            inp.addEventListener('input', function () {
+                var q = this.value.trim().toLowerCase();
+                grid.querySelectorAll('.pres-res-card').forEach(function (card) {
+                    var text = card.textContent.toLowerCase();
+                    var roleHidden = card.classList.contains('role-hidden');
+                    card.style.display = (!q || text.includes(q)) && !roleHidden ? '' : 'none';
+                });
+                if (pagerRef && pagerRef.reset) pagerRef.reset();
+            });
+        }
+        wireCardSearch('mpResSearch',   'mpGrid',    mpPager);
+        wireCardSearch('eqResSearch',   'eqGrid',    eqPager);
+        wireCardSearch('toolResSearch', 'toolsGrid', toolsPager);
+    }());
+
+    /* ── Tabs (with sessionStorage persistence) ── */
+    var TAB_KEY = 'presTab_' + PID;
+
+    function activateTab(panelName) {
+        document.querySelectorAll('.pres-tab').forEach(function (t) { t.classList.remove('active'); });
+        document.querySelectorAll('.pres-tab-panel').forEach(function (p) { p.classList.remove('active'); });
+        var tab = document.querySelector('.pres-tab[data-panel="' + panelName + '"]');
+        if (tab) tab.classList.add('active');
+        var panel = document.getElementById('panel-' + panelName);
+        if (panel) panel.classList.add('active');
+    }
+
+    // Restore last active tab on load
+    (function () {
+        var saved = sessionStorage.getItem(TAB_KEY);
+        if (saved) activateTab(saved);
+    }());
+
     document.querySelectorAll('.pres-tab').forEach(function (tab) {
         tab.addEventListener('click', function () {
-            document.querySelectorAll('.pres-tab').forEach(function (t) { t.classList.remove('active'); });
-            document.querySelectorAll('.pres-tab-panel').forEach(function (p) { p.classList.remove('active'); });
-            tab.classList.add('active');
-            var panel = document.getElementById('panel-' + tab.dataset.panel);
-            if (panel) panel.classList.add('active');
+            var panelName = tab.dataset.panel;
+            activateTab(panelName);
+            try { sessionStorage.setItem(TAB_KEY, panelName); } catch (e) {}
         });
     });
 
@@ -426,7 +466,7 @@
         });
     });
 
-    /* ── Post helper ── */
+    /* ── Post helper (updates CSRF token from every response) ── */
     function post(url, data) {
         data[CSRF_N] = CSRF_V;
         return fetch(url, {
@@ -434,7 +474,108 @@
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams(data),
             credentials: 'same-origin',
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d && d.csrf_hash) CSRF_V = d.csrf_hash;
+            return d;
+        });
+    }
+
+    /* ── "Assigned Resources" section helpers ── */
+    function getOrCreateGrid() {
+        var grid = document.getElementById('assignedGrid');
+        if (!grid) {
+            var empty = document.getElementById('assignedEmpty');
+            if (empty) empty.style.display = 'none';
+            grid = document.createElement('div');
+            grid.className = 'pres-assigned-grid';
+            grid.id = 'assignedGrid';
+            document.getElementById('assignedSection').appendChild(grid);
+        }
+        return grid;
+    }
+
+    function checkAssignedEmpty() {
+        var grid = document.getElementById('assignedGrid');
+        if (grid && grid.children.length === 0) {
+            grid.remove();
+            var empty = document.getElementById('assignedEmpty');
+            if (empty) empty.style.display = '';
+        }
+    }
+
+    function addManpowerCard(mpId, name) {
+        var refId = 'mp:' + mpId;
+        var grid  = getOrCreateGrid();
+        if (grid.querySelector('[data-ref-id="' + refId + '"]')) return;
+        var card = document.createElement('div');
+        card.className = 'pres-assigned-card';
+        card.setAttribute('data-ref-id', refId);
+        card.innerHTML = '<span class="material-symbols-outlined pres-assigned-icon">person</span>' +
+            '<div><div class="pres-assigned-name">' + jEsc(name) + '</div></div>';
+        grid.appendChild(card);
+    }
+
+    function removeManpowerCard(mpId) {
+        var grid = document.getElementById('assignedGrid');
+        if (!grid) return;
+        var card = grid.querySelector('[data-ref-id="mp:' + mpId + '"]');
+        if (card) { card.remove(); checkAssignedEmpty(); }
+    }
+
+    function adjustEquipmentCard(resId, name, delta) {
+        var refId = 'eq:' + resId;
+        if (delta > 0) {
+            var grid  = getOrCreateGrid();
+            var existing = grid.querySelector('[data-ref-id="' + refId + '"]');
+            if (existing) {
+                var meta = existing.querySelector('.pres-assigned-meta');
+                if (meta) {
+                    var cur = parseInt(meta.textContent.replace(/\D/g, ''), 10) || 0;
+                    meta.textContent = (cur + delta) + ' assigned unit(s)';
+                }
+            } else {
+                var card = document.createElement('div');
+                card.className = 'pres-assigned-card';
+                card.setAttribute('data-ref-id', refId);
+                card.innerHTML = '<span class="material-symbols-outlined pres-assigned-icon">build</span>' +
+                    '<div><div class="pres-assigned-name">' + jEsc(name) + '</div>' +
+                    '<div class="pres-assigned-meta">' + delta + ' assigned unit(s)</div></div>';
+                grid.appendChild(card);
+            }
+        } else {
+            var grid2 = document.getElementById('assignedGrid');
+            if (!grid2) return;
+            var existing2 = grid2.querySelector('[data-ref-id="' + refId + '"]');
+            if (!existing2) return;
+            var meta2 = existing2.querySelector('.pres-assigned-meta');
+            if (meta2) {
+                var cur2 = parseInt(meta2.textContent.replace(/\D/g, ''), 10) || 0;
+                var newCount = cur2 + delta;
+                if (newCount <= 0) { existing2.remove(); checkAssignedEmpty(); }
+                else { meta2.textContent = newCount + ' assigned unit(s)'; }
+            }
+        }
+    }
+
+    function adjustResItemStats(resId, deltaAssigned, deltaAvail) {
+        var card = document.querySelector('.pres-res-card[data-res-id="' + resId + '"]');
+        if (!card) return;
+        var assignedSub = card.querySelector('.pres-res-assigned');
+        var availSub    = card.querySelector('.pres-res-avail');
+        if (assignedSub) {
+            var cur = parseInt(assignedSub.textContent.replace(/\D/g, ''), 10) || 0;
+            assignedSub.textContent = '• ' + Math.max(0, cur + deltaAssigned) + ' assigned unit(s)';
+        }
+        if (availSub) {
+            var cur2 = parseInt(availSub.textContent.replace(/\D/g, ''), 10) || 0;
+            availSub.textContent = '• ' + Math.max(0, cur2 + deltaAvail) + ' available unit(s)';
+        }
+        // Keep BULK button's data-available in sync
+        var bulkBtn = card.querySelector('[data-action="bulk-equipment"]');
+        if (bulkBtn) {
+            var curAvail = parseInt(bulkBtn.dataset.available, 10) || 0;
+            bulkBtn.dataset.available = Math.max(0, curAvail + deltaAvail);
+        }
     }
 
     /* ── Delegate clicks ── */
@@ -451,32 +592,87 @@
         if (action === 'bulk-equipment')  { doBulkEquipment(btn); }
     });
 
-    /* ── Individual manpower assign / unassign ── */
+    /* ── Individual manpower assign ── */
     function doAssign(btn) {
         btn.disabled = true; btn.textContent = '…';
+        var refId = btn.dataset.refId;
+        var name  = btn.dataset.name;
         post(BASE + 'projects/' + PID + '/resources/assign', {
             type:   btn.dataset.type,
-            ref_id: btn.dataset.refId,
-            name:   btn.dataset.name,
+            ref_id: refId,
+            name:   name,
         }).then(function (d) {
-            if (d.success) { location.reload(); }
-            else { showToast(d.message || 'Failed to assign'); btn.disabled = false; btn.textContent = 'ASSIGN'; }
-        }).catch(function () { showToast('Network error'); btn.disabled = false; btn.textContent = 'ASSIGN'; });
-    }
-
-    async function doUnassign(btn) {
-        if (!await openPresConfirm('Remove this assignment?', 'delete')) return;
-        btn.disabled = true;
-        post(BASE + 'projects/' + PID + '/resources/unassign', {
-            assignment_id: btn.dataset.assignmentId,
-        }).then(function (d) {
-            if (d.success) { location.reload(); }
-            else { showToast(d.message || 'Failed'); btn.disabled = false; }
+            if (d.success) {
+                var card = btn.closest('.pres-res-card');
+                var info = card.querySelector('.pres-res-info');
+                // Update or add site label
+                var siteDiv = card.querySelector('.pres-res-site');
+                if (siteDiv) {
+                    siteDiv.className   = 'pres-res-site pres-res-site-here';
+                    siteDiv.textContent = 'Assigned to this project';
+                } else {
+                    var div = document.createElement('div');
+                    div.className   = 'pres-res-site pres-res-site-here';
+                    div.textContent = 'Assigned to this project';
+                    info.appendChild(div);
+                }
+                // Replace ASSIGN with REMOVE
+                var removeBtn = document.createElement('button');
+                removeBtn.className = 'pres-btn pres-btn-remove';
+                removeBtn.dataset.action       = 'unassign';
+                removeBtn.dataset.assignmentId = d.assignment_id || ('mp:' + refId);
+                removeBtn.textContent = 'REMOVE';
+                btn.parentNode.replaceChild(removeBtn, btn);
+                // Update top assigned section
+                addManpowerCard(refId, name);
+                showToast(name + ' assigned.', 'success');
+            } else {
+                showToast(d.message || 'Failed to assign');
+                btn.disabled = false; btn.textContent = 'ASSIGN';
+            }
+        }).catch(function () {
+            showToast('Network error');
+            btn.disabled = false; btn.textContent = 'ASSIGN';
         });
     }
 
-    /* ── Equipment bulk assign modal ── */
+    /* ── Individual manpower unassign ── */
+    async function doUnassign(btn) {
+        if (!await openPresConfirm('Remove this assignment?', 'delete')) return;
+        btn.disabled = true;
+        var assignmentId = btn.dataset.assignmentId;
+        var mpId = assignmentId.slice(3); // strip 'mp:' prefix
+        var card = btn.closest('.pres-res-card');
+        var name = (card.querySelector('.pres-res-name') || {}).textContent || '';
+        post(BASE + 'projects/' + PID + '/resources/unassign', {
+            assignment_id: assignmentId,
+        }).then(function (d) {
+            if (d.success) {
+                // Remove site label
+                var siteDiv = card.querySelector('.pres-res-site');
+                if (siteDiv) siteDiv.remove();
+                // Replace REMOVE with ASSIGN
+                var assignBtn = document.createElement('button');
+                assignBtn.className = 'pres-btn pres-btn-assign';
+                assignBtn.dataset.action  = 'assign';
+                assignBtn.dataset.type    = 'manpower';
+                assignBtn.dataset.refId   = mpId;
+                assignBtn.dataset.name    = name;
+                assignBtn.textContent = 'ASSIGN';
+                btn.parentNode.replaceChild(assignBtn, btn);
+                // Update top assigned section
+                removeManpowerCard(mpId);
+                showToast('Assignment removed.', 'success');
+            } else {
+                showToast(d.message || 'Failed');
+                btn.disabled = false;
+            }
+        });
+    }
+
+    /* ── Equipment/Tools bulk assign modal ── */
     var bulkEqResourceId = '';
+    var bulkEqName       = '';
     var bulkEqAvail      = 0;
     var bulkEqQty        = 1;
 
@@ -489,11 +685,10 @@
         bulkEqResourceId = btn.dataset.resourceId;
         bulkEqAvail      = avail;
         bulkEqQty        = 1;
+        bulkEqName       = btn.closest('.pres-res-card').querySelector('.pres-res-name').textContent;
 
-        document.getElementById('bulkEqTitle').textContent =
-            btn.closest('.pres-res-card').querySelector('.pres-res-name').textContent;
-        document.getElementById('bulkEqSub').textContent =
-            avail + ' unit(s) available at warehouse';
+        document.getElementById('bulkEqTitle').textContent = bulkEqName;
+        document.getElementById('bulkEqSub').textContent   = avail + ' unit(s) available at warehouse';
         updateBulkEqDisplay();
         openModal('modalBulkEquipment');
     }
@@ -513,16 +708,21 @@
     document.getElementById('bulkEqConfirm').addEventListener('click', function () {
         var btn = this;
         btn.disabled = true; btn.textContent = 'Assigning…';
+        var resId = bulkEqResourceId;
+        var name  = bulkEqName;
         post(BASE + 'projects/' + PID + '/resources/bulk-assign-equipment', {
-            resource_id: bulkEqResourceId,
+            resource_id: resId,
             quantity:    bulkEqQty,
         }).then(function (d) {
             btn.disabled = false;
             updateBulkEqDisplay();
             if (d.success) {
+                var n = d.assigned;
                 closeModal('modalBulkEquipment');
-                showToast(d.assigned + ' unit(s) assigned successfully.', 'success');
-                setTimeout(function () { location.reload(); }, 900);
+                adjustResItemStats(resId, +n, -n);
+                adjustEquipmentCard(resId, name, +n);
+                bulkEqAvail = Math.max(0, bulkEqAvail - n);
+                showToast(n + ' unit(s) assigned successfully.', 'success');
             } else {
                 showToast(d.message || 'Failed to assign');
             }
@@ -533,15 +733,16 @@
         });
     });
 
-    /* ── Units modal ── */
-    var currentResId, currentResType;
+    /* ── Units modal (view specific units) ── */
+    var currentResId, currentResName;
 
     function openUnitsModal(btn) {
         currentResId   = btn.dataset.resourceId;
-        currentResType = btn.dataset.resourceType || 'Equipment';
-        document.getElementById('unitsModalTitle').textContent = btn.dataset.resourceName || '';
-        document.getElementById('unitsModalSub').textContent =
-            'Assign specific ' + currentResType + ' units from the resource list.';
+        currentResName = btn.dataset.resourceName || '';
+        var resType    = btn.dataset.resourceType || 'Equipment';
+        document.getElementById('unitsModalTitle').textContent = currentResName;
+        document.getElementById('unitsModalSub').textContent   =
+            'Assign specific ' + resType + ' units from the resource list.';
         document.getElementById('unitsModalBody').innerHTML = '<div style="color:#bbb;font-size:.87rem;padding:.5rem 0">Loading…</div>';
         openModal('modalUnits');
 
@@ -584,28 +785,67 @@
     }
 
     function doAssignUnit(btn) {
-        var name = document.getElementById('unitsModalTitle').textContent;
         btn.disabled = true; btn.textContent = '…';
+        var resId  = btn.dataset.resourceId;
+        var unitId = btn.dataset.unitId;
+        var name   = document.getElementById('unitsModalTitle').textContent;
         post(BASE + 'projects/' + PID + '/resources/assign', {
             type:      btn.dataset.type,
-            ref_id:    btn.dataset.resourceId,
+            ref_id:    resId,
             name:      name,
-            unit_id:   btn.dataset.unitId,
+            unit_id:   unitId,
             unit_name: btn.dataset.unitName,
         }).then(function (d) {
-            if (d.success) { location.reload(); }
-            else { showToast(d.message || 'Failed'); btn.disabled = false; btn.textContent = 'ASSIGN'; }
-        }).catch(function () { showToast('Network error'); btn.disabled = false; btn.textContent = 'ASSIGN'; });
+            if (d.success) {
+                // Update button in modal
+                var removeBtn = document.createElement('button');
+                removeBtn.className = 'pres-btn pres-btn-remove';
+                removeBtn.dataset.action       = 'unassign-unit';
+                removeBtn.dataset.assignmentId = d.assignment_id || ('unit:' + resId + ':' + unitId);
+                removeBtn.textContent = 'REMOVE';
+                btn.parentNode.replaceChild(removeBtn, btn);
+                // Update card stats + top section
+                adjustResItemStats(resId, +1, -1);
+                adjustEquipmentCard(resId, name, +1);
+                showToast('Unit assigned.', 'success');
+            } else {
+                showToast(d.message || 'Failed');
+                btn.disabled = false; btn.textContent = 'ASSIGN';
+            }
+        }).catch(function () {
+            showToast('Network error');
+            btn.disabled = false; btn.textContent = 'ASSIGN';
+        });
     }
 
     async function doUnassignUnit(btn) {
         if (!await openPresConfirm('Remove this unit from the project?', 'delete')) return;
         btn.disabled = true;
+        var assignId = btn.dataset.assignmentId; // 'unit:resId:unitId'
+        var parts    = assignId.split(':');
+        var resId    = parts[1];
+        var name     = document.getElementById('unitsModalTitle').textContent;
         post(BASE + 'projects/' + PID + '/resources/unassign', {
-            assignment_id: btn.dataset.assignmentId,
+            assignment_id: assignId,
         }).then(function (d) {
-            if (d.success) { location.reload(); }
-            else { showToast(d.message || 'Failed'); btn.disabled = false; }
+            if (d.success) {
+                // Restore button in modal
+                var assignBtn = document.createElement('button');
+                assignBtn.className = 'pres-btn pres-btn-assign';
+                assignBtn.dataset.action     = 'assign-unit';
+                assignBtn.dataset.resourceId = resId;
+                assignBtn.dataset.unitId     = parts[2];
+                assignBtn.dataset.type       = 'equipment';
+                assignBtn.textContent = 'ASSIGN';
+                btn.parentNode.replaceChild(assignBtn, btn);
+                // Update card stats + top section
+                adjustResItemStats(resId, -1, +1);
+                adjustEquipmentCard(resId, name, -1);
+                showToast('Unit removed.', 'success');
+            } else {
+                showToast(d.message || 'Failed');
+                btn.disabled = false;
+            }
         });
     }
 
@@ -644,8 +884,36 @@
             updateQtyDisplay();
             if (d.success) {
                 closeModal('modalBulkManpower');
+                // Update each assigned worker's card in-place
+                if (d.workers && d.workers.length) {
+                    d.workers.forEach(function (w) {
+                        var assignBtn = document.querySelector(
+                            '[data-action="assign"][data-type="manpower"][data-ref-id="' + w.id + '"]'
+                        );
+                        if (assignBtn) {
+                            var card = assignBtn.closest('.pres-res-card');
+                            var info = card.querySelector('.pres-res-info');
+                            var siteDiv = card.querySelector('.pres-res-site');
+                            if (siteDiv) {
+                                siteDiv.className   = 'pres-res-site pres-res-site-here';
+                                siteDiv.textContent = 'Assigned to this project';
+                            } else {
+                                var div = document.createElement('div');
+                                div.className   = 'pres-res-site pres-res-site-here';
+                                div.textContent = 'Assigned to this project';
+                                info.appendChild(div);
+                            }
+                            var removeBtn = document.createElement('button');
+                            removeBtn.className = 'pres-btn pres-btn-remove';
+                            removeBtn.dataset.action       = 'unassign';
+                            removeBtn.dataset.assignmentId = 'mp:' + w.id;
+                            removeBtn.textContent = 'REMOVE';
+                            assignBtn.parentNode.replaceChild(removeBtn, assignBtn);
+                            addManpowerCard(w.id, w.name);
+                        }
+                    });
+                }
                 showToast(d.assigned + ' worker(s) assigned successfully.', 'success');
-                setTimeout(function () { location.reload(); }, 900);
             } else {
                 showToast(d.message || 'Failed to assign workers');
             }
@@ -662,7 +930,7 @@
         });
     }
 
-    // ── Custom confirm ────────────────────────────────────────────
+    /* ── Custom confirm dialog ── */
     var _presConfirmResolve = null;
     var presCd = document.getElementById('presConfirmDialog');
     var presCm = document.getElementById('presConfirmMessage');

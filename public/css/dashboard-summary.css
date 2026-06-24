@@ -1,0 +1,227 @@
+/* Dashboard Summary Section */
+
+#summary.db-section {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 18px 24px 36px;
+}
+
+#summary .db-today {
+    margin: 0 0 2px;
+    color: #3f4d5e;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+#summary .db-today-date {
+    margin: 0 0 18px;
+    color: #12161d;
+    font-size: clamp(2rem, 2.8vw, 3.1rem);
+    line-height: 1.05;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+/* ── Card shell ── */
+.pz-sc {
+    background: #ffffff;
+    border: 1px solid #eadfbe;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(140, 112, 28, 0.07);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Card header ── */
+.pz-sc-head {
+    color: #8C701C;
+    text-align: center;
+    font-weight: 800;
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 11px 16px 9px;
+    background: linear-gradient(180deg, #fffdf8 0%, #fff7e6 100%);
+    border-bottom: 1px solid #eadfbe;
+    flex-shrink: 0;
+}
+
+/* ── Empty state ── */
+.pz-sc-empty {
+    text-align: center;
+    color: #6f5a28;
+    font-size: 0.88rem;
+    padding: 22px 16px;
+    margin: 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ── Two-column blocker layout ── */
+.pz-sc-cols {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    padding: 10px 14px 6px;
+    gap: 0;
+}
+
+.pz-sc-half {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.pz-sc-divider {
+    width: 1px;
+    background: #eadfbe;
+    margin: 0 10px;
+    flex-shrink: 0;
+}
+
+/* ── Table ── */
+.pz-sc-tbl {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 3px;
+    table-layout: fixed;
+}
+
+.pz-sc-tbl thead th {
+    background: #f4ead1;
+    color: #7a5c1e;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 7px 8px;
+    text-align: left;
+    letter-spacing: 0.06em;
+}
+
+.pz-sc-tbl thead th:first-child { border-radius: 7px 0 0 7px; }
+.pz-sc-tbl thead th:last-child  { border-radius: 0 7px 7px 0; }
+
+.pz-sc-tbl tbody td {
+    padding: 7px 8px;
+    font-size: 0.82rem;
+    color: #2b2113;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: #fdfaf3;
+    border-top: 1px solid #f0e6cd;
+    border-bottom: 1px solid #f0e6cd;
+}
+
+.pz-sc-tbl tbody td:first-child {
+    border-left: 1px solid #f0e6cd;
+    border-radius: 8px 0 0 8px;
+}
+
+.pz-sc-tbl tbody td:last-child {
+    border-right: 1px solid #f0e6cd;
+    border-radius: 0 8px 8px 0;
+}
+
+.pz-sc-tbl tbody tr:hover td { background: #fdf6e3; }
+
+.pz-sc-tbl td.pz-sc-name  { font-weight: 700; text-transform: uppercase; }
+.pz-sc-tbl td.pz-sc-r     { text-align: right; }
+.pz-sc-tbl td.pz-delay-warn { color: #b3261e; font-weight: 700; }
+.pz-sc-tbl td.pz-delay-ok   { color: #8a8a8a; }
+
+/* ── Pager nav ── */
+.pz-sc-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 16px 10px;
+    border-top: 1px solid #eadfbe;
+    background: #fffdf8;
+    flex-shrink: 0;
+}
+
+.pz-sc-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1.5px solid #C9A84C;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #8C701C;
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 1px 3px rgba(140,112,28,0.1);
+    transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+    /* explicit resets — no all:unset */
+    font-family: inherit;
+    text-decoration: none;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+}
+
+.pz-sc-nav-btn:hover:not(:disabled) {
+    background: #FDF0C4;
+    border-color: #8C701C;
+    color: #5c4010;
+}
+
+.pz-sc-nav-btn:focus-visible {
+    outline: 2px solid rgba(140,112,28,0.4);
+    outline-offset: 2px;
+}
+
+.pz-sc-nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+    pointer-events: none;
+}
+
+.pz-sc-nav-label {
+    min-width: 4rem;
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #8C701C;
+    user-select: none;
+}
+
+/* ── Side-by-side row (Tools + Deploy) ── */
+.pz-sc-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 4px;
+}
+
+.pz-sc-row > .pz-sc {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+/* Table inside side-by-side cards gets padding */
+.pz-sc-row > .pz-sc > .pz-sc-tbl {
+    margin: 8px 10px 6px;
+    width: calc(100% - 20px);
+}
+
+@media (max-width: 900px) {
+    #summary.db-section { padding-inline: 14px; }
+    .pz-sc-cols, .pz-sc-row { flex-direction: column; }
+    .pz-sc-divider { display: none; }
+}

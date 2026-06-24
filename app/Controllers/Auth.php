@@ -197,10 +197,6 @@ class Auth extends BaseController {
             return redirect()->back()->withInput()->with('error', 'Invalid email or password.');
         }
 
-        // Email verification is disabled for now so new users can sign in immediately.
-        // To re-enable later, set AUTH_REQUIRE_EMAIL_VERIFICATION=true in your .env
-        // and uncomment the verification block below.
-        /*
         if ($this->requiresEmailVerification()) {
             try {
                 $firebaseUserRecord = $this->firestore->getAuth()->getUser($firebaseUid);
@@ -211,7 +207,6 @@ class Auth extends BaseController {
                 return redirect()->back()->withInput()->with('error', 'Unable to verify account status. Please contact support.');
             }
         }
-        */
 
         try {
             $userModel = new \App\Models\Model_Users();
@@ -230,6 +225,11 @@ class Auth extends BaseController {
         // Block unverified staff accounts
         if (isset($userData['is_verified']) && $userData['is_verified'] === false) {
             return redirect()->back()->withInput()->with('error', 'Please verify your account via the email sent to you before logging in.');
+        }
+
+        // Site Engineers can only access the system through the mobile app
+        if (($userData['role'] ?? '') === 'Site Engineer') {
+            return redirect()->back()->withInput()->with('error', 'Site Engineer accounts can only log in through the mobile app.');
         }
 
         // Check if this is a first-time login with a temporary password
@@ -341,7 +341,7 @@ class Auth extends BaseController {
     }
 
     public function processRegister() {
-        // Logic for Executive self-registration
+        // Logic for Administrator self-registration
         $email = strtolower(trim((string) $this->request->getPost('email')));
         $password = (string) $this->request->getPost('password');
         $confirmPassword = (string) $this->request->getPost('confirm_password');
@@ -379,7 +379,7 @@ class Auth extends BaseController {
             'email'       => $email,
             'country_code' => $countryCode,
             'contact_number' => $contactNumber,
-            'role'        => 'executive', // Hardcoded as per your rule
+            'role'        => 'Administrator',
             'created_at'  => new Timestamp(new \DateTime()),
             'must_change_password' => false
         ];
@@ -404,13 +404,9 @@ class Auth extends BaseController {
             try {
                 $this->firestore->getDb()->collection('users')->document($firebaseUid)->set($data);
 
-                // Keep this block disabled for now so development accounts are usable immediately.
-                // To apply later, uncomment it or move it behind AUTH_REQUIRE_EMAIL_VERIFICATION=true.
-                /*
                 if ($this->requiresEmailVerification()) {
                     $firebaseAuth->sendEmailVerificationLink($data['email']);
                 }
-                */
             } catch (\Throwable $firestoreError) {
                 $firebaseAuth->deleteUser($firebaseUid);
                 throw $firestoreError;
@@ -419,7 +415,7 @@ class Auth extends BaseController {
             return redirect()->back()->withInput()->with('error', 'Failed to create Firebase Authentication user: ' . $e->getMessage());
         }
 
-        return redirect()->to('/login')->with('success', 'Executive Account Created');
+        return redirect()->to('/login')->with('success', 'Administrator Account Created');
     }
 
     /**
@@ -428,6 +424,28 @@ class Auth extends BaseController {
     public function logout() {
         session()->destroy();
         return redirect()->to('auth/login')->with('success', 'Logged out successfully');
+    }
+
+    public function firebaseToken()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Not logged in']);
+        }
+        $uid  = (string)(session()->get('userId') ?? '');
+        $role = (string)(session()->get('role')   ?? '');
+        if (!$uid) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'No user ID']);
+        }
+        try {
+            $factory = (new \Kreait\Firebase\Factory())
+                ->withServiceAccount(WRITEPATH . 'credentials/firebase_key.json');
+            $auth    = $factory->createAuth();
+            $token   = $auth->createCustomToken($uid, ['role' => $role]);
+            return $this->response->setJSON(['token' => $token->toString()]);
+        } catch (\Throwable $e) {
+            log_message('error', 'firebaseToken: ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Token generation failed']);
+        }
     }
 
     private function buildContactNumber(string $countryCode, string $displayValue): string

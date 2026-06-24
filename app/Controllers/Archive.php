@@ -11,6 +11,11 @@ class Archive extends BaseController
 
     public function __construct()
     {
+        if (!session()->get('isLoggedIn')) {
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+            exit;
+        }
         $this->archive = new ArchiveService(FirestoreService::getInstance());
     }
 
@@ -20,7 +25,9 @@ class Archive extends BaseController
         if (!$archiveId) {
             return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing arch_id']);
         }
-        return $this->response->setJSON($this->archive->restoreItem($archiveId));
+        $result = $this->archive->restoreItem($archiveId);
+        $result['csrf_hash'] = csrf_hash();
+        return $this->response->setJSON($result);
     }
 
     public function permanentDelete()
@@ -29,7 +36,12 @@ class Archive extends BaseController
         if (!$archiveId) {
             return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing arch_id']);
         }
-        $this->archive->permanentDelete($archiveId);
-        return $this->response->setJSON(['success' => true]);
+        try {
+            $this->archive->permanentDelete($archiveId);
+            return $this->response->setJSON(['success' => true, 'csrf_hash' => csrf_hash()]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Archive::permanentDelete - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Delete failed']);
+        }
     }
 }

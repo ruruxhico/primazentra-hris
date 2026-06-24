@@ -70,9 +70,12 @@ $count = count($items);
                 </tr>
             </thead>
             <tbody>
-            <?php foreach ($items as $i => $item):
+            <?php
+            $ts2int = fn($v, $d = 0) => $v instanceof \Google\Cloud\Core\Timestamp
+                ? $v->get()->getTimestamp() : (int)($v ?? $d);
+            foreach ($items as $i => $item):
                 $data       = $item['data'] ?? [];
-                $archivedAt = (int)($item['archived_at'] ?? 0);
+                $archivedAt = $ts2int($item['archived_at'] ?? null);
             ?>
             <tr data-arch-id="<?= esc($item['id']) ?>">
                 <td><?= $i + 1 ?></td>
@@ -123,6 +126,21 @@ $count = count($items);
     <?php endif; ?>
 </div><!-- /.del-shell -->
 
+<div id="archConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="archConfirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="archConfirmTitle">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="archConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="archConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="archConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     var CSRF_N = '<?= csrf_token() ?>';
@@ -136,7 +154,10 @@ $count = count($items);
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams(data),
             credentials: 'same-origin',
-        }).then(function (r) { return r.json(); });
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d && d.csrf_hash) CSRF_V = d.csrf_hash;
+            return d;
+        });
     }
 
     function animateOut(row) {
@@ -248,19 +269,128 @@ $count = count($items);
 }());
 </script>
 
-<div id="archConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
-    <div class="confirm-backdrop"></div>
-    <div class="confirm-box">
-        <div class="confirm-hdr">
-            <span class="material-symbols-outlined confirm-hdr-icon" id="archConfirmIcon">delete_forever</span>
-            <p class="confirm-hdr-title" id="archConfirmTitle">Delete</p>
-        </div>
-        <div class="confirm-content"><p id="archConfirmMessage"></p></div>
-        <div class="confirm-actions">
-            <button id="archConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
-            <button id="archConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
-        </div>
-    </div>
-</div>
-
 <?= $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  window._pzPageListeners = true;
+  var _module = '<?= esc($module) ?>';
+  var _base   = window.pzBaseUrl || '';
+
+  function fmtDate(ts) {
+    if (!ts || typeof ts.toDate !== 'function') return '—';
+    var d = ts.toDate();
+    return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })
+         + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  function moduleCells(item) {
+    var d = item.data || {};
+    if (_module === 'staff')
+      return '<td>' + (d.role  || '—') + '</td><td>' + (d.email || '—') + '</td>';
+    if (_module === 'project')
+      return '<td>' + (d.project_type || '—') + '</td>'
+           + '<td>' + ((d.location && d.location.address) || '—') + '</td>'
+           + '<td>' + (d.status || '—') + '</td>';
+    if (_module === 'resource')
+      return '<td>' + (d.category || '—') + '</td>';
+    if (_module === 'manpower')
+      return '<td>' + (d.role || '—') + '</td><td>' + (d.status || '—') + '</td>';
+    if (_module === 'request')
+      return '<td>' + (d.source_site || '—') + '</td>'
+           + '<td>' + (d.destination_site || '—') + '</td>'
+           + '<td>' + (d.category || '—') + '</td>';
+    return '';
+  }
+
+  function rowCount() {
+    return document.querySelectorAll('#archTable tbody tr[data-arch-id]').length;
+  }
+
+  function updateMeta() {
+    var n    = rowCount();
+    var info = document.querySelector('.pager-info');
+    var badge = document.querySelector('.del-count-badge');
+    if (info)  info.textContent = 'Showing ' + n + ' record' + (n !== 1 ? 's' : '');
+    if (badge) badge.innerHTML  = '<span class="material-symbols-outlined" style="font-size:14px">inventory_2</span> '
+                                + n + ' archived record' + (n !== 1 ? 's' : '');
+  }
+
+  function renumber() {
+    document.querySelectorAll('#archTable tbody tr').forEach(function (tr, i) {
+      if (tr.cells[0]) tr.cells[0].textContent = i + 1;
+    });
+    updateMeta();
+  }
+
+  function buildRow(id, item) {
+    var name = (item.name || '—').replace(/</g, '&lt;');
+    var no   = rowCount() + 1;
+    return '<tr data-arch-id="' + id + '" class="pz-row-new">'
+         + '<td>' + no + '</td>'
+         + '<td><strong>' + name + '</strong></td>'
+         + moduleCells(item)
+         + '<td>' + (item.archived_by || 'System') + '</td>'
+         + '<td>' + fmtDate(item.archived_at) + '</td>'
+         + '<td class="text-center" style="white-space:nowrap">'
+         + '<button class="del-btn del-btn-unarchive" data-id="' + id + '">'
+         + '<span class="material-symbols-outlined">unarchive</span> Unarchive</button>'
+         + '<button class="del-btn del-btn-perma" data-id="' + id + '">'
+         + '<span class="material-symbols-outlined">delete_forever</span> Purge</button>'
+         + '</td></tr>';
+  }
+
+  function ensureTable() {
+    if (document.getElementById('archTable')) return true;
+    // Table not rendered (page was empty on load) — show bar instead
+    window.pzShowLiveBar && window.pzShowLiveBar('New archived record added — refresh when ready');
+    return false;
+  }
+
+  var _setupDone = false;
+  function setup(db) {
+    if (_setupDone) return; _setupDone = true;
+    var _ready = false;
+
+    db.collection('archived')
+      .where('module_type', '==', _module)
+      .onSnapshot(function (snap) {
+        if (!_ready) { _ready = true; return; }
+        snap.docChanges().forEach(function (chg) {
+          var id   = chg.doc.id;
+          var item = chg.doc.data();
+
+          if (chg.type === 'added') {
+            if (document.querySelector('tr[data-arch-id="' + id + '"]')) return;
+            if (!ensureTable()) return;
+            var tbody = document.querySelector('#archTable tbody');
+            if (!tbody) return;
+            var tmp = document.createElement('tbody');
+            tmp.innerHTML = buildRow(id, item);
+            tbody.insertBefore(tmp.firstElementChild, tbody.firstChild);
+            renumber();
+            return;
+          }
+
+          if (chg.type === 'removed') {
+            var row = document.querySelector('tr[data-arch-id="' + id + '"]');
+            if (!row) return;
+            row.style.transition = 'opacity .4s, background .4s';
+            row.style.background = '#fee2e2';
+            row.style.opacity    = '0';
+            setTimeout(function () {
+              row.remove();
+              renumber();
+            }, 400);
+          }
+        });
+      }, function (err) { console.warn('[PZ] Archive listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
+</script>
+<?php $this->endSection() ?>

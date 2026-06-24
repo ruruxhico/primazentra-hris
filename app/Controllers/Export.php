@@ -145,7 +145,7 @@ class Export extends BaseController
     {
         $headers = [
             'Model ID', 'Model Code', 'Model Name',
-            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand', 'Model Number',
+            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand',
             'Location Address', 'Location Type', 'Assigned Project ID',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
         ];
@@ -179,7 +179,6 @@ class Export extends BaseController
                     $item['condition'] ?? '',
                     $item['status'] ?? '',
                     $item['brand'] ?? ($item['brand_name'] ?? ''),
-                    $item['model_number'] ?? '',
                     $loc['address'] ?? ($item['location_address'] ?? ''),
                     $loc['type'] ?? ($item['location_type'] ?? ''),
                     $item['assigned_project_id'] ?? '',
@@ -202,7 +201,7 @@ class Export extends BaseController
         if ($resourceId === '') return [[], [], 'Export'];
 
         $headers = [
-            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand', 'Model Number',
+            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand',
             'Location Address', 'Location Type', 'Assigned Project ID',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
         ];
@@ -221,7 +220,6 @@ class Export extends BaseController
                 $item['condition'] ?? '',
                 $item['status'] ?? '',
                 $item['brand'] ?? ($item['brand_name'] ?? ''),
-                $item['model_number'] ?? '',
                 $loc['address'] ?? ($item['location_address'] ?? ''),
                 $loc['type'] ?? ($item['location_type'] ?? ''),
                 $item['assigned_project_id'] ?? '',

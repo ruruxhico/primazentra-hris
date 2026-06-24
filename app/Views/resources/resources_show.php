@@ -95,10 +95,6 @@
             <div class="pd-section-hdr">Asset Details</div>
             <div class="pd-section-body">
                 <div class="pd-row">
-                    <span class="pd-row-label">Model Number</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['asset_details']['model_number'] ?? '—')) ?></span>
-                </div>
-                <div class="pd-row">
                     <span class="pd-row-label">Total Quantity</span>
                     <span class="pd-row-value"><?= esc((string)($resource['asset_details']['total_quantity'] ?? '—')) ?></span>
                 </div>
@@ -133,7 +129,7 @@
                 </div>
                 <div class="pd-row">
                     <span class="pd-row-label">Assigned Project</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['assigned_project_id'] ?? '—')) ?></span>
+                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['assigned_project_name'] ?? $resource['manpower_details']['assigned_project_id'] ?? '—')) ?></span>
                 </div>
             </div>
         </div>

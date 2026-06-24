@@ -7,7 +7,7 @@ class MilestoneProgressService
     /**
      * Build the planned progress curve from a set of milestones.
      *
-     * Milestones must carry at least: order (int), weight (float), targetDate (string|null).
+     * Milestones must carry at least: order (int), weight_percent (float), target_date (string|null).
      * The curve starts at (projectStart, 0%) and ends at the last dated milestone (or
      * projectEnd as a fallback) at 100%.  Undated milestones are NOT control points —
      * their weight is absorbed into the ramp up to the next dated milestone.
@@ -29,13 +29,14 @@ class MilestoneProgressService
         $controlPoints = [['date' => $projectStart, 'cumWeight' => 0.0]];
 
         foreach ($milestones as $m) {
-            $cumWeight += (float)($m['weight'] ?? 0);
+            $cumWeight += (float)($m['weight_percent'] ?? $m['weight'] ?? 0);
+            $tDate = $m['target_date'] ?? $m['targetDate'] ?? null;
 
-            if (empty($m['targetDate'])) {
+            if (empty($tDate)) {
                 $undatedCount++;
             } else {
                 $controlPoints[] = [
-                    'date'      => (string) $m['targetDate'],
+                    'date'      => (string) $tDate,
                     'cumWeight' => round($cumWeight, 4),
                 ];
             }

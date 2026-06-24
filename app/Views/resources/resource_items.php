@@ -108,10 +108,6 @@
                 <label>Brand</label>
                 <input type="text" name="brand" id="brandInput" value="<?= esc($af['brand'] ?? '') ?>" placeholder="Search brand…">
             </div>
-            <div class="pz-filter-group">
-                <label>Model No.</label>
-                <input type="text" name="model_no" id="modelNoInput" value="<?= esc($af['model_no'] ?? '') ?>" placeholder="Search model…">
-            </div>
         </div>
 
         <input type="hidden" id="conditionInput" name="condition" value="<?= esc($af['condition'] ?? '') ?>">
@@ -161,7 +157,6 @@
                 <th>#</th>
                 <th>Serial No.</th>
                 <th>Brand</th>
-                <th>Model No.</th>
                 <th>Condition</th>
                 <th>Status</th>
                 <th>Location</th>
@@ -189,12 +184,15 @@
                     }
                     $isReleased = $rawRel !== null && !$isLocked;
                 ?>
-                <tr data-id="<?= esc($item['id'] ?? '') ?>">
+                <tr data-id="<?= esc($item['id'] ?? '') ?>"
+                    data-condition="<?= esc(strtolower($item['condition'] ?? '')) ?>"
+                    data-item-status="<?= esc(strtolower($item['status'] ?? '')) ?>"
+                    data-loc-type="<?= esc(strtolower($item['location']['type'] ?? '')) ?>"
+                    data-brand="<?= esc(strtolower($item['brand_name'] ?? $item['brand'] ?? '')) ?>">
                     <td><input type="checkbox" class="row-check" value="<?= esc($item['id'] ?? '') ?>"></td>
                     <td class="pz-row-num"><?= $pagerOffset + $index + 1 ?></td>
                     <td><?= esc((string)($item['serial_number'] ?? 'N/A')) ?></td>
-                    <td class="pz-row-muted"><?= esc((string)($item['brand'] ?? '—')) ?></td>
-                    <td class="pz-row-muted"><?= esc((string)($item['model_number'] ?? '—')) ?></td>
+                    <td class="pz-row-muted"><?= esc((string)($item['brand_name'] ?? $item['brand'] ?? '—')) ?></td>
                     <td>
                         <?php $cond = strtolower($item['condition'] ?? ''); $cbc = $cond === 'new' ? 'pz-badge-approved' : ($cond === 'functional' ? 'pz-badge-available' : ($cond === 'worn' ? 'pz-badge-deployed' : 'pz-badge-rejected')); ?>
                         <span class="pz-badge <?= $cbc ?>"><?= esc((string)($item['condition'] ?? 'N/A')) ?></span>
@@ -231,8 +229,7 @@
                         <div class="action-wrap">
                             <button class="action-btn view-unit-btn" title="View"
                                 data-serial="<?= esc($item['serial_number'] ?? '') ?>"
-                                data-brand="<?= esc($item['brand'] ?? '') ?>"
-                                data-model="<?= esc($item['model_number'] ?? '') ?>"
+                                data-brand="<?= esc($item['brand_name'] ?? $item['brand'] ?? '') ?>"
                                 data-condition="<?= esc($item['condition'] ?? '') ?>"
                                 data-status="<?= esc($item['status'] ?? '') ?>"
                                 data-loc-type="<?= esc($item['location']['type'] ?? '') ?>"
@@ -242,8 +239,7 @@
                             <button class="action-btn edit-unit-btn" title="Edit"
                                 data-id="<?= esc($item['id'] ?? '') ?>"
                                 data-serial="<?= esc($item['serial_number'] ?? '') ?>"
-                                data-brand="<?= esc($item['brand'] ?? '') ?>"
-                                data-model="<?= esc($item['model_number'] ?? '') ?>"
+                                data-brand="<?= esc($item['brand_name'] ?? $item['brand'] ?? '') ?>"
                                 data-condition="<?= esc($item['condition'] ?? '') ?>"
                                 data-status="<?= esc($item['status'] ?? '') ?>"
                                 data-loc-type="<?= esc($item['location']['type'] ?? '') ?>"
@@ -294,7 +290,6 @@
         <div class="pz-info-grid" style="gap:.5rem 1.2rem">
             <span class="pz-info-label">Serial No.</span><span class="pz-info-value" id="vu-serial">—</span>
             <span class="pz-info-label">Brand</span><span class="pz-info-value" id="vu-brand">—</span>
-            <span class="pz-info-label">Model No.</span><span class="pz-info-value" id="vu-model">—</span>
             <span class="pz-info-label">Condition</span><span class="pz-info-value" id="vu-condition">—</span>
             <span class="pz-info-label">Status</span><span class="pz-info-value" id="vu-status">—</span>
             <span class="pz-info-label">Location Type</span><span class="pz-info-value" id="vu-loctype">—</span>
@@ -395,10 +390,6 @@
                         <label>Brand</label>
                         <input type="text" id="editBrand" name="brand" placeholder="e.g. Makita">
                     </div>
-                    <div class="pz-form-group">
-                        <label>Model No.</label>
-                        <input type="text" id="editModelNo" name="model_number" placeholder="e.g. DP4011">
-                    </div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.65rem">
                     <div class="pz-form-group">
@@ -454,10 +445,6 @@
                 <div class="pz-form-group">
                     <label>Brand</label>
                     <input type="text" name="brand" id="addBrand" placeholder="e.g. Caterpillar">
-                </div>
-                <div class="pz-form-group">
-                    <label>Model Number</label>
-                    <input type="text" name="model_number" id="addModelNo" placeholder="e.g. CAT-950GC">
                 </div>
                 <div class="pz-form-group">
                     <label>Condition</label>
@@ -738,7 +725,6 @@ document.addEventListener('DOMContentLoaded', function () {
             editForm.action = baseUpdateUrl + encodeURIComponent(d.id);
             document.getElementById('editSerial').value    = d.serial;
             document.getElementById('editBrand').value     = d.brand;
-            document.getElementById('editModelNo').value   = d.model;
             document.getElementById('editCondition').value = d.condition;
             document.getElementById('editStatus').value    = d.status;
             document.getElementById('editLocType').value   = d.locType || '';
@@ -836,7 +822,6 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.addEventListener('click', function () {
             document.getElementById('vu-serial').textContent    = this.dataset.serial || '—';
             document.getElementById('vu-brand').textContent     = this.dataset.brand || '—';
-            document.getElementById('vu-model').textContent     = this.dataset.model || '—';
             document.getElementById('vu-condition').textContent = this.dataset.condition || '—';
             document.getElementById('vu-status').textContent    = this.dataset.status || '—';
             document.getElementById('vu-loctype').textContent   = this.dataset.locType || '—';
@@ -924,48 +909,53 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 
-    // ── Live search ──────────────────────────────────────────────────────────
-    const unitSearch = document.getElementById('unitSearch');
-    if (unitSearch) {
-        unitSearch.addEventListener('input', function () {
-            const q = this.value.toLowerCase().trim();
-            document.querySelectorAll('#itemsTable tbody tr').forEach(function (row) {
-                if (row.cells.length < 2) return; // empty-state row
-                const text = Array.from(row.cells).map(c => c.textContent).join(' ').toLowerCase();
-                row.style.display = q === '' || text.includes(q) ? '' : 'none';
-            });
-        });
-    }
-
+    // ── Live filter (search + chips + brand) ─────────────────────────────────
+    const unitSearch  = document.getElementById('unitSearch');
     const filterToggleBtn = document.getElementById('filterToggleBtn');
     const filterPanel     = document.getElementById('filterPanel');
-    const filterForm      = document.getElementById('filterForm');
 
     if (filterToggleBtn && filterPanel) {
         <?php if ($activeCount > 0): ?>filterPanel.classList.add('open');<?php endif; ?>
         filterToggleBtn.addEventListener('click', () => filterPanel.classList.toggle('open'));
     }
 
-    if (filterForm) {
-        let debounce;
-        ['brandInput','modelNoInput'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('input', () => { clearTimeout(debounce); debounce = setTimeout(() => filterForm.submit(), 400); });
-        });
+    const itemFilters = { condition: '', status: '', locType: '', brand: '' };
 
-        function wireChips(selector, hiddenId) {
-            const inp = document.getElementById(hiddenId);
-            filterForm.querySelectorAll(selector).forEach(chip => {
-                chip.addEventListener('click', function () {
-                    inp.value = inp.value === this.dataset.val ? '' : this.dataset.val;
-                    filterForm.submit();
-                });
-            });
-        }
-        wireChips('.condition-chip', 'conditionInput');
-        wireChips('.status-chip',    'statusInput');
-        wireChips('.loctype-chip',   'locTypeInput');
+    function applyItemFilters() {
+        const q = (unitSearch?.value || '').toLowerCase().trim();
+        document.querySelectorAll('#itemsTable tbody tr[data-id]').forEach(row => {
+            let show = true;
+            if (row.cells.length < 2) return;
+            if (q && !Array.from(row.cells).map(c => c.textContent).join(' ').toLowerCase().includes(q)) show = false;
+            if (itemFilters.condition && (row.dataset.condition   ||'') !== itemFilters.condition) show = false;
+            if (itemFilters.status    && (row.dataset.itemStatus  ||'') !== itemFilters.status)    show = false;
+            if (itemFilters.locType   && (row.dataset.locType     ||'') !== itemFilters.locType)   show = false;
+            if (itemFilters.brand     && !(row.dataset.brand      ||'').includes(itemFilters.brand)) show = false;
+            row.style.display = show ? '' : 'none';
+        });
     }
+
+    if (unitSearch) unitSearch.addEventListener('input', applyItemFilters);
+
+    const brandInput = document.getElementById('brandInput');
+    if (brandInput) brandInput.addEventListener('input', function () {
+        itemFilters.brand = this.value.trim().toLowerCase();
+        applyItemFilters();
+    });
+
+    function wireChips(selector, key) {
+        document.querySelectorAll(selector).forEach(chip => {
+            chip.addEventListener('click', function () {
+                const val = this.dataset.val.toLowerCase();
+                itemFilters[key] = itemFilters[key] === val ? '' : val;
+                document.querySelectorAll(selector).forEach(c => c.classList.toggle('active', c.dataset.val.toLowerCase() === itemFilters[key]));
+                applyItemFilters();
+            });
+        });
+    }
+    wireChips('.condition-chip', 'condition');
+    wireChips('.status-chip',    'status');
+    wireChips('.loctype-chip',   'locType');
 
     // ── Export modal ─────────────────────────────────────────────────────────
     const exportBtn = document.getElementById('exportUnitsBtn');

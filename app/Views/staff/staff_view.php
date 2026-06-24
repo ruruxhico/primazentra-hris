@@ -59,10 +59,6 @@
     </a>
     <?php endif; ?>
 
-    <button class="rv-btn rv-btn-import" id="staffImportBtn">
-        <span class="material-symbols-outlined">download</span> Import
-    </button>
-
     <button class="rv-btn rv-btn-export" data-module="staff" onclick="openStaffExportModal()">
         <span class="material-symbols-outlined">upload</span> Export
     </button>
@@ -139,7 +135,9 @@
                         $pic = $person['profile_picture'] ?? '';
                         $ini = strtoupper(substr((string)($person['first_name'] ?? 'S'), 0, 1));
                     ?>
-                    <tr>
+                    <tr data-staff-id="<?= esc((string)($person['id'] ?? '')) ?>"
+                        data-staff-role-val="<?= esc(strtolower($person['role'] ?? '')) ?>"
+                        data-staff-ln-first="<?= esc(strtolower(substr((string)($person['last_name'] ?? ''), 0, 1))) ?>">
                         <td class="pz-col-check">
                             <input type="checkbox" class="row-cb" value="<?= esc((string)$person['id']) ?>" data-name="<?= esc(trim(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>">
                         </td>
@@ -152,10 +150,10 @@
                             <?php endif; ?>
                         </td>
                         <td><?= $offset + $index + 1 ?></td>
-                        <td><strong><?= esc((string)($person['last_name'] ?? 'N/A')) ?></strong></td>
-                        <td><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
+                        <td data-staff-ln><strong><?= esc((string)($person['last_name'] ?? 'N/A')) ?></strong></td>
+                        <td data-staff-fn><?= esc((string)($person['first_name'] ?? 'N/A')) ?></td>
                         <td><?= esc((string)($person['middle_name'] ?? 'N/A')) ?></td>
-                        <td><?= esc((string)($person['email'] ?? 'N/A')) ?></td>
+                        <td data-staff-email><?= esc((string)($person['email'] ?? 'N/A')) ?></td>
                         <?php
                             $roleVal   = (string)($person['role'] ?? '');
                             $roleClass = match($roleVal) {
@@ -167,7 +165,7 @@
                             };
                         ?>
                         <td>
-                            <span class="role-badge <?= $roleClass ?>">
+                            <span class="role-badge <?= $roleClass ?>" data-staff-role>
                                 <?= esc($roleVal ?: 'Staff') ?>
                             </span>
                         </td>
@@ -279,29 +277,42 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // — Auto-submit: role dropdown → immediate; ln chips → toggle + immediate —
-    if (filterForm) {
-        filterForm.querySelectorAll('select').forEach(function (sel) {
-            sel.addEventListener('change', function () { filterForm.submit(); });
-        });
+    const search = document.getElementById('searchStaff');
+    const table  = document.getElementById('staffTable');
+    const staffFilters = { role: '', lnRange: '' };
 
-        const lnRangeInput = document.getElementById('lnRangeInput');
-        filterForm.querySelectorAll('.ln-chip').forEach(function (chip) {
-            chip.addEventListener('click', function () {
-                const range = this.dataset.range;
-                lnRangeInput.value = lnRangeInput.value === range ? '' : range;
-                filterForm.submit();
-            });
+    function applyStaffFilters() {
+        const q = search ? search.value.trim().toLowerCase() : '';
+        table?.querySelectorAll('tbody tr[data-staff-id]').forEach(row => {
+            let show = true;
+            if (q && !row.innerText.toLowerCase().includes(q)) show = false;
+            if (staffFilters.role) {
+                if ((row.dataset.staffRoleVal||'') !== staffFilters.role.toLowerCase()) show = false;
+            }
+            if (staffFilters.lnRange) {
+                const first = row.dataset.staffLnFirst || '';
+                const parts = staffFilters.lnRange.split('-');
+                if (parts.length === 2 && (first < parts[0].toLowerCase() || first > parts[1].toLowerCase())) show = false;
+            }
+            row.style.display = show ? '' : 'none';
         });
     }
 
-    const search = document.getElementById('searchStaff');
-    const table = document.getElementById('staffTable');
-    if (search && table) {
-        search.addEventListener('input', function () {
-            const q = this.value.trim().toLowerCase();
-            table.querySelectorAll('tbody tr').forEach(row => {
-                row.style.display = q === '' || row.innerText.toLowerCase().includes(q) ? '' : 'none';
+    if (search) search.addEventListener('input', applyStaffFilters);
+
+    if (filterForm) {
+        const roleSelect = filterForm.querySelector('[name="role_filter"]');
+        if (roleSelect) roleSelect.addEventListener('change', function () {
+            staffFilters.role = this.value;
+            applyStaffFilters();
+        });
+
+        filterForm.querySelectorAll('.ln-chip').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                const range = this.dataset.range;
+                staffFilters.lnRange = staffFilters.lnRange === range ? '' : range;
+                filterForm.querySelectorAll('.ln-chip').forEach(c => c.classList.toggle('active', c.dataset.range === staffFilters.lnRange));
+                applyStaffFilters();
             });
         });
     }
@@ -443,145 +454,71 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // ── Single delete ─────────────────────────────────────────────
-    function wireDeleteBtn(btn) {
-        btn.addEventListener('click', async function (e) {
-            e.preventDefault();
-            const id   = this.dataset.id;
-            const row  = this.closest('tr');
-            const name = this.dataset.name || 'this staff member';
+    // ── Single delete (event delegation — works for live-added rows too) ──
+    document.addEventListener('click', async function (e) {
+        var btn = e.target.closest('.action-delete');
+        if (!btn) return;
+        e.preventDefault();
+        const id   = btn.dataset.id;
+        const row  = btn.closest('tr');
+        const name = btn.dataset.name || 'this staff member';
 
-            if (!await openConfirm('Delete "' + name + '"?')) return;
+        if (!await openConfirm('Delete "' + name + '"?')) return;
 
-            const body = new URLSearchParams();
-            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
-            body.append('id', id);
+        const body = new URLSearchParams();
+        if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+        body.append('id', id);
 
-            fetch(DELETE_URL, {
-                method: 'POST', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-                body: body.toString()
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data && data.success) {
-                    showToast('Staff deleted', 'success');
-                    animateRowOut(row);
-                    setTimeout(() => renumberTable(document.getElementById('staffTable'), 2), 290);
-                } else {
-                    showToast(data.message || 'Delete failed', 'error');
-                }
-            })
-            .catch(() => showToast('Error deleting staff', 'error'));
-        });
-    }
-    document.querySelectorAll('.action-delete').forEach(wireDeleteBtn);
+        fetch(DELETE_URL, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                showToast('Staff deleted', 'success');
+                animateRowOut(row);
+                setTimeout(() => renumberTable(document.getElementById('staffTable'), 2), 290);
+            } else {
+                showToast(data.message || 'Delete failed', 'error');
+            }
+        })
+        .catch(() => showToast('Error deleting staff', 'error'));
+    });
 
-    // ── Archive ───────────────────────────────────────────────
+    // ── Archive (event delegation — works for live-added rows too) ────────
     const ARCHIVE_URL = '<?= base_url('staff/archive') ?>';
-    document.querySelectorAll('.action-archive').forEach(function (btn) {
-        btn.addEventListener('click', async function (e) {
-            e.preventDefault();
-            const id   = this.dataset.id;
-            const name = this.dataset.name || 'this staff member';
-            const row  = this.closest('tr');
-            if (!await openConfirm('Archive "' + name + '"? They will be moved to the archive and removed from active records.', 'archive')) return;
-            const body = new URLSearchParams();
-            if (csrfName && csrfHash) body.append(csrfName, csrfHash);
-            body.append('id', id);
-            fetch(ARCHIVE_URL, {
-                method: 'POST', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
-                body: body.toString()
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data && data.success) {
-                    showToast('"' + name + '" archived', 'success');
-                    animateRowOut(row);
-                    setTimeout(() => renumberTable(document.getElementById('staffTable'), 2), 290);
-                } else {
-                    showToast(data.message || 'Archive failed', 'error');
-                }
-            })
-            .catch(() => showToast('Error archiving staff', 'error'));
-        });
+    document.addEventListener('click', async function (e) {
+        var btn = e.target.closest('.action-archive');
+        if (!btn) return;
+        e.preventDefault();
+        const id   = btn.dataset.id;
+        const name = btn.dataset.name || 'this staff member';
+        const row  = btn.closest('tr');
+        if (!await openConfirm('Archive "' + name + '"? They will be moved to the archive and removed from active records.', 'archive')) return;
+        const body = new URLSearchParams();
+        if (csrfName && csrfHash) body.append(csrfName, csrfHash);
+        body.append('id', id);
+        fetch(ARCHIVE_URL, {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            body: body.toString()
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.success) {
+                showToast('"' + name + '" archived', 'success');
+                animateRowOut(row);
+                setTimeout(() => renumberTable(document.getElementById('staffTable'), 2), 290);
+            } else {
+                showToast(data.message || 'Archive failed', 'error');
+            }
+        })
+        .catch(() => showToast('Error archiving staff', 'error'));
     });
 
 });
-</script>
-
-<!-- Import Modal -->
-<div id="importModal" class="pz-modal-overlay" style="display:none" hidden>
-  <div class="pz-modal-box">
-    <h3 class="pz-modal-title">Import Staff</h3>
-    <p class="pz-modal-subtitle">Upload an .xlsx or .csv file. <a id="importTplLink" href="<?= base_url('import/template?module=staff') ?>">Download template</a></p>
-    <div id="importDropZone" class="pz-modal-drop-zone">
-      <div style="font-size:28px;margin-bottom:6px;">📂</div>
-      Click or drag &amp; drop your .xlsx or .csv file here
-      <input type="file" id="importFileInput" accept=".xlsx,.xls,.csv" style="display:none;">
-    </div>
-    <div id="importFileName" class="pz-modal-file-name"></div>
-    <div id="importResult"   class="pz-modal-result"></div>
-    <div class="pz-modal-actions">
-      <button onclick="closeImportModal()" class="pz-btn-modal-cancel">Cancel</button>
-      <button id="importSubmitBtn" onclick="submitImport()" class="pz-btn-modal-import">Import</button>
-    </div>
-  </div>
-</div>
-
-<script>
-(function () {
-  const baseUrl   = '<?= base_url() ?>';
-  const csrfName  = document.querySelector('meta[name="csrf-name"]')?.content;
-  const csrfHash  = document.querySelector('meta[name="csrf-hash"]')?.content;
-
-  document.getElementById('staffImportBtn')?.addEventListener('click', function () {
-    const m = document.getElementById('importModal');
-    document.getElementById('importFileName').textContent = '';
-    document.getElementById('importResult').textContent   = '';
-    document.getElementById('importFileInput').value      = '';
-    m.hidden = false; m.style.display = 'flex';
-  });
-
-  window.closeImportModal = function () {
-    const m = document.getElementById('importModal');
-    m.hidden = true; m.style.display = 'none';
-  };
-
-  window.submitImport = function () {
-    const fi  = document.getElementById('importFileInput');
-    const re  = document.getElementById('importResult');
-    if (!fi.files.length) { re.style.color='#c0392b'; re.textContent='Please select a file first.'; return; }
-    const btn = document.getElementById('importSubmitBtn');
-    btn.disabled = true; btn.textContent = 'Importing…';
-    re.style.color = '#555'; re.textContent = 'Processing…';
-    const fd = new FormData();
-    fd.append('module', 'staff');
-    fd.append('import_file', fi.files[0]);
-    if (csrfName) fd.append(csrfName, csrfHash);
-    fetch(baseUrl + 'import/process', { method:'POST', body:fd })
-      .then(r => r.json())
-      .then(d => {
-        btn.disabled = false; btn.textContent = 'Import';
-        if (d.success) { re.style.color='#27ae60'; re.textContent='✓ '+d.message; setTimeout(() => { closeImportModal(); location.reload(); }, 1800); }
-        else { re.style.color='#c0392b'; re.textContent='✗ '+(d.message||'Import failed.'); }
-      })
-      .catch(() => { btn.disabled=false; btn.textContent='Import'; re.style.color='#c0392b'; re.textContent='Network error.'; });
-  };
-
-  const dz = document.getElementById('importDropZone');
-  const fi = document.getElementById('importFileInput');
-  const fn = document.getElementById('importFileName');
-  if (dz) {
-    dz.addEventListener('click', () => fi.click());
-    dz.addEventListener('dragover', e => { e.preventDefault(); dz.style.borderColor='#C47A0F'; });
-    dz.addEventListener('dragleave', () => { dz.style.borderColor='#d4c185'; });
-    dz.addEventListener('drop', e => { e.preventDefault(); dz.style.borderColor='#d4c185'; if(e.dataTransfer.files.length){ fi.files=e.dataTransfer.files; fn.textContent='📎 '+fi.files[0].name; } });
-    fi.addEventListener('change', () => { if(fi.files.length) fn.textContent='📎 '+fi.files[0].name; });
-  }
-  document.getElementById('importModal')?.addEventListener('click', function(e){ if(e.target===this){this.hidden=true;this.style.display='none';} });
-}());
 </script>
 
 <!-- Export Modal -->
@@ -620,3 +557,119 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
 </script>
 
 <?= $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  window._pzPageListeners = true;
+
+  var _base = window.pzBaseUrl || '';
+  var _page = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+
+  var ROLE_CLS = {
+    'Administrator':      'role-badge--administrator',
+    'Operations Manager': 'role-badge--ops-manager',
+    'Project Manager':    'role-badge--project-manager',
+    'Site Engineer':      'role-badge--site-engineer',
+  };
+
+  function flashRow(row) {
+    row.style.transition = 'background .2s';
+    row.style.background = '#dbeafe';
+    setTimeout(function () { row.style.background = ''; }, 1000);
+  }
+
+  function pzUpdateStaffRow(id, data) {
+    var row = document.querySelector('tr[data-staff-id="' + id + '"]');
+    if (!row) return;
+    var lnEl    = row.querySelector('[data-staff-ln]');
+    var fnEl    = row.querySelector('[data-staff-fn]');
+    var emailEl = row.querySelector('[data-staff-email]');
+    var roleEl  = row.querySelector('[data-staff-role]');
+    if (lnEl)    lnEl.innerHTML    = '<strong>' + (data.last_name  || 'N/A') + '</strong>';
+    if (fnEl)    fnEl.textContent  = data.first_name || 'N/A';
+    if (emailEl) emailEl.textContent = data.email || 'N/A';
+    if (roleEl) {
+      var role = data.role || '';
+      roleEl.className   = 'role-badge ' + (ROLE_CLS[role] || '');
+      roleEl.textContent = role || 'Staff';
+    }
+    flashRow(row);
+  }
+
+  function buildStaffRow(id, data) {
+    var fn  = data.first_name  || 'N/A';
+    var ln  = data.last_name   || 'N/A';
+    var mn  = data.middle_name || 'N/A';
+    var em  = data.email       || 'N/A';
+    var role = data.role || '';
+    var ini  = (fn.charAt(0) || 'S').toUpperCase();
+    var fullName = fn + ' ' + ln;
+    var no   = document.querySelectorAll('tr[data-staff-id]').length + 1;
+    var avatar = '<div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;'
+               + 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e">' + ini + '</div>';
+    return '<tr data-staff-id="' + id + '" class="pz-row-new">'
+         + '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + id + '" data-name="' + fullName + '"></td>'
+         + '<td style="padding:4px 8px">' + avatar + '</td>'
+         + '<td>' + no + '</td>'
+         + '<td data-staff-ln><strong>' + ln + '</strong></td>'
+         + '<td data-staff-fn>' + fn + '</td>'
+         + '<td>' + mn + '</td>'
+         + '<td data-staff-email>' + em + '</td>'
+         + '<td><span class="role-badge ' + (ROLE_CLS[role] || '') + '" data-staff-role>' + (role || 'Staff') + '</span></td>'
+         + '<td class="text-center"><div class="action-wrap">'
+         + '<a href="' + _base + 'staff/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
+         + '<a href="' + _base + 'staff/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
+         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + fullName + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
+         + '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + fullName + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>'
+         + '</div></td>'
+         + '</tr>';
+  }
+
+  var _setupDone = false;
+  function setup(db) {
+    if (_setupDone) return; _setupDone = true;
+    var _ready = false;
+    db.collection('users').onSnapshot(function (snap) {
+      if (!_ready) { _ready = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        var id = chg.doc.id;
+
+        if (chg.type === 'modified') { pzUpdateStaffRow(id, chg.doc.data()); return; }
+
+        if (chg.type === 'added' && _page === 1) {
+          if (document.querySelector('tr[data-staff-id="' + id + '"]')) return;
+          var tbody = document.querySelector('table tbody');
+          if (!tbody) return;
+          var empty = tbody.querySelector('td[colspan]');
+          if (empty) empty.closest('tr').remove();
+          var tmp = document.createElement('tbody');
+          tmp.innerHTML = buildStaffRow(id, chg.doc.data());
+          tbody.appendChild(tmp.firstElementChild);
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var row = document.querySelector('tr[data-staff-id="' + id + '"]');
+          if (!row) return;
+          row.style.transition = 'opacity .4s, background .4s';
+          row.style.background = '#fee2e2';
+          row.style.opacity    = '0';
+          setTimeout(function () {
+            row.remove();
+            var tbody = document.querySelector('table tbody');
+            if (tbody && !tbody.querySelector('tr[data-staff-id]')) {
+              tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No staff found.</td></tr>';
+            }
+          }, 400);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Staff listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
+</script>
+<?php $this->endSection() ?>

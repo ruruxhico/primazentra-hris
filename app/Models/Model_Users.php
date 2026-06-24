@@ -40,7 +40,7 @@ class Model_Users extends Model_BaseFirestore
     }
 
     /**
-     * Count all staff members (excluding executives)
+     * Count all staff members
      */
     public function countStaff()
     {
