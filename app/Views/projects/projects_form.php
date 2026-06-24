@@ -195,6 +195,14 @@
                 </div>
 
                 <div class="pz-form-group">
+                    <label for="delay_ping_days">Ping if Delayed by (Days)</label>
+                    <input type="number" id="delay_ping_days" name="delay_ping_days"
+                           min="0" step="1" placeholder="e.g. 3"
+                           value="<?= esc($project['delay_ping_days'] ?? '') ?>">
+                    <small class="pz-field-hint">Notify admins and PM when ML predicts a delay ≥ this many days. Leave 0 to ping on any predicted delay.</small>
+                </div>
+
+                <div class="pz-form-group">
                     <label for="attachments">Attachments</label>
                     <label class="file-upload-label" for="attachments">
                         <span class="material-symbols-outlined file-upload-icon">upload_file</span>

@@ -115,8 +115,8 @@
 
                 <div class="auth-role-row">
                     <label class="auth-radio-pill">
-                        <input type="radio" name="role_display" value="executive" checked>
-                        <span>Executive</span>
+                        <input type="radio" name="role_display" value="administrator" checked>
+                        <span>Administrator</span>
                     </label>
                 </div>
 

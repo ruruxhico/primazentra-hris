@@ -13,6 +13,39 @@
     <link rel="stylesheet" href="<?= base_url(is_file(FCPATH . 'css/styles.css') ? 'css/styles.css' : 'public/css/styles.css') ?>?v=<?= filemtime(ROOTPATH . 'public/css/styles.css') ?>">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
     <?= $this->renderSection('head') ?>
+    <!-- Live-change bar (global, all pages) -->
+    <style>
+    #pzLiveBar {
+        position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%) translateY(4px);
+        background: #1e293b; color: #fff; border-radius: 2rem;
+        padding: .55rem 1.25rem; font-size: .85rem; font-weight: 500;
+        display: flex; align-items: center; gap: .6rem;
+        box-shadow: 0 4px 18px rgba(0,0,0,.25); z-index: 9999;
+        opacity: 0; pointer-events: none;
+        transition: opacity .3s ease, transform .3s ease;
+        white-space: nowrap;
+    }
+    #pzLiveBar.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+    #pzLiveBar .pz-live-dot {
+        width: 8px; height: 8px; border-radius: 50%; background: #4ade80;
+        animation: pz-pulse 1.4s infinite; flex-shrink: 0;
+    }
+    @keyframes pz-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+    #pzLiveBar button {
+        background: #3b82f6; border: none; color: #fff; border-radius: 1rem;
+        padding: .25rem .8rem; font-size: .8rem; cursor: pointer; font-weight: 600;
+        margin-left: .25rem;
+    }
+    #pzLiveBar button:hover { background: #2563eb; }
+    #pzLiveBar .pz-bar-dismiss {
+        cursor: pointer; opacity: .55; margin-left: .15rem;
+        font-size: 1.1rem; line-height: 1; flex-shrink: 0;
+    }
+    #pzLiveBar .pz-bar-dismiss:hover { opacity: 1; }
+    /* New row flash animation (used by all live-insert pages) */
+    @keyframes pzRowNew { 0%{background:#dbeafe} 100%{background:transparent} }
+    .pz-row-new { animation: pzRowNew 1.5s ease forwards; }
+    </style>
 </head>
 <body>
   <div id="wrapper">
@@ -87,13 +120,68 @@
   <?= $this->renderSection('scripts') ?>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
+  <!-- ── Firebase JS SDK (real-time listeners) ── -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script>
+  (function () {
+    var _fbConfig = {
+      apiKey:            'AIzaSyCq8YNyOXnaYP7Q-BKI65CuDG2bemwCFaI',
+      authDomain:        'nebuhive-primazentra.firebaseapp.com',
+      projectId:         'nebuhive-primazentra',
+      storageBucket:     'nebuhive-primazentra.firebasestorage.app',
+      messagingSenderId: '385215892270',
+      appId:             '1:385215892270:web:d50e3773b7688c0aaf88bf',
+    };
+    var _fbApp  = firebase.initializeApp(_fbConfig);
+    var _fbDb   = firebase.firestore(_fbApp);
+    // Expose for other page scripts
+    window.pzFirebaseDb  = _fbDb;
+    window.pzBaseUrl     = '<?= base_url() ?>';
+    // Sign in with a PHP-issued custom token (ties browser auth to the PHP session user)
+    // so Firestore security rules see the real UID. Falls back to anonymous on failure.
+    (function () {
+      function _doSignIn(token) {
+        var authInst = firebase.auth(_fbApp);
+        if (token) {
+          authInst.signInWithCustomToken(token).catch(function (err) {
+            console.warn('[PZ] Custom token sign-in failed, falling back to anonymous:', err.message);
+            authInst.signInAnonymously().catch(function () {});
+          });
+        } else {
+          authInst.signInAnonymously().catch(function () {});
+        }
+      }
+      fetch('<?= base_url('auth/firebase-token') ?>', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : {}; })
+        .then(function (d) {
+          console.log('[PZ-auth] token fetch ok, has token:', !!d.token);
+          _doSignIn(d.token || null);
+        })
+        .catch(function (e) {
+          console.warn('[PZ-auth] token fetch failed:', e.message);
+          _doSignIn(null);
+        });
+    }());
+  }());
+  </script>
+
+  <!-- Page-specific Firebase scripts (must come after Firebase SDK loads) -->
+  <?= $this->renderSection('firebase-scripts') ?>
+
   <!-- ── Notification bell ── -->
   <script>
   (function () {
     var _base    = '<?= base_url() ?>';
     var _csrf    = '<?= csrf_token() ?>';
+    var _uid     = '<?= session()->get('userId') ?? '' ?>';
     var _open    = false;
     var _data    = [];
+
+    // ── Cross-tab badge sync via BroadcastChannel ─────────────────────────
+    var _bc = null;
+    try { _bc = new BroadcastChannel('pz_badges'); } catch (e) {}
 
     var btn    = document.getElementById('pzNotifBtn');
     var panel  = document.getElementById('pzNotifPanel');
@@ -182,13 +270,14 @@
       }
     }
 
-    function updateBadge(count) {
+    function updateBadge(count, _noBC) {
       if (count > 0) {
         badge.textContent = count > 99 ? '99+' : count;
         badge.style.display = 'flex';
       } else {
         badge.style.display = 'none';
       }
+      if (_bc && !_noBC) { try { _bc.postMessage({ type: 'notif', count: count }); } catch (e) {} }
     }
 
     function load() {
@@ -206,7 +295,7 @@
       e.stopPropagation();
       _open = !_open;
       panel.classList.toggle('open', _open);
-      if (_open) render(_data);
+      if (_open) { load(); } // always fetch fresh content when opening panel
     });
 
     document.addEventListener('click', function (e) {
@@ -229,19 +318,52 @@
       }).catch(function(){});
     });
 
-    // initial load + poll every 30 s
+    // Initial panel data load (populates _data for when bell is clicked)
     load();
-    setInterval(load, 30000);
+
+    // ── Notification badge: real-time via Firestore onSnapshot ───────────
+    // Falls back to 10s polling if Firestore permission is denied.
+    function startNotifListener() {
+      if (!window.pzFirebaseDb || !_uid) {
+        setInterval(load, 10000);
+        return;
+      }
+      window.pzFirebaseDb
+        .collection('notifications').doc(_uid).collection('items')
+        .where('isRead', '==', false)
+        .onSnapshot(
+          function (snap) { updateBadge(snap.size); },
+          function (err)  {
+            console.warn('[PZ] Notification listener:', err.message);
+            setInterval(load, 10000); // fallback polling
+          }
+        );
+    }
+    // Wait for anonymous auth before attaching listener
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (user && !window._pzNotifListenerStarted) {
+        window._pzNotifListenerStarted = true;
+        startNotifListener();
+      }
+    });
+    // Fallback: start listener even if auth state never fires within 4 s
+    setTimeout(function () {
+      if (!window._pzNotifListenerStarted) {
+        window._pzNotifListenerStarted = true;
+        startNotifListener();
+      }
+    }, 4000);
 
     // ── Message unread badge ──────────────────────────────────────────────
     var msgBadge = document.getElementById('pzMsgBadge');
-    function updateMsgBadge(n) {
+    function updateMsgBadge(n, _noBC) {
       if (n > 0) {
         msgBadge.textContent = n > 99 ? '99+' : n;
         msgBadge.style.display = 'flex';
       } else {
         msgBadge.style.display = 'none';
       }
+      if (_bc && !_noBC) { try { _bc.postMessage({ type: 'msg', count: n }); } catch (e) {} }
     }
     function loadMsgCount() {
       fetch(_base + 'messages/unread-count', { credentials: 'same-origin' })
@@ -249,8 +371,53 @@
         .then(function (d) { updateMsgBadge(d.count || 0); })
         .catch(function () {});
     }
+    // Initial load for the badge
     loadMsgCount();
-    setInterval(loadMsgCount, 30000);
+
+    // ── Message badge: real-time via Firestore onSnapshot ────────────────
+    function startMsgListener() {
+      if (!window.pzFirebaseDb || !_uid) {
+        setInterval(loadMsgCount, 10000);
+        return;
+      }
+      window.pzFirebaseDb
+        .collection('chats')
+        .where('members', 'array-contains', _uid)
+        .onSnapshot(
+          function (snap) {
+            var total = 0;
+            snap.forEach(function (doc) {
+              var counts = doc.data().unread_counts || {};
+              total += parseInt(counts[_uid] || 0, 10);
+            });
+            updateMsgBadge(total);
+          },
+          function (err) {
+            console.warn('[PZ] Message listener:', err.message);
+            setInterval(loadMsgCount, 10000); // fallback polling
+          }
+        );
+    }
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (user && !window._pzMsgListenerStarted) {
+        window._pzMsgListenerStarted = true;
+        startMsgListener();
+      }
+    });
+    setTimeout(function () {
+      if (!window._pzMsgListenerStarted) {
+        window._pzMsgListenerStarted = true;
+        startMsgListener();
+      }
+    }, 4000);
+
+    // ── Receive badge updates from other tabs (BroadcastChannel) ─────────
+    if (_bc) {
+      _bc.onmessage = function (e) {
+        if (e.data && e.data.type === 'notif') updateBadge(e.data.count, true);
+        if (e.data && e.data.type === 'msg')   updateMsgBadge(e.data.count, true);
+      };
+    }
   }());
   </script>
 
@@ -618,6 +785,113 @@
     // 3. Page-specific close hooks (optional override per page)
     if (typeof window.pzEscClose === 'function') window.pzEscClose();
   });
+  </script>
+
+  <!-- ── Global live-change bar ── -->
+  <div id="pzLiveBar">
+    <span class="pz-live-dot"></span>
+    <span id="pzLiveBarMsg">Data has changed</span>
+    <button onclick="location.reload()">Refresh Now</button>
+    <span class="pz-bar-dismiss" title="Dismiss"
+          onclick="document.getElementById('pzLiveBar').classList.remove('show')">×</span>
+  </div>
+
+  <!-- ── Page-aware Firestore change listeners ── -->
+  <script>
+  (function () {
+    var _path = window.location.pathname.toLowerCase();
+
+    // Global live-bar function — NO auto-reload; user chooses when
+    window.pzShowLiveBar = function (msg) {
+      var bar = document.getElementById('pzLiveBar');
+      if (!bar || bar.classList.contains('show')) return;
+      var msgEl = document.getElementById('pzLiveBarMsg');
+      if (msgEl) msgEl.textContent = msg || 'Data has changed — refresh when ready';
+      bar.classList.add('show');
+    };
+
+    // JS equivalent of PHP rr_badge() class map
+    window.pzBadgeClass = function (status) {
+      var map = {
+        'pending':                    'pz-badge-pending',
+        'pending secondary approval': 'pz-badge-pending-secondary',
+        'in-transit':                 'pz-badge-in-transit',
+        'rejected':                   'pz-badge-rejected',
+        'completed':                  'pz-badge-completed',
+      };
+      return map[(status || '').toLowerCase()] || 'pz-badge-pending';
+    };
+
+    // Pages that manage their own Firestore listeners skip the global handler
+    var _skipPaths = /\/login|\/register|\/forgot|\/reset|\/verify|\/requests\/?$|\/requests\/[^/]+\/?$|\/projects\/?$|\/staff\/?$|\/resources\/?$/i;
+    if (_skipPaths.test(_path)) return;
+
+    // Collection → page message map
+    var _rules = [
+      { pat: /\/dashboard|\/summary|\/monitor/, col: 'project',           msg: 'Project data has changed — refresh when ready' },
+      { pat: /\/dashboard|\/summary|\/monitor/, col: 'resource_requests', msg: 'Transfer status has changed — refresh when ready' },
+      { pat: /\/requests\/?$/,                  col: 'resource_requests', inPlace: true },
+      { pat: /\/projects/,                      col: 'project',           msg: 'Project data has changed — refresh when ready' },
+      { pat: /\/resources/,                     col: 'resource',          msg: 'Resource data has changed — refresh when ready' },
+      { pat: /\/resources/,                     col: 'manpower',          msg: 'Resource data has changed — refresh when ready' },
+      { pat: /\/manpower/,                      col: 'manpower',          msg: 'Manpower data has changed — refresh when ready' },
+      { pat: /\/staff/,                         col: 'users',             msg: 'Staff data has changed — refresh when ready' },
+    ];
+
+    var _attached = {};
+
+    function attachListener(db, col, msg, inPlace) {
+      if (_attached[col]) return;
+      _attached[col] = true;
+      var _ready = false;
+      db.collection(col).onSnapshot(
+        function (snap) {
+          if (!_ready) { _ready = true; return; }
+          var changes = snap.docChanges();
+          if (!changes.length) return;
+
+          // In-place: update request status badges without any page reload
+          if (inPlace && col === 'resource_requests') {
+            var hasNew = false;
+            changes.forEach(function (chg) {
+              if (chg.type === 'added') { hasNew = true; return; }
+              if (chg.type !== 'modified') return;
+              var row = document.querySelector('tr[data-req-id="' + chg.doc.id + '"]');
+              if (!row) return;
+              var cell = row.querySelector('[data-req-status]');
+              if (!cell) return;
+              var s = chg.doc.data().status || '';
+              cell.innerHTML = '<span class="pz-badge ' + window.pzBadgeClass(s) + '">'
+                             + s.toUpperCase() + '</span>';
+            });
+            if (hasNew) window.pzShowLiveBar('New request received — refresh when ready');
+            return;
+          }
+
+          window.pzShowLiveBar(msg);
+        },
+        function (err) { console.warn('[PZ] Listener (' + col + '):', err.message); }
+      );
+    }
+
+    function setupListeners(db) {
+      var seen = {};
+      _rules.forEach(function (r) {
+        if (!r.pat.test(_path)) return;
+        var key = r.col;
+        if (seen[key]) return;
+        seen[key] = true;
+        attachListener(db, r.col, r.msg, r.inPlace);
+      });
+    }
+
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (user && window.pzFirebaseDb && !window._pzPageListeners) {
+        window._pzPageListeners = true;
+        setupListeners(window.pzFirebaseDb);
+      }
+    });
+  }());
   </script>
 </body>
 </html>

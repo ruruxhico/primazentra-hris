@@ -241,6 +241,7 @@ class Resources extends BaseController
                 $resourceId = $this->model->createResource($data);
                 if (in_array($data['category'] ?? '', ['Equipment', 'Tools'], true)) {
                     $this->syncResourceItems($resourceId, $this->request->getPost('items') ?? []);
+                    $this->syncResourceCounts($resourceId);
                 }
             }
 
@@ -340,8 +341,10 @@ class Resources extends BaseController
                     } else {
                         $this->deleteResourceItems($id);
                     }
+                    $this->syncResourceCounts($id);
                 } elseif ($category === 'Tools') {
                     $this->syncResourceItems($id, $this->request->getPost('items') ?? []);
+                    $this->syncResourceCounts($id);
                 } else {
                     $this->deleteResourceItems($id);
                 }
@@ -455,7 +458,7 @@ class Resources extends BaseController
             } else {
                 $mpData = $this->manpowerModel->getManpowerById($id);
                 if ($mpData) {
-                    $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                    $mpName = ($mpData['name'] ?? '') ?: implode(' ', array_filter([trim((string)($mpData['first_name'] ?? '')), trim((string)($mpData['middle_name'] ?? '')), trim((string)($mpData['last_name'] ?? ''))], fn($p) => $p !== '')) ?: $id;
                     (new ArchiveService($this->firestore))->moveToArchive(
                         'manpower', $id, $mpName, $mpData, [],
                         session()->get('userName')
@@ -520,7 +523,7 @@ class Resources extends BaseController
                 } else {
                     $mpData = $this->manpowerModel->getManpowerById($id);
                     if ($mpData) {
-                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        $mpName = ($mpData['name'] ?? '') ?: implode(' ', array_filter([trim((string)($mpData['first_name'] ?? '')), trim((string)($mpData['middle_name'] ?? '')), trim((string)($mpData['last_name'] ?? ''))], fn($p) => $p !== '')) ?: $id;
                         (new TrashService($this->firestore))->moveToTrash(
                             'manpower', $id, $mpName, $mpData, [],
                             session()->get('userName')
@@ -557,7 +560,7 @@ class Resources extends BaseController
                 } else {
                     $mpData = $this->manpowerModel->getManpowerById($id);
                     if ($mpData) {
-                        $mpName = trim(($mpData['first_name'] ?? '') . ' ' . ($mpData['last_name'] ?? '')) ?: ($mpData['name'] ?? $id);
+                        $mpName = ($mpData['name'] ?? '') ?: implode(' ', array_filter([trim((string)($mpData['first_name'] ?? '')), trim((string)($mpData['middle_name'] ?? '')), trim((string)($mpData['last_name'] ?? ''))], fn($p) => $p !== '')) ?: $id;
                         (new TrashService($this->firestore))->moveToTrash(
                             'manpower', $id, $mpName, $mpData, [],
                             session()->get('userName')
@@ -600,6 +603,7 @@ class Resources extends BaseController
                 $db                 = $this->firestore->getDb();
                 $deleteField        = \Google\Cloud\Firestore\FieldValue::deleteField();
                 $projectExistsCache = [];
+                $projectNameCache   = [];
 
                 foreach ($this->model->getResourceItems($id) as $item) {
                     $apid = $item['assigned_project_id'] ?? null;
@@ -610,11 +614,14 @@ class Resources extends BaseController
                     if ($pid !== '') {
                         if (!array_key_exists($pid, $projectExistsCache)) {
                             try {
-                                $projectExistsCache[$pid] = $db
-                                    ->collection('project')->document($pid)
-                                    ->snapshot()->exists();
+                                $ps = $db->collection('project')->document($pid)->snapshot();
+                                $projectExistsCache[$pid] = $ps->exists();
+                                $projectNameCache[$pid]   = $ps->exists()
+                                    ? trim((string)($ps->data()['project_name'] ?? ''))
+                                    : '';
                             } catch (\Throwable) {
-                                $projectExistsCache[$pid] = true; // assume exists on error
+                                $projectExistsCache[$pid] = true;
+                                $projectNameCache[$pid]   = '';
                             }
                         }
 
@@ -633,10 +640,12 @@ class Resources extends BaseController
                                     log_message('warning', 'Resources::show auto-heal - ' . $e->getMessage());
                                 }
                             }
-                            // Fix display data immediately so the page shows correct values
                             unset($item['assigned_project_id']);
                             $item['status']      = 'In-Storage';
                             $item['assigned_to'] = '';
+                        } else {
+                            // Show project name in the Assigned To column
+                            $item['assigned_to'] = $projectNameCache[$pid] ?: $pid;
                         }
                     }
 
@@ -679,7 +688,6 @@ class Resources extends BaseController
 
             // â€” Read unit-level filters â€”
             $filterBrand     = trim((string) ($this->request->getGet('brand')     ?? ''));
-            $filterModelNo   = trim((string) ($this->request->getGet('model_no')  ?? ''));
             $filterCondition = trim((string) ($this->request->getGet('condition') ?? ''));
             $filterStatus    = trim((string) ($this->request->getGet('status')    ?? ''));
             $filterLocType   = trim((string) ($this->request->getGet('loc_type')  ?? ''));
@@ -688,10 +696,6 @@ class Resources extends BaseController
             if ($filterBrand !== '') {
                 $items = array_values(array_filter($items, fn($i) =>
                     str_contains(strtolower((string) ($i['brand'] ?? '')), strtolower($filterBrand))));
-            }
-            if ($filterModelNo !== '') {
-                $items = array_values(array_filter($items, fn($i) =>
-                    str_contains(strtolower((string) ($i['model_number'] ?? '')), strtolower($filterModelNo))));
             }
             if ($filterCondition !== '') {
                 $items = array_values(array_filter($items, fn($i) =>
@@ -725,7 +729,6 @@ class Resources extends BaseController
                 'itemsTotalPages'         => $itemsTotal > 0 ? (int)ceil($itemsTotal / $perPage) : 1,
                 'activeFilters'           => [
                     'brand'     => $filterBrand,
-                    'model_no'  => $filterModelNo,
                     'condition' => $filterCondition,
                     'status'    => $filterStatus,
                     'loc_type'  => $filterLocType,
@@ -758,10 +761,9 @@ class Resources extends BaseController
 
             $serial  = trim((string)($this->request->getPost('serial_number')    ?? ''));
             $brand   = trim((string)($this->request->getPost('brand')            ?? ''));
-            $modelNo = trim((string)($this->request->getPost('model_number')     ?? ''));
             $cond    = trim((string)($this->request->getPost('condition')        ?? ''));
             $status  = trim((string)($this->request->getPost('status')           ?? ''));
-            $locType = trim((string)($this->request->getPost('location_type')    ?? ''));
+            $locType = strtoupper(trim((string)($this->request->getPost('location_type')    ?? '')));
             $locAddr = trim((string)($this->request->getPost('location_address') ?? ''));
             $qty     = max(1, (int)($this->request->getPost('quantity') ?? 1));
 
@@ -770,8 +772,7 @@ class Resources extends BaseController
             }
 
             $base = [
-                'brand'       => $brand,
-                'model_number'=> $modelNo,
+                'brand_name'  => $brand,
                 'condition'   => $cond,
                 'status'      => $status,
                 'location'    => ['type' => $locType, 'address' => $locAddr],
@@ -787,6 +788,7 @@ class Resources extends BaseController
                 ]));
             }
 
+            $this->syncResourceCounts($resourceId);
             $msg = $qty > 1 ? "{$qty} units added successfully!" : 'Unit added successfully!';
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', $msg);
         } catch (\Exception $e) {
@@ -818,10 +820,9 @@ class Resources extends BaseController
 
             $serial   = trim((string)($this->request->getPost('serial_number') ?? ''));
             $brand    = trim((string)($this->request->getPost('brand')         ?? ''));
-            $modelNo  = trim((string)($this->request->getPost('model_number')  ?? ''));
             $cond     = trim((string)($this->request->getPost('condition')     ?? ''));
             $status   = trim((string)($this->request->getPost('status')        ?? ''));
-            $locType  = trim((string)($this->request->getPost('location_type') ?? ''));
+            $locType  = strtoupper(trim((string)($this->request->getPost('location_type') ?? '')));
             $locAddr  = trim((string)($this->request->getPost('location_address') ?? ''));
 
             if ($serial === '' || $cond === '' || $status === '') {
@@ -833,8 +834,7 @@ class Resources extends BaseController
                 'condition'     => $cond,
                 'status'        => $status,
             ];
-            if ($brand   !== '') $data['brand']        = $brand;
-            if ($modelNo !== '') $data['model_number'] = $modelNo;
+            if ($brand   !== '') $data['brand_name']   = $brand;
             if ($locType !== '' || $locAddr !== '') {
                 $data['location'] = ['type' => $locType, 'address' => $locAddr];
             }
@@ -844,6 +844,7 @@ class Resources extends BaseController
                 ->collection('items')->document($itemId)
                 ->set($data, ['merge' => true]);
 
+            $this->syncResourceCounts($resourceId);
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit updated successfully!');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error updating unit: ' . $e->getMessage());
@@ -868,6 +869,7 @@ class Resources extends BaseController
             }
             $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
 
+            $this->syncResourceCounts($resourceId);
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit deleted successfully.');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error deleting unit: ' . $e->getMessage());
@@ -898,6 +900,7 @@ class Resources extends BaseController
 
             $db->collection('resource')->document($resourceId)->collection('items')->document($itemId)->delete();
 
+            $this->syncResourceCounts($resourceId);
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
             return $this->response->setJSON(['success' => false, 'message' => $e->getMessage()]);
@@ -967,6 +970,7 @@ class Resources extends BaseController
                 $deleted++;
             } catch (\Throwable) {}
         }
+        $this->syncResourceCounts($resourceId);
         return $this->response->setJSON(['success' => true, 'deleted' => $deleted]);
     }
 
@@ -992,7 +996,27 @@ class Resources extends BaseController
                 $done++;
             } catch (\Throwable) {}
         }
+        $this->syncResourceCounts($resourceId);
         return $this->response->setJSON(['success' => true, 'archived' => $done]);
+    }
+
+    private function syncResourceCounts(string $resourceId): void
+    {
+        try {
+            $items     = $this->model->getResourceItems($resourceId);
+            $total     = count($items);
+            $available = $this->countAvailableUnits($items);
+            $status    = $available > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
+            $this->firestore->getDb()
+                ->collection('resource')->document($resourceId)
+                ->update([
+                    ['path' => 'total_quantity',    'value' => $total],
+                    ['path' => 'available_quantity', 'value' => $available],
+                    ['path' => 'status',             'value' => $status],
+                ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'syncResourceCounts(' . $resourceId . '): ' . $e->getMessage());
+        }
     }
 
     private function cleanProjectResourceEntry($db, string $resourceId, string $unitId, $assignedProjectId): void
@@ -1024,19 +1048,17 @@ class Resources extends BaseController
         $items = $this->normalizeItems($this->request->getPost('items') ?? []);
 
         $data = [
-            'name' => trim((string) $this->request->getPost('name')),
+            'name'     => trim((string) $this->request->getPost('name')),
             'category' => $category,
-            'location' => [
-                'address' => trim((string) $this->request->getPost('location_address')),
-                'type' => trim((string) $this->request->getPost('location_type')),
-            ],
         ];
 
         if ($category === 'Manpower') {
-            $firstName = trim((string) $this->request->getPost('first_name'));
+            $firstName  = trim((string) $this->request->getPost('first_name'));
             $middleName = trim((string) $this->request->getPost('middle_name'));
-            $lastName = trim((string) $this->request->getPost('last_name'));
-            $fullName = trim($firstName . ' ' . $lastName);
+            $lastName   = trim((string) $this->request->getPost('last_name'));
+            // Full name includes middle name — used as scan match token in mobile
+            $nameParts = array_filter([$firstName, $middleName, $lastName], fn($p) => $p !== '');
+            $fullName  = implode(' ', $nameParts);
             $manpowerId = trim((string) $this->request->getPost('manpower_id'));
 
             if ($manpowerId === '') {
@@ -1047,41 +1069,31 @@ class Resources extends BaseController
                 $data['name'] = $fullName;
             }
 
-            // Flattened manpower schema (new collection)
-            $data['employee_id'] = $manpowerId;
-            $data['first_name'] = $firstName;
+            // category is not in the mobile manpower schema
+            unset($data['category']);
+
+            // Flattened manpower schema
+            $data['employee_id']   = $manpowerId;
+            $data['first_name']    = $firstName;
             if ($middleName !== '') $data['middle_name'] = $middleName;
-            $data['last_name'] = $lastName;
-            $data['status'] = trim((string) ($this->request->getPost('status') ?: $this->request->getPost('manpower_status')));
-            $data['role'] = trim((string) $this->request->getPost('manpower_role'));
+            $data['last_name']     = $lastName;
+            $data['status']        = trim((string) ($this->request->getPost('status') ?: $this->request->getPost('manpower_status')));
+            $data['role']          = trim((string) $this->request->getPost('manpower_role'));
             $data['specialization'] = trim((string) $this->request->getPost('specialization'));
-            $data['contact_number'] = trim((string) $this->request->getPost('contact_number'));
+            // contact_number dropped from mobile schema — not written
             $data['assigned_project_id'] = trim((string) $this->request->getPost('assigned_project_id')) ?: null;
-            $data['next_availability'] = trim((string) $this->request->getPost('next_availability')) ?: null;
+            $data['next_availability']   = trim((string) $this->request->getPost('next_availability')) ?: null;
             $rawSkills = $this->request->getPost('skills') ?? [];
             $data['skills'] = array_values(array_filter(array_map('trim', is_array($rawSkills) ? $rawSkills : [])));
 
-            // For manpower, if current site/deployment provided, use it as top-level location
-            $site = trim((string) $this->request->getPost('current_site_deployment'));
-            // If user selected a project but didn't provide a site string, fetch project address
-            if (($site === '' || $site === null) && !empty($data['assigned_project_id'])) {
-                try {
-                    $projSnap = $this->model->getFirestoreInstance()->getDb()->collection('project')->document($data['assigned_project_id'])->snapshot();
-                    if ($projSnap->exists()) {
-                        $projData = $projSnap->data();
-                        $site = trim((string)($projData['location']['address'] ?? ''));
-                    }
-                } catch (\Exception $e) {
-                    // ignore and fall back
-                }
-            }
-
-            if ($site !== '') {
-                $data['location'] = [
-                    'address' => $site,
-                    'type' => trim((string) $this->request->getPost('location_type')) ?: 'Project Site',
-                ];
-            }
+            // Workers always get a location; default to WAREHOUSE — mobile stamps real values on transfer arrival
+            $site         = trim((string) $this->request->getPost('current_site_deployment'));
+            $locationType = strtoupper(trim((string) $this->request->getPost('location_type'))) ?: 'WAREHOUSE';
+            $data['location'] = [
+                'address'  => $site,
+                'type'     => $locationType,
+                'geopoint' => null,
+            ];
         }
 
         if (in_array($category, ['Equipment', 'Tools'], true)) {
@@ -1090,27 +1102,12 @@ class Resources extends BaseController
             
             // For Equipment/Tools, use spec fields directly
             $data['model_code'] = $modelCode;
-            $data['model_number'] = trim((string) $this->request->getPost('model_number'));
             $data['total_quantity'] = (int) ($this->request->getPost('total_quantity') ?: 0);
             $data['available_quantity'] = (int) ($this->request->getPost('available_quantity') ?: 0);
             $data['condition_summary'] = $this->buildConditionSummary($items);
             $data['running_serial_count'] = (int) ($this->request->getPost('running_serial_count') ?: 0);
-            
-            // Keep asset_details for backward compatibility with existing views/forms
-            $data['asset_details'] = [
-                'model_number' => $data['model_number'],
-                'total_quantity' => $data['total_quantity'],
-                'available_quantity' => $data['available_quantity'],
-                'condition_summary' => $data['condition_summary'],
-            ];
-            $data['items'] = $items;
-        }
-
-        // Optional geopoint support (latitude/longitude) for map integration
-        $lat = $this->request->getPost('location_geopoint_lat');
-        $lng = $this->request->getPost('location_geopoint_lng');
-        if ($lat !== null && $lng !== null && is_numeric($lat) && is_numeric($lng)) {
-            $data['location']['geopoint'] = ['lat' => (float) $lat, 'lng' => (float) $lng];
+            // asset_details nested map intentionally not written — mobile reads top-level fields
+            // items embedded array intentionally not written — items subcollection is source of truth
         }
 
         return $data;
@@ -1123,13 +1120,15 @@ class Resources extends BaseController
         foreach ($rawItems as $item) {
             // New spec fields
             $serialNumber = trim((string) ($item['serial_number'] ?? ''));
-            $brand        = trim((string) ($item['brand'] ?? ''));
-            $modelNumber  = trim((string) ($item['model_number'] ?? ''));
+            $brand        = trim((string) ($item['brand_name'] ?? $item['brand'] ?? ''));
             $condition = trim((string) ($item['condition'] ?? ''));
             $status = trim((string) ($item['status'] ?? 'In-Storage'));
             $address = trim((string) ($item['address'] ?? ''));
-            $locationType = trim((string) ($item['location_type'] ?? ''));
-            $assignedProjectId = trim((string) ($item['assigned_project_id'] ?? '')) ?: null;
+            $locationType = strtoupper(trim((string) ($item['location_type'] ?? '')));
+            $rawAssignedProjId = $item['assigned_project_id'] ?? null;
+            $assignedProjectId = $rawAssignedProjId instanceof \Google\Cloud\Firestore\DocumentReference
+                ? $rawAssignedProjId->id()
+                : (trim((string)($rawAssignedProjId ?? '')) ?: null);
             $nextAvailability = trim((string) ($item['next_availability'] ?? '')) ?: null;
 
             // Fallback: legacy unit_id support for backward compatibility
@@ -1145,11 +1144,11 @@ class Resources extends BaseController
             }
 
             // Build item with new spec structure
+            // __docId is used as the Firestore document ID and is stripped before writing
             $itemData = [
-                'id'           => trim((string) ($item['id'] ?? '')) ?: bin2hex(random_bytes(8)),
+                '__docId'      => trim((string) ($item['id'] ?? '')) ?: bin2hex(random_bytes(8)),
                 'serial_number' => $serialNumber,
-                'brand'        => $brand,
-                'model_number' => $modelNumber,
+                'brand_name'   => $brand,
                 'condition'    => $condition,
                 'status'       => $status,
                 'assigned_project_id' => $assignedProjectId,
@@ -1194,7 +1193,20 @@ class Resources extends BaseController
 
     private function syncResourceItems(string $resourceId, array $rawItems): void
     {
-        $items = $this->normalizeItems($rawItems);
+        // Expand items whose qty stepper is > 1 into individual item entries
+        $expandedRaw = [];
+        foreach ($rawItems as $item) {
+            $qty    = max(1, (int)($item['quantity'] ?? 1));
+            $serial = trim((string)($item['serial_number'] ?? ''));
+            for ($i = 0; $i < $qty; $i++) {
+                $copy = $item;
+                $copy['serial_number'] = $this->_deriveSerial($serial, $i);
+                $copy['quantity'] = 1;
+                $expandedRaw[] = $copy;
+            }
+        }
+
+        $items = $this->normalizeItems($expandedRaw);
         $itemsRef = $this->model->getFirestoreInstance()->getDb()
             ->collection('resource')
             ->document($resourceId)
@@ -1213,7 +1225,8 @@ class Resources extends BaseController
 
         // Sync items to subcollection
         foreach ($items as $item) {
-            $itemId = $item['id'];
+            $itemId = $item['__docId'];
+            unset($item['__docId']);
 
             // Generate serial number if empty and model_code is available
             if (empty($item['serial_number']) && !empty($modelCode)) {
@@ -1233,32 +1246,6 @@ class Resources extends BaseController
             $item['updated_at'] = new \Google\Cloud\Core\Timestamp(new \DateTime());
 
             $itemsRef->document($itemId)->set($item);
-        }
-
-        // Dual-write: persist a simplified items array on the parent document for compatibility
-        $docRef = $this->model->getFirestoreInstance()->getDb()
-            ->collection('resource')
-            ->document($resourceId);
-
-        try {
-            // Ensure parent document items use Firestore Timestamp objects for timestamps
-            foreach ($items as &$pi) {
-                if (isset($pi['created_at']) && is_numeric($pi['created_at'])) {
-                    $dt = new \DateTime();
-                    $dt->setTimestamp((int) $pi['created_at']);
-                    $pi['created_at'] = new \Google\Cloud\Core\Timestamp($dt);
-                } elseif (empty($pi['created_at'])) {
-                    $pi['created_at'] = new \Google\Cloud\Core\Timestamp(new \DateTime());
-                }
-
-                $pi['updated_at'] = new \Google\Cloud\Core\Timestamp(new \DateTime());
-            }
-
-            unset($pi);
-
-            $docRef->set(['items' => $items], ['merge' => true]);
-        } catch (\Exception $e) {
-            // swallow - best-effort write
         }
     }
 
@@ -1295,12 +1282,19 @@ class Resources extends BaseController
         $resource['category_label'] = (string) ($resource['category'] ?? '');
         $resource['asset_details'] = is_array($resource['asset_details'] ?? null) ? $resource['asset_details'] : [];
         $resource['manpower_details'] = is_array($resource['manpower_details'] ?? null) ? $resource['manpower_details'] : [];
-        $resource['total_quantity_display'] = (int) ($resource['asset_details']['total_quantity'] ?? 0);
-        $resource['available_units_display'] = (int) ($resource['asset_details']['available_quantity'] ?? 0);
+        $resource['total_quantity_display'] = (int) ($resource['total_quantity'] ?? $resource['asset_details']['total_quantity'] ?? 0);
+        $resource['available_units_display'] = max(0, (int) ($resource['available_quantity'] ?? $resource['asset_details']['available_quantity'] ?? 0));
+
+        // Derive status for equipment/tools when the field is missing or empty
+        if (empty($resource['status']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
+            $avail = $resource['available_units_display'];
+            $total = $resource['total_quantity_display'];
+            $resource['status'] = $avail > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
+        }
 
         // Ensure model_code is populated for Equipment/Tools
         if (empty($resource['model_code']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
-            $resource['model_code'] = (string) ($resource['asset_details']['model_number'] ?? '');
+            $resource['model_code'] = '';
         }
 
         $derivedItems = [];
@@ -1348,18 +1342,23 @@ class Resources extends BaseController
                 'role' => $resource['role'] ?? ($resource['manpower_details']['role'] ?? ''),
                 'specialization' => $resource['specialization'] ?? ($resource['manpower_details']['specialization'] ?? ''),
                 'contact_number' => $resource['contact_number'] ?? ($resource['manpower_details']['contact_number'] ?? ''),
-                'assigned_project_id' => $resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null),
+                'assigned_project_id' => (function($v){ return $v instanceof \Google\Cloud\Firestore\DocumentReference ? $v->id() : ($v ?: null); })($resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null)),
                 'skills' => is_array($resource['skills'] ?? null) ? $resource['skills'] : ($resource['manpower_details']['skills'] ?? []),
                 'current_site_deployment' => '',
             ];
             // Prefer showing project name when assigned_project_id exists
-            $assignedPid = $resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null);
+            $rawAssignedPid = $resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null);
+            $assignedPid = $rawAssignedPid instanceof \Google\Cloud\Firestore\DocumentReference
+                ? $rawAssignedPid->id()
+                : (trim((string)($rawAssignedPid ?? '')) ?: null);
             if (!empty($assignedPid)) {
                 try {
                     $projSnap = $this->model->getFirestoreInstance()->getDb()->collection('project')->document($assignedPid)->snapshot();
                     if ($projSnap->exists()) {
                         $projData = $projSnap->data();
-                        $resource['manpower_details']['current_site_deployment'] = trim((string)($projData['project_name'] ?? $projData['location']['address'] ?? ''));
+                        $projName = trim((string)($projData['project_name'] ?? $projData['location']['address'] ?? ''));
+                        $resource['manpower_details']['current_site_deployment']  = $projName;
+                        $resource['manpower_details']['assigned_project_name']    = $projName;
                     } else {
                         $resource['manpower_details']['current_site_deployment'] = $resource['location']['address'] ?? ($resource['manpower_details']['current_site_deployment'] ?? '');
                     }
@@ -1399,6 +1398,22 @@ class Resources extends BaseController
                     $resource['manpower_details']['manpower_id'] = 'MP-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
                 } catch (\Exception $e) {
                     $resource['manpower_details']['manpower_id'] = 'MP-UNKNOWN';
+                }
+            }
+
+            // Resolve assigned_project_name if not already set
+            if (empty($resource['manpower_details']['assigned_project_name'])) {
+                $rawPid = $resource['manpower_details']['assigned_project_id'] ?? $resource['assigned_project_id'] ?? null;
+                $pid = $rawPid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $rawPid->id()
+                    : (trim((string)($rawPid ?? '')) ?: null);
+                if (!empty($pid)) {
+                    try {
+                        $ps = $this->model->getFirestoreInstance()->getDb()->collection('project')->document($pid)->snapshot();
+                        if ($ps->exists()) {
+                            $resource['manpower_details']['assigned_project_name'] = trim((string)($ps->data()['project_name'] ?? ''));
+                        }
+                    } catch (\Exception $e) {}
                 }
             }
         }

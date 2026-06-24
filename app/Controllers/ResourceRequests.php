@@ -116,7 +116,7 @@ class ResourceRequests extends BaseController
         $recommendedBest    = null;
         $recommendedNearest = null;
 
-        if (in_array(strtolower($req['status'] ?? ''), ['pending', 'pending secondary', 'pending secondary approval'])) {
+        if (in_array(strtolower($req['status'] ?? ''), ['pending', 'pending secondary approval'])) {
             try {
                 $mlService = new MLServiceClient();
                 $destPid   = $req['destination_project_id'] ?? '';
@@ -141,7 +141,7 @@ class ResourceRequests extends BaseController
                             'project_name'   => $proj['label'],
                             'lat'            => (float)($proj['lat'] ?? 14.5995),
                             'lng'            => (float)($proj['lng'] ?? 120.9842),
-                            'tool_category'  => $req['category'] ?? 'Equipment',
+                            'tool_category'  => $req['resource_category'] ?? 'Equipment',
                             'units_released' => 1,
                         ];
                     }
@@ -150,7 +150,7 @@ class ResourceRequests extends BaseController
                 if (!empty($releasedPayload)) {
                     $mlCfg = new \Config\MLService();
                     $result = $mlService->predictToolAvailability([
-                        'tool_category'  => $req['category'] ?? 'Equipment',
+                        'tool_category'  => $req['resource_category'] ?? 'Equipment',
                         'site_lat'       => $siteLat,
                         'site_lng'       => $siteLng,
                         'radius_km'      => 500,
@@ -185,14 +185,19 @@ class ResourceRequests extends BaseController
             }
         }
 
+        $currentRole        = session()->get('role') ?? '';
+        $canAcceptDelivery  = $currentRole === 'Site Engineer'
+                           && strtolower($req['status'] ?? '') === 'in-transit';
+
         return view('requests/show', [
-            'pageTitle'          => 'Request Details',
-            'activePage'         => 'resources',
-            'request'            => $req,
-            'projects'           => $projects,
-            'role'               => session()->get('role') ?? '',
-            'recommended_best'   => $recommendedBest,
-            'recommended_nearest'=> $recommendedNearest,
+            'pageTitle'           => 'Request Details',
+            'activePage'          => 'resources',
+            'request'             => $req,
+            'projects'            => $projects,
+            'role'                => $currentRole,
+            'recommended_best'    => $recommendedBest,
+            'recommended_nearest' => $recommendedNearest,
+            'canAcceptDelivery'   => $canAcceptDelivery,
         ]);
     }
 
@@ -206,17 +211,17 @@ class ResourceRequests extends BaseController
 
         $body = $this->request->getJSON(true) ?: $this->request->getPost();
 
-        $category    = trim($body['category']    ?? '');
-        $resName     = trim($body['resource_name'] ?? '');
-        $sourcePid   = trim($body['source_project_id']      ?? '');
-        $sourceName  = trim($body['source_project_name']    ?? '');
-        $destPid     = trim($body['destination_project_id'] ?? '');
-        $destName    = trim($body['destination_project_name'] ?? '');
-        $type        = trim($body['type']        ?? 'drag_drop');
-        $qty         = max(1, (int)($body['quantity'] ?? 1));
-        $model       = trim($body['model']       ?? '');
-        $resId       = trim($body['resource_id'] ?? '');
-        $unitId      = trim($body['unit_id']     ?? '');
+        $category      = trim($body['resource_category'] ?? $body['category'] ?? '');
+        $resName       = trim($body['resource_name'] ?? $body['requested_model_name'] ?? '');
+        $sourcePid     = trim($body['source_project_id'] ?? $body['source_site_id'] ?? '');
+        $sourceName    = trim($body['source_project_name'] ?? $body['source_site_name'] ?? '');
+        $destPid       = trim($body['destination_project_id'] ?? $body['destination_site_id'] ?? '');
+        $destName      = trim($body['destination_project_name'] ?? $body['destination_site_name'] ?? '');
+        $requestKind   = trim($body['request_kind'] ?? $body['type'] ?? 'manual');
+        $qty           = max(1, (int)($body['requested_quantity'] ?? $body['quantity'] ?? 1));
+        $modelId       = trim($body['requested_model_id'] ?? $body['resource_id'] ?? '');
+        $sourceResId   = trim($body['source_resource_id'] ?? $body['unit_id'] ?? '');
+        $sourceResCode = trim($body['source_resource_code'] ?? '');
 
         if (!$category || !$destPid) {
             return $this->jsonError('Missing required fields.');
@@ -240,19 +245,24 @@ class ResourceRequests extends BaseController
             } catch (\Throwable $e) { $destName = $destPid; }
         }
 
+        $cat = ucfirst(strtolower($category));
+
         $data = [
-            'type'                   => $type,
-            'category'               => ucfirst(strtolower($category)),
+            'request_kind'           => $requestKind,
+            'resource_category'      => $cat,
             'resource_name'          => $resName,
-            'resource_id'            => $resId,
-            'unit_id'                => $unitId,
-            'quantity'               => $qty,
-            'model'                  => $model,
+            'requested_model_id'     => $modelId ?: null,
+            'requested_model_name'   => $resName ?: null,
+            'source_resource_id'     => $sourceResId ?: null,
+            'source_resource_code'   => $sourceResCode ?: null,
+            'requested_quantity'     => $qty,
             'source_project_id'      => $sourcePid ?: null,
-            'source_site_name'       => $sourcePid ? $sourceName : 'To be assigned',
+            'source_site_id'         => $sourcePid ?: null,
+            'source_site_name'       => $sourcePid ? $sourceName : null,
             'destination_project_id' => $destPid,
+            'destination_site_id'    => $destPid,
             'destination_site_name'  => $destName,
-            'requested_by'           => $uid,
+            'requested_by_uid'       => $uid,
             'requested_by_name'      => $user,
             'requested_by_role'      => $role,
         ];
@@ -315,59 +325,59 @@ class ResourceRequests extends BaseController
             $bypassSecond = false;
         }
 
-        $updates = [
-            'status'                       => $bypassSecond ? 'Approved' : 'Pending Secondary',
-            'approved_by'                  => $uid,
-            'approved_by_name'             => $user,
-            'approved_by_role'             => $role,
-            'approved_at'                  => new Timestamp(new \DateTime()),
-            'bypass_secondary'             => $bypassSecond,
-            'approved_source_project_id'   => $sourcePid ?: ($req['source_project_id'] ?? ''),
-            'approved_source_project_name' => $sourceName ?: ($req['source_site_name'] ?? ''),
-        ];
-
-        // If source was already known (drag-and-drop), use it
-        if (!$sourcePid && !empty($req['source_project_id'])) {
-            $updates['approved_source_project_id']   = $req['source_project_id'];
-            $updates['approved_source_project_name'] = $req['source_site_name'] ?? '';
-            $updates['status'] = $bypassSecond ? 'Approved' : 'Pending Secondary';
-        }
+        // Resolve final source values (prefer submitted, fall back to what's stored on the request)
+        $finalSrcPid  = $sourcePid ?: ($req['source_project_id'] ?? $req['source_site_id'] ?? '');
+        $finalSrcName = $sourceName ?: ($req['source_site_name'] ?? '');
 
         try {
-            $this->requestModel->update($id, $updates);
-
-            $resName     = (string)($req['resource_name'] ?? 'resource');
-            $requesterUid = (string)($req['requested_by'] ?? '');
+            $resName       = (string)($req['requested_model_name'] ?? $req['resource_name'] ?? 'resource');
+            $requesterUid  = (string)($req['requested_by_uid'] ?? '');
             $requesterName = (string)($req['requested_by_name'] ?? 'Someone');
-
-            $svc = new NotificationService();
+            $svc           = new NotificationService();
 
             if ($bypassSecond) {
-                // Admin bypass — fully approved in one step; move the resource immediately
-                $this->_finalizeTransfer(array_merge($req, $updates));
+                // Admin bypass: write source then finalize directly to In-Transit
+                $this->requestModel->update($id, [
+                    'source_project_id' => $finalSrcPid,
+                    'source_site_id'    => $finalSrcPid,
+                    'source_site_name'  => $finalSrcName,
+                ]);
+
+                $this->_finalizeTransfer(
+                    array_merge($req, [
+                        'source_project_id' => $finalSrcPid,
+                        'source_site_id'    => $finalSrcPid,
+                        'source_site_name'  => $finalSrcName,
+                    ]),
+                    $uid, $user, $role, true
+                );
 
                 if ($requesterUid) {
-                    $svc->send(
-                        $requesterUid,
-                        'requestApproved',
-                        'Request Approved',
-                        'Your request has been fully approved.',
-                        ['request_id' => $id]
-                    );
+                    $svc->send($requesterUid, 'requestApproved', 'Request Approved',
+                        'Your request has been fully approved.', ['request_id' => $id]);
                 }
             } else {
-                // Primary approved, secondary still needed — notify requester (1/2)
+                // Primary approval — write primary_approval nested object, no resource locking yet
+                $this->requestModel->update($id, [
+                    'status'          => 'Pending Secondary Approval',
+                    'approval_stage'  => 'Secondary',
+                    'primary_approval' => [
+                        'uid'         => $uid,
+                        'name'        => $user,
+                        'role'        => $role,
+                        'approved_at' => (new \DateTime())->format('c'),
+                    ],
+                    'source_project_id' => $finalSrcPid,
+                    'source_site_id'    => $finalSrcPid,
+                    'source_site_name'  => $finalSrcName,
+                ]);
+
                 if ($requesterUid) {
-                    $svc->send(
-                        $requesterUid,
-                        'requestApproved',
-                        'Request Approved',
+                    $svc->send($requesterUid, 'requestApproved', 'Request Approved',
                         'Your request has been approved (1/2) — awaiting secondary.',
-                        ['request_id' => $id]
-                    );
+                        ['request_id' => $id]);
                 }
 
-                // Notify secondary approvers (all roles except the primary approver's role)
                 $this->notifyUsersWithRoles(
                     ['Administrator', 'Operations Manager', 'Project Manager'],
                     'secondaryApproval',
@@ -407,8 +417,11 @@ class ResourceRequests extends BaseController
         try {
             $this->requestModel->update($id, [
                 'status'          => 'Rejected',
-                'rejected_by'     => session()->get('userId') ?? '',
+                'transfer_state'  => 'Rejected',
+                'transfer_locked' => false,
+                'rejected_by_uid' => session()->get('userId')   ?? '',
                 'rejected_by_name'=> session()->get('userName') ?? '',
+                'rejected_by_role'=> $role,
                 'rejected_at'     => new Timestamp(new \DateTime()),
             ]);
             return redirect()->to('requests')->with('success', 'Request rejected.');
@@ -431,28 +444,23 @@ class ResourceRequests extends BaseController
         }
 
         $req = $this->requestModel->getById($id);
-        if (!$req || $req['status'] !== 'Pending Secondary') {
+        if (!$req || $req['status'] !== 'Pending Secondary Approval') {
             return redirect()->to('requests/' . $id)->with('error', 'Request is not awaiting secondary approval.');
         }
 
-        $primaryRole = $req['approved_by_role'] ?? '';
+        // Role must differ from the primary approver (read from primary_approval nested object)
+        $primaryRole = $req['primary_approval']['role'] ?? $req['approved_by_role'] ?? '';
         if ($primaryRole && $currentRole === $primaryRole) {
             return redirect()->to('requests/' . $id)->with('error', "A {$primaryRole} already approved this request. A different role must provide the secondary approval.");
         }
 
         try {
-            $this->requestModel->update($id, [
-                'status'                      => 'Approved',
-                'secondary_approved_by'       => session()->get('userId') ?? '',
-                'secondary_approved_by_name'  => session()->get('userName') ?? '',
-                'secondary_approved_by_role'  => $currentRole,
-                'secondary_approved_at'       => new Timestamp(new \DateTime()),
-            ]);
+            $uid  = session()->get('userId')   ?? '';
+            $user = session()->get('userName') ?? '';
 
-            // Move the resource to the destination project now that it's fully approved
-            $this->_finalizeTransfer($req);
+            $this->_finalizeTransfer($req, $uid, $user, $currentRole, false);
 
-            $requesterUid = (string)($req['requested_by'] ?? '');
+            $requesterUid = (string)($req['requested_by_uid'] ?? '');
             if ($requesterUid) {
                 (new NotificationService())->send(
                     $requesterUid,
@@ -486,11 +494,11 @@ class ResourceRequests extends BaseController
 
         $result = [];
         foreach ($all as $r) {
-            if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary', 'Pending Secondary Approval'])) continue;
+            if (!in_array($r['status'] ?? '', ['Pending', 'Pending Secondary Approval'])) continue;
             $result[] = [
                 'id'            => $r['id'],
                 'status'        => $r['status'],
-                'category'      => strtolower($r['category'] ?? ''),
+                'category'      => strtolower($r['resource_category'] ?? ''),
                 'resource_id'   => $r['resource_id']            ?? '',
                 'resource_name' => $r['resource_name']          ?? '',
                 'source_pid'    => $r['source_project_id']      ?? '',
@@ -535,73 +543,503 @@ class ResourceRequests extends BaseController
     }
 
     /**
-     * After final approval, update the resource's assigned_project_id and status
-     * so the dashboard immediately reflects the transfer.
+     * Final-approval handler — Parts A–D of the transfer spec.
+     * Builds reserved_resources, locks resource documents, updates project arrays,
+     * and flips the request to In-Transit.
      */
-    private function _finalizeTransfer(array $req): void
-    {
-        $category = strtolower(trim($req['category'] ?? ''));
-        $resId    = trim($req['resource_id'] ?? '');
-        $unitId   = trim($req['unit_id']     ?? '');
-        $destPid  = trim($req['destination_project_id'] ?? '');
-        $destName = trim($req['destination_site_name']  ?? '');
+    private function _finalizeTransfer(
+        array  $req,
+        string $approverUid  = '',
+        string $approverName = '',
+        string $approverRole = '',
+        bool   $bypassSecond = false
+    ): void {
+        $reqId     = trim($req['id'] ?? '');
+        $category  = strtolower(trim($req['resource_category'] ?? $req['category'] ?? ''));
+        // For equipment/tools: requested_model_id = resource model doc ID
+        // For manpower:        source_resource_id  = manpower doc ID
+        $modelId   = trim($req['requested_model_id'] ?? $req['resource_id'] ?? '');
+        $unitId    = trim($req['source_resource_id'] ?? $req['unit_id'] ?? '');
+        $srcPid    = trim($req['source_project_id'] ?? $req['source_site_id'] ?? '');
+        $srcName   = strtoupper(trim($req['source_site_name'] ?? ''));
+        $destPid   = trim($req['destination_project_id'] ?? $req['destination_site_id'] ?? '');
+        $destName  = trim($req['destination_site_name'] ?? '');
+        $modelName = trim($req['requested_model_name'] ?? $req['resource_name'] ?? '');
+        $qty       = max(1, (int)($req['requested_quantity'] ?? 1));
+        $nowIso    = (new \DateTime())->format('c');
 
-        if (!$resId || !$destPid) return;
+        if (!$destPid) return;
 
         $db  = $this->firestore->getDb();
         $now = new Timestamp(new \DateTime());
 
         try {
+            // ── Part A: Build reserved_resources ───────────────────────────
+            $reservedResources = [];
+
+            $lockFields = [
+                ['path' => 'transfer_state',               'value' => 'Transferring'],
+                ['path' => 'transfer_locked',              'value' => true],
+                ['path' => 'transfer_request_id',          'value' => $reqId],
+                ['path' => 'transfer_source_site_id',      'value' => $srcPid],
+                ['path' => 'transfer_source_site_name',    'value' => $srcName],
+                ['path' => 'transfer_destination_site_id',   'value' => $destPid],
+                ['path' => 'transfer_destination_site_name', 'value' => strtoupper($destName)],
+                ['path' => 'transfer_locked_at',           'value' => $now],
+                ['path' => 'status',                       'value' => 'Transfer Pending'],
+                ['path' => 'updated_at',                   'value' => $now],
+            ];
+
+            if ($category === 'manpower') {
+                $mpId   = $unitId ?: $modelId; // manpower doc ID is in source_resource_id
+                $mpData = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
+                $fn     = strtoupper(trim((string)($mpData['first_name']  ?? '')));
+                $mn     = strtoupper(trim((string)($mpData['middle_name'] ?? '')));
+                $ln     = strtoupper(trim((string)($mpData['last_name']   ?? '')));
+                $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                       ?: strtoupper(trim((string)($mpData['name'] ?? '')));
+                $empId  = strtolower(trim((string)($mpData['employee_id'] ?? '')));
+
+                // match_tokens: employee_id + full name (lower) + first+last (lower, if differs)
+                $fullLower      = strtolower($mpName);
+                $firstLastLower = strtolower(implode(' ', array_filter([$fn, $ln], fn($p) => $p !== '')));
+                $tokens = array_values(array_unique(array_filter(
+                    [$empId, $fullLower, $firstLastLower !== $fullLower ? $firstLastLower : ''],
+                    fn($t) => $t !== ''
+                )));
+
+                $reservedResources[] = [
+                    'kind'                  => 'manpower',
+                    'resource_id'           => $mpId,
+                    'model_id'              => null,
+                    'equipment_type'        => '',
+                    'source_site_id'        => $srcPid,
+                    'source_site_name'      => $srcName,
+                    'destination_site_id'   => $destPid,
+                    'destination_site_name' => $destName,
+                    'display_name'          => $mpName,
+                    'match_tokens'          => $tokens,
+                    'scanned'               => false,
+                    'scanned_at'            => null,
+                    'scanned_by'            => null,
+                ];
+
+                // Part C: lock manpower doc + move assigned_project_id immediately
+                $db->collection('manpower')->document($mpId)->update(array_merge($lockFields, [
+                    ['path' => 'assigned_project_id', 'value' => $destPid],
+                    ['path' => 'location', 'value' => [
+                        'address' => strtoupper($destName),
+                        'type'    => 'PROJECT SITE',
+                    ]],
+                ]));
+
+                // Part D (manpower): sync project.resources arrays
+                // Remove from source project immediately so it doesn't show in both places
+                if ($srcPid) {
+                    $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
+                    $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
+                    $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
+                        (string)($r['ref_id'] ?? '') !== $mpId
+                    ));
+                    if (count($srcFiltered) !== count($srcCurrent)) {
+                        $db->collection('project')->document($srcPid)->update([
+                            ['path' => 'resources', 'value' => $srcFiltered],
+                        ]);
+                    }
+                }
+
+                // Add to destination project with transit flags (mirrors equipment pattern)
+                $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                $destCurrent = array_values(array_filter($destCurrent, fn($r) =>
+                    (string)($r['ref_id'] ?? '') !== $mpId && (string)($r['unit_id'] ?? '') !== $mpId
+                ));
+                $destCurrent[] = [
+                    'ref_id'              => $mpId,
+                    'unit_id'             => '',
+                    'name'                => $mpName,
+                    'category'            => 'manpower',
+                    'transit'             => true,
+                    'transit_incoming'    => true,
+                    'transfer_request_id' => $reqId,
+                ];
+                $db->collection('project')->document($destPid)->update([
+                    ['path' => 'resources', 'value' => array_values($destCurrent)],
+                ]);
+
+            } elseif (in_array($category, ['equipment', 'tools'])) {
+                $resData  = $db->collection('resource')->document($modelId)->snapshot()->data() ?? [];
+                $resLabel = strtoupper(trim((string)($resData['name'] ?? $modelName)));
+                $resCat   = ucfirst(strtolower($category));
+                $itemsRef = $db->collection('resource')->document($modelId)->collection('items');
+
+                $unitLockFields = array_merge($lockFields, [
+                    // Do NOT set assigned_project_id yet — that happens on scan confirmation
+                ]);
+
+                if ($unitId !== '') {
+                    // Specific unit (drag-drop)
+                    $itemData = $itemsRef->document($unitId)->snapshot()->data() ?? [];
+                    $sn       = strtolower(trim((string)($itemData['serial_number'] ?? '')));
+                    $tokens   = array_values(array_filter([$sn], fn($t) => $t !== ''));
+
+                    $reservedResources[] = [
+                        'kind'                  => 'unit',
+                        'resource_id'           => $unitId,
+                        'model_id'              => $modelId,
+                        'equipment_type'        => $resLabel,
+                        'source_site_id'        => $srcPid,
+                        'source_site_name'      => $srcName,
+                        'destination_site_id'   => $destPid,
+                        'destination_site_name' => $destName,
+                        'display_name'          => $sn ?: $unitId,
+                        'match_tokens'          => $tokens,
+                        'scanned'               => false,
+                        'scanned_at'            => null,
+                        'scanned_by'            => null,
+                    ];
+
+                    // Part C: lock this unit
+                    $itemsRef->document($unitId)->update($unitLockFields);
+
+                } else {
+                    // Bulk: select $qty In-Storage units
+                    $moved = 0;
+                    foreach ($itemsRef->documents() as $itemDoc) {
+                        if (!$itemDoc->exists() || $moved >= $qty) break;
+                        if ((string)($itemDoc->data()['status'] ?? '') !== 'In-Storage') continue;
+
+                        $iId    = $itemDoc->id();
+                        $sn     = strtolower(trim((string)($itemDoc->data()['serial_number'] ?? '')));
+                        $tokens = array_values(array_filter([$sn], fn($t) => $t !== ''));
+
+                        $reservedResources[] = [
+                            'kind'                  => 'unit',
+                            'resource_id'           => $iId,
+                            'model_id'              => $modelId,
+                            'equipment_type'        => $resLabel,
+                            'source_site_id'        => $srcPid,
+                            'source_site_name'      => $srcName,
+                            'destination_site_id'   => $destPid,
+                            'destination_site_name' => $destName,
+                            'display_name'          => $sn ?: $iId,
+                            'match_tokens'          => $tokens,
+                            'scanned'               => false,
+                            'scanned_at'            => null,
+                            'scanned_by'            => null,
+                        ];
+
+                        // Part C: lock this unit
+                        $itemDoc->reference()->update($unitLockFields);
+                        $moved++;
+                    }
+                }
+
+                // Part D: update project.resources arrays (units only)
+                $unitIds = array_column($reservedResources, 'resource_id');
+
+                // Source project: set transit = true on matching unit entries
+                if ($srcPid && !empty($unitIds)) {
+                    $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
+                    $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
+                    $srcChanged = false;
+                    $srcUpdated = array_map(function ($r) use ($unitIds, &$srcChanged) {
+                        if (in_array((string)($r['unit_id'] ?? ''), $unitIds, true) && empty($r['transit'])) {
+                            $r['transit'] = true;
+                            $srcChanged   = true;
+                        }
+                        return $r;
+                    }, $srcCurrent);
+                    if ($srcChanged) {
+                        $db->collection('project')->document($srcPid)->update([
+                            ['path' => 'resources', 'value' => $srcUpdated],
+                        ]);
+                    }
+                }
+
+                // Destination project: remove stale entry, append with transit + transit_incoming flags
+                if (!empty($reservedResources)) {
+                    $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                    $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                    foreach ($reservedResources as $rr) {
+                        $destCurrent = array_values(array_filter(
+                            $destCurrent,
+                            fn($r) => (string)($r['unit_id'] ?? '') !== $rr['resource_id']
+                        ));
+                        $destCurrent[] = [
+                            'name'                => $resLabel,
+                            'category'            => $resCat,
+                            'unit_id'             => $rr['resource_id'],
+                            'ref_id'              => $modelId,
+                            'transit'             => true,
+                            'transit_incoming'    => true,
+                            'transfer_request_id' => $reqId,
+                        ];
+                    }
+                    $db->collection('project')->document($destPid)->update([
+                        ['path' => 'resources', 'value' => array_values($destCurrent)],
+                    ]);
+                }
+            }
+
+            // ── Part B: Update request document ────────────────────────────
+            if ($reqId) {
+                $existingHistory = is_array($req['approval_history'] ?? null) ? $req['approval_history'] : [];
+                $existingHistory[] = [
+                    'uid'              => $approverUid,
+                    'name'             => $approverName,
+                    'role'             => $approverRole,
+                    'approved_at'      => $nowIso,
+                    'bypass_secondary' => $bypassSecond,
+                ];
+
+                $this->requestModel->update($reqId, [
+                    'status'             => 'In-Transit',
+                    'approval_stage'     => 'Complete',
+                    'transfer_state'     => 'In-Transit',
+                    'transfer_locked'    => true,
+                    'source_project_id'  => $srcPid,
+                    'source_site_id'     => $srcPid,
+                    'source_site_name'   => $srcName,
+                    'reserved_resources' => $reservedResources,
+                    'approved_at'        => $now,
+                    'approved_by_uid'    => $approverUid,
+                    'approved_by_name'   => $approverName,
+                    'approved_by_role'   => $approverRole,
+                    'approval_history'   => $existingHistory,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::_finalizeTransfer - ' . $e->getMessage());
+            throw $e; // re-throw so callers can show an error
+        }
+    }
+
+    public function acceptDelivery(string $id): object
+    {
+        if (!session()->get('isLoggedIn')) {
+            return redirect()->to('auth/login');
+        }
+
+        $role = session()->get('role') ?? '';
+        if ($role !== 'Site Engineer') {
+            return redirect()->to('requests/' . $id)->with('error', 'Only Site Engineers can accept delivery.');
+        }
+
+        $req = $this->requestModel->getById($id);
+        if (!$req) {
+            return redirect()->to('requests')->with('error', 'Request not found.');
+        }
+        if (strtolower($req['status'] ?? '') !== 'in-transit') {
+            return redirect()->to('requests/' . $id)->with('error', 'This request is not awaiting delivery acceptance.');
+        }
+
+        $category = strtolower(trim($req['resource_category'] ?? ''));
+        // resource_id is not stored on the request; manpower/model ID is in requested_model_id
+        $resId    = trim($req['resource_id'] ?? $req['requested_model_id'] ?? '');
+        // unit_id is stored as source_resource_id (drag-drop sends it as unit_id, store() maps it)
+        $unitId   = trim($req['unit_id'] ?? $req['source_resource_id'] ?? '');
+        $srcPid   = trim($req['source_site_id'] ?? $req['source_project_id'] ?? '');
+        $destPid  = trim($req['destination_project_id'] ?? '');
+
+        if (!$resId) {
+            return redirect()->to('requests/' . $id)->with('error', 'Invalid request data.');
+        }
+
+        $db  = $this->firestore->getDb();
+        $now = new Timestamp(new \DateTime());
+
+        try {
+            // ── Verification step ──────────────────────────────────────────
+            if ($category === 'manpower') {
+                $mpData     = $db->collection('manpower')->document($resId)->snapshot()->data() ?? [];
+                $mn         = strtolower(trim((string)($mpData['middle_name'] ?? '')));
+                $fn         = strtolower(trim((string)($mpData['first_name']  ?? '')));
+                $ln         = strtolower(trim((string)($mpData['last_name']   ?? '')));
+                $storedName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                           ?: strtolower(trim((string)($mpData['name'] ?? '')));
+                $input      = strtolower(trim($this->request->getPost('confirm_name') ?? ''));
+
+                if ($input === '' || $input !== $storedName) {
+                    return redirect()->to('requests/' . $id)
+                        ->with('error', 'Name does not match. Please verify the worker\'s full name and try again.');
+                }
+            } elseif (in_array($category, ['equipment', 'tools'])) {
+                $itemsRef = $db->collection('resource')->document($resId)->collection('items');
+                $inputSN  = strtolower(trim($this->request->getPost('serial_number') ?? ''));
+
+                if ($inputSN === '') {
+                    return redirect()->to('requests/' . $id)
+                        ->with('error', 'Please enter the serial number or scan the QR/barcode to confirm receipt.');
+                }
+
+                if ($unitId !== '') {
+                    $itemData = $itemsRef->document($unitId)->snapshot()->data() ?? [];
+                    $storedSN = strtolower(trim((string)($itemData['serial_number'] ?? '')));
+                    if ($storedSN === '' || $inputSN !== $storedSN) {
+                        return redirect()->to('requests/' . $id)
+                            ->with('error', 'Serial number does not match. Please verify and try again.');
+                    }
+                } else {
+                    // Bulk: verify that the entered SN belongs to one of the in-transit items
+                    $matched = false;
+                    foreach ($itemsRef->where('transfer_request_id', '=', $id)->documents() as $itemDoc) {
+                        if (!$itemDoc->exists()) continue;
+                        $storedSN = strtolower(trim((string)($itemDoc->data()['serial_number'] ?? '')));
+                        if ($storedSN !== '' && $inputSN === $storedSN) { $matched = true; break; }
+                    }
+                    if (!$matched) {
+                        return redirect()->to('requests/' . $id)
+                            ->with('error', 'Serial number does not match any item in this transfer. Please verify and try again.');
+                    }
+                }
+            }
+
+            // ── Update item / manpower status (arrival) ───────────────────
+            $acceptedUnits = [];
+            $destName      = trim($req['destination_site_name'] ?? '');
+
             if ($category === 'manpower') {
                 $db->collection('manpower')->document($resId)->update([
-                    ['path' => 'assigned_project_id', 'value' => $destPid],
-                    ['path' => 'status',              'value' => 'DEPLOYED'],
-                    ['path' => 'location',            'value' => [
+                    ['path' => 'status',                 'value' => 'DEPLOYED'],
+                    ['path' => 'transfer_request_id',    'value' => null],
+                    ['path' => 'transfer_state',         'value' => 'Completed'],
+                    ['path' => 'transfer_completed_at',  'value' => $now],
+                    ['path' => 'assigned_project_id',    'value' => $destPid],
+                    ['path' => 'location',               'value' => [
                         'address' => strtoupper($destName),
                         'type'    => 'PROJECT SITE',
                     ]],
                     ['path' => 'updated_at', 'value' => $now],
                 ]);
+                $acceptedUnits[] = ['ref_id' => $resId, 'unit_id' => ''];
             } elseif (in_array($category, ['equipment', 'tools'])) {
                 $itemsRef = $db->collection('resource')->document($resId)->collection('items');
 
+                $itemArrivalFields = [
+                    ['path' => 'status',                 'value' => 'In-Use'],
+                    ['path' => 'transfer_request_id',    'value' => null],
+                    ['path' => 'transfer_state',         'value' => 'Completed'],
+                    ['path' => 'transfer_locked',        'value' => false],
+                    ['path' => 'transfer_completed_at',  'value' => $now],
+                    ['path' => 'released_at',            'value' => null],
+                    ['path' => 'released_by',            'value' => null],
+                    ['path' => 'assigned_project_id',    'value' => $destPid],
+                    ['path' => 'location',               'value' => [
+                        'address' => $destName,
+                        'type'    => 'Project Site',
+                    ]],
+                    ['path' => 'updated_at', 'value' => $now],
+                ];
+
                 if ($unitId !== '') {
-                    // Single specific unit
-                    $itemsRef->document($unitId)->update([
-                        ['path' => 'assigned_project_id', 'value' => $destPid],
-                        ['path' => 'status',              'value' => 'In-Use'],
-                        ['path' => 'location',            'value' => [
-                            'address' => $destName,
-                            'type'    => 'Project Site',
-                        ]],
-                        ['path' => 'transfer_locked',     'value' => false],
-                        ['path' => 'updated_at',          'value' => $now],
-                    ]);
+                    $itemsRef->document($unitId)->update($itemArrivalFields);
+                    $acceptedUnits[] = ['ref_id' => $resId, 'unit_id' => $unitId];
                 } else {
-                    // Bulk: move $qty In-Storage items to the destination
-                    $qty   = max(1, (int)($req['quantity'] ?? 1));
-                    $moved = 0;
-                    foreach ($itemsRef->documents() as $itemDoc) {
-                        if (!$itemDoc->exists() || $moved >= $qty) break;
-                        $itemStatus = (string)($itemDoc->data()['status'] ?? '');
-                        if ($itemStatus === 'In-Storage') {
-                            $itemDoc->reference()->update([
-                                ['path' => 'assigned_project_id', 'value' => $destPid],
-                                ['path' => 'status',              'value' => 'In-Use'],
-                                ['path' => 'location',            'value' => [
-                                    'address' => $destName,
-                                    'type'    => 'Project Site',
-                                ]],
-                                ['path' => 'transfer_locked', 'value' => false],
-                                ['path' => 'updated_at',      'value' => $now],
-                            ]);
-                            $moved++;
-                        }
+                    foreach ($itemsRef->where('transfer_request_id', '=', $id)->documents() as $itemDoc) {
+                        if (!$itemDoc->exists()) continue;
+                        $itemDoc->reference()->update($itemArrivalFields);
+                        $acceptedUnits[] = ['ref_id' => $resId, 'unit_id' => $itemDoc->id()];
                     }
                 }
             }
+
+            // ── Sync project.resources: remove from source, fix dest entry ──
+            if (!empty($acceptedUnits)) {
+                if ($category === 'manpower') {
+                    $mpId = $acceptedUnits[0]['ref_id'];
+
+                    // SOURCE: remove any entry for this manpower (by ref_id)
+                    if ($srcPid) {
+                        $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
+                        $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
+                        $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
+                            (string)($r['ref_id'] ?? '') !== $mpId
+                        ));
+                        if (count($srcFiltered) !== count($srcCurrent)) {
+                            $db->collection('project')->document($srcPid)->update([
+                                ['path' => 'resources', 'value' => $srcFiltered],
+                            ]);
+                        }
+                    }
+
+                    // DEST: _finalizeTransfer added a transit placeholder with unit_id=mpId.
+                    // Replace it (and any stale ref-only entry) with the canonical entry.
+                    if ($destPid) {
+                        $mpDoc  = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
+                        $fn     = strtoupper(trim((string)($mpDoc['first_name']  ?? '')));
+                        $mn     = strtoupper(trim((string)($mpDoc['middle_name'] ?? '')));
+                        $ln     = strtoupper(trim((string)($mpDoc['last_name']   ?? '')));
+                        $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                               ?: strtoupper(trim((string)($mpDoc['name'] ?? $mpId)));
+
+                        $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                        $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                        $destFiltered = array_values(array_filter($destCurrent, function ($r) use ($mpId) {
+                            // remove transit placeholder (unit_id=mpId) and any existing ref-only entry
+                            if ((string)($r['unit_id'] ?? '') === $mpId) return false;
+                            if ((string)($r['ref_id'] ?? '') === $mpId && (string)($r['unit_id'] ?? '') === '') return false;
+                            return true;
+                        }));
+                        $destFiltered[] = ['ref_id' => $mpId, 'unit_id' => '', 'name' => $mpName, 'category' => 'manpower'];
+
+                        $db->collection('project')->document($destPid)->update([
+                            ['path' => 'resources', 'value' => array_values($destFiltered)],
+                        ]);
+                    }
+                } else {
+                    // Equipment / tools: key = ref_id|unit_id
+                    $acceptedKeys = [];
+                    foreach ($acceptedUnits as $au) {
+                        $acceptedKeys[$au['ref_id'] . '|' . $au['unit_id']] = true;
+                    }
+
+                    if ($srcPid) {
+                        $srcSnap     = $db->collection('project')->document($srcPid)->snapshot();
+                        $srcCurrent  = (array)($srcSnap->data()['resources'] ?? []);
+                        $srcFiltered = array_values(array_filter($srcCurrent, function ($r) use ($acceptedKeys) {
+                            $k = (string)($r['ref_id'] ?? '') . '|' . (string)($r['unit_id'] ?? '');
+                            return !isset($acceptedKeys[$k]);
+                        }));
+                        if (count($srcFiltered) !== count($srcCurrent)) {
+                            $db->collection('project')->document($srcPid)->update([
+                                ['path' => 'resources', 'value' => $srcFiltered],
+                            ]);
+                        }
+                    }
+
+                    if ($destPid) {
+                        $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                        $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                        $destUpdated = array_map(function ($r) use ($acceptedKeys) {
+                            $k = (string)($r['ref_id'] ?? '') . '|' . (string)($r['unit_id'] ?? '');
+                            if (isset($acceptedKeys[$k])) {
+                                unset($r['transit']);
+                                unset($r['transit_incoming']);
+                            }
+                            return $r;
+                        }, $destCurrent);
+                        $db->collection('project')->document($destPid)->update([
+                            ['path' => 'resources', 'value' => array_values($destUpdated)],
+                        ]);
+                    }
+                }
+            }
+
+            $this->requestModel->update($id, [
+                'status'          => 'Completed',
+                'transfer_state'  => 'Completed',
+                'transfer_locked' => false,
+                'accepted_by'      => session()->get('userId')   ?? '',
+                'accepted_by_name' => session()->get('userName') ?? '',
+                'accepted_at'      => $now,
+                'updated_at'       => $now,
+            ]);
+
+            return redirect()->to('requests/' . $id)->with('success', 'Delivery accepted — resource is now active at the destination project.');
         } catch (\Throwable $e) {
-            log_message('error', 'ResourceRequests::_finalizeTransfer - ' . $e->getMessage());
+            log_message('error', 'ResourceRequests::acceptDelivery - ' . $e->getMessage());
+            return redirect()->to('requests/' . $id)->with('error', 'Failed to accept delivery. Please try again.');
         }
     }
 

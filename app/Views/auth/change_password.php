@@ -15,7 +15,7 @@
                 </div>
             <?php endif; ?>
 
-            <p class="auth-email-display" style="text-align:center;margin-bottom:.6rem;font-size:.88rem;color:#7a5c1e;">
+            <p class="auth-email-display" style="text-align:center;margin-bottom:.6rem;font-size:.88rem;color:#7a6040;">
                 Your account was created with a temporary password.<br>
                 Please set a new password to continue.
             </p>
@@ -105,7 +105,7 @@
             <div class="auth-footer-link">
                 <form action="<?= base_url('auth/logout') ?>" method="post" style="display:inline">
                     <?= csrf_field() ?>
-                    <button type="submit" style="background:none;border:none;color:#8C701C;font-size:1rem;cursor:pointer;text-decoration:underline;padding:0">
+                    <button type="submit" style="background:none;border:none;color:#9a7b3a;font-size:.9rem;cursor:pointer;text-decoration:underline;padding:0;font-weight:700;">
                         Sign out
                     </button>
                 </form>

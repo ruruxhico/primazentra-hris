@@ -57,15 +57,14 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
     <div class="rr-filter-section">
         <div class="rr-filter-label">Status</div>
         <div class="pz-chip-row">
-            <a href="<?= rr_url(['category' => $filterCategory, 'search' => $filterSearch]) ?>"
+            <a href="#" data-filter="status" data-val=""
                class="pz-chip <?= $filterStatus === '' ? 'active' : '' ?>">
-                <?php if ($filterStatus === ''): ?><span class="material-symbols-outlined">check</span><?php endif; ?>All
+                <span class="rr-check-icon material-symbols-outlined" <?= $filterStatus === '' ? '' : 'style="display:none"' ?>>check</span>All
             </a>
-            <?php foreach (['Pending', 'Pending Secondary', 'Approved', 'Rejected', 'Completed'] as $s): ?>
-            <a href="<?= rr_url(['status' => $s, 'category' => $filterCategory, 'search' => $filterSearch]) ?>"
+            <?php foreach (['Pending', 'Pending Secondary Approval', 'In-Transit', 'Completed'] as $s): ?>
+            <a href="#" data-filter="status" data-val="<?= esc($s) ?>"
                class="pz-chip <?= $filterStatus === $s ? 'active' : '' ?>">
-                <?php if ($filterStatus === $s): ?><span class="material-symbols-outlined">check</span><?php endif; ?>
-                <?= esc($s) ?>
+                <span class="rr-check-icon material-symbols-outlined" <?= $filterStatus === $s ? '' : 'style="display:none"' ?>>check</span><?= esc($s) ?>
             </a>
             <?php endforeach; ?>
         </div>
@@ -73,15 +72,14 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
     <div class="rr-filter-section">
         <div class="rr-filter-label">Category</div>
         <div class="pz-chip-row">
-            <a href="<?= rr_url(['status' => $filterStatus, 'search' => $filterSearch]) ?>"
+            <a href="#" data-filter="category" data-val=""
                class="pz-chip <?= $filterCategory === '' ? 'active' : '' ?>">
-                <?php if ($filterCategory === ''): ?><span class="material-symbols-outlined">check</span><?php endif; ?>All
+                <span class="rr-check-icon material-symbols-outlined" <?= $filterCategory === '' ? '' : 'style="display:none"' ?>>check</span>All
             </a>
             <?php foreach (['Manpower', 'Equipment', 'Tools'] as $c): ?>
-            <a href="<?= rr_url(['status' => $filterStatus, 'category' => $c, 'search' => $filterSearch]) ?>"
+            <a href="#" data-filter="category" data-val="<?= esc($c) ?>"
                class="pz-chip <?= $filterCategory === $c ? 'active' : '' ?>">
-                <?php if ($filterCategory === $c): ?><span class="material-symbols-outlined">check</span><?php endif; ?>
-                <?= esc($c) ?>
+                <span class="rr-check-icon material-symbols-outlined" <?= $filterCategory === $c ? '' : 'style="display:none"' ?>>check</span><?= esc($c) ?>
             </a>
             <?php endforeach; ?>
         </div>
@@ -122,13 +120,15 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
             </td></tr>
         <?php else: ?>
             <?php foreach ($requests as $r): ?>
-            <tr>
+            <tr data-req-id="<?= esc($r['id']) ?>"
+                data-req-status="<?= esc(strtolower($r['status'] ?? 'pending')) ?>"
+                data-req-category="<?= esc(strtolower($r['resource_category'] ?? '')) ?>">
                 <td style="font-family:monospace;letter-spacing:.05em"><?= esc(strtoupper(substr($r['id'], 0, 6))) ?></td>
                 <td class="pz-row-muted" title="<?= esc($r['source_site_name'] ?? '—') ?>"><?= esc($r['source_site_name'] ?? '—') ?></td>
                 <td class="pz-row-muted" title="<?= esc($r['destination_site_name'] ?? '—') ?>"><?= esc($r['destination_site_name'] ?? '—') ?></td>
-                <td><?= rr_badge($r['status'] ?? 'Pending') ?></td>
-                <td class="rr-col-sm"><?= esc($r['category'] ?? '—') ?></td>
-                <td class="rr-col-md"><?= esc($r['quantity'] ?? 1) ?></td>
+                <td data-req-status><?= rr_badge($r['status'] ?? 'Pending') ?></td>
+                <td class="rr-col-sm"><?= esc($r['resource_category'] ?? '—') ?></td>
+                <td class="rr-col-md"><?= esc($r['requested_quantity'] ?? $r['quantity'] ?? 1) ?></td>
                 <td class="pz-row-muted rr-col-md" style="white-space:nowrap"><?= esc($r['created_at_fmt'] ?? '—') ?></td>
                 <td class="actions">
                     <a href="<?= base_url('requests/' . $r['id']) ?>" class="pz-btn-icon" title="View details">
@@ -164,26 +164,170 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
 <?php $this->section('scripts') ?>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    /* ── Search (debounced URL redirect) ── */
-    var searchInput = document.getElementById('rrSearch');
-    var timeout = null;
-    searchInput && searchInput.addEventListener('input', function () {
-        clearTimeout(timeout);
-        var q = this.value;
-        timeout = setTimeout(function () {
-            var url = new URL(window.location.href);
-            url.searchParams.set('search', q);
-            if (!q) url.searchParams.delete('search');
-            window.location.href = url.toString();
-        }, 500);
-    });
-
     /* ── Filter panel toggle ── */
     var filterToggle = document.getElementById('rrFilterToggle');
     var filterPanel  = document.getElementById('rrFilterPanel');
     filterToggle && filterToggle.addEventListener('click', function () {
         filterPanel.style.display = filterPanel.style.display === 'none' ? 'block' : 'none';
     });
+
+    /* ── Live filter state ── */
+    var rrFilters = {
+        status   : '<?= esc($filterStatus) ?>'.toLowerCase(),
+        category : '<?= esc($filterCategory) ?>'.toLowerCase()
+    };
+
+    function applyRRFilters() {
+        var q = (document.getElementById('rrSearch')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('tbody tr[data-req-id]').forEach(function (row) {
+            var show = true;
+            if (q && !row.innerText.toLowerCase().includes(q)) show = false;
+            if (rrFilters.status   && (row.dataset.reqStatus   ||'') !== rrFilters.status)   show = false;
+            if (rrFilters.category && (row.dataset.reqCategory ||'') !== rrFilters.category) show = false;
+            row.style.display = show ? '' : 'none';
+        });
+    }
+
+    /* ── Search — live ── */
+    var searchInput = document.getElementById('rrSearch');
+    searchInput && searchInput.addEventListener('input', applyRRFilters);
+
+    /* ── Chip clicks — live ── */
+    document.querySelectorAll('.pz-chip[data-filter]').forEach(function (chip) {
+        chip.addEventListener('click', function (e) {
+            e.preventDefault();
+            var filter = this.dataset.filter;
+            var val    = this.dataset.val.toLowerCase();
+            rrFilters[filter] = val;
+            // Update active state + check icon in this chip row
+            var row = this.closest('.pz-chip-row');
+            if (row) {
+                row.querySelectorAll('.pz-chip').forEach(function (c) {
+                    var active = c.dataset.val.toLowerCase() === val;
+                    c.classList.toggle('active', active);
+                    var icon = c.querySelector('.rr-check-icon');
+                    if (icon) icon.style.display = active ? '' : 'none';
+                });
+            }
+            applyRRFilters();
+        });
+    });
 });
+</script>
+<?php $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  window._pzPageListeners = true; // own our listeners
+
+  var _base = window.pzBaseUrl || '';
+  var _params   = new URLSearchParams(window.location.search);
+  var _fStatus  = (_params.get('status')   || '').toLowerCase();
+  var _fCat     = (_params.get('category') || '').toLowerCase();
+  var _page     = parseInt(_params.get('page') || '1', 10);
+
+  function fmtDate(ts) {
+    if (!ts || typeof ts.toDate !== 'function') return '—';
+    var d = ts.toDate();
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function buildRow(id, data) {
+    var status  = data.status   || 'Pending';
+    var cat     = data.resource_category || '—';
+    var cls     = window.pzBadgeClass ? window.pzBadgeClass(status) : '';
+    var shortId = id.substring(0, 6).toUpperCase();
+    var src     = (data.source_site_name      || '—').replace(/</g,'&lt;');
+    var dst     = (data.destination_site_name || '—').replace(/</g,'&lt;');
+    return '<tr data-req-id="' + id + '" class="pz-row-new">'
+         + '<td style="font-family:monospace;letter-spacing:.05em">' + shortId + '</td>'
+         + '<td class="pz-row-muted" title="' + src + '">' + src + '</td>'
+         + '<td class="pz-row-muted" title="' + dst + '">' + dst + '</td>'
+         + '<td data-req-status><span class="pz-badge ' + cls + '">' + status.toUpperCase() + '</span></td>'
+         + '<td class="rr-col-sm">' + cat + '</td>'
+         + '<td class="rr-col-md">' + (data.requested_quantity || data.quantity || 1) + '</td>'
+         + '<td class="pz-row-muted rr-col-md" style="white-space:nowrap">' + fmtDate(data.created_at) + '</td>'
+         + '<td class="actions"><a href="' + _base + 'requests/' + id + '" class="pz-btn-icon" title="View details">'
+         + '<span class="material-symbols-outlined">visibility</span></a></td>'
+         + '</tr>';
+  }
+
+  function matchesFilter(data) {
+    if (_page > 1) return false; // only insert on page 1 (newest first)
+    var status = (data.status   || '').toLowerCase();
+    var cat    = (data.resource_category || '').toLowerCase();
+    if (_fStatus && _fStatus !== status) return false;
+    if (_fCat    && _fCat    !== cat)    return false;
+    return true;
+  }
+
+  function flashRow(row) {
+    row.style.transition  = 'background .2s';
+    row.style.background  = '#dbeafe';
+    setTimeout(function () { row.style.background = ''; }, 1000);
+  }
+
+  var _setupDone = false;
+  function setup(db) {
+    if (_setupDone) return; _setupDone = true;
+    console.log('[PZ-req] listener attached, page=' + _page + ' fStatus="' + _fStatus + '" fCat="' + _fCat + '"');
+    var _ready = false;
+    db.collection('resource_requests').onSnapshot(function (snap) {
+      if (!_ready) {
+        _ready = true;
+        console.log('[PZ-req] initial snapshot skipped (' + snap.size + ' docs)');
+        return;
+      }
+      snap.docChanges().forEach(function (chg) {
+        var id   = chg.doc.id;
+        var data = chg.doc.data();
+
+        if (chg.type === 'modified') {
+          var row = document.querySelector('tr[data-req-id="' + id + '"]');
+          if (!row) return;
+          var cell = row.querySelector('[data-req-status]');
+          if (cell) {
+            var s = data.status || '';
+            cell.innerHTML = '<span class="pz-badge ' + (window.pzBadgeClass ? window.pzBadgeClass(s) : '') + '">' + s.toUpperCase() + '</span>';
+          }
+          flashRow(row);
+          return;
+        }
+
+        if (chg.type === 'added' && matchesFilter(data)) {
+          if (document.querySelector('tr[data-req-id="' + id + '"]')) return;
+          var tbody = document.querySelector('table tbody');
+          if (!tbody) return;
+          var empty = tbody.querySelector('td[colspan]');
+          if (empty) empty.closest('tr').remove();
+          var tmp = document.createElement('tbody');
+          tmp.innerHTML = buildRow(id, data);
+          tbody.insertBefore(tmp.firstElementChild, tbody.firstChild);
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var row = document.querySelector('tr[data-req-id="' + id + '"]');
+          if (!row) return;
+          row.style.transition = 'opacity .4s, background .4s';
+          row.style.background = '#fee2e2';
+          row.style.opacity    = '0';
+          setTimeout(function () {
+            row.remove();
+            var tbody = document.querySelector('table tbody');
+            if (tbody && !tbody.querySelector('tr[data-req-id]')) {
+              tbody.innerHTML = '<tr><td colspan="8" class="pz-table-empty">No requests found.</td></tr>';
+            }
+          }, 400);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Requests listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
 </script>
 <?php $this->endSection() ?>

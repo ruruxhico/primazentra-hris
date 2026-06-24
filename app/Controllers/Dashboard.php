@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\FirestoreService;
 use App\Libraries\MLServiceClient;
 use App\Models\Model_Projects;
 use App\Models\Model_Resources;
@@ -17,6 +18,7 @@ class Dashboard extends BaseController
     protected $userModel;
     protected $manpowerModel;
     protected $requestModel;
+    protected FirestoreService $firestore;
 
     public function __construct()
     {
@@ -25,6 +27,7 @@ class Dashboard extends BaseController
         $this->userModel     = new Model_Users();
         $this->manpowerModel = new Model_Manpower();
         $this->requestModel  = new Model_ResourceRequests();
+        $this->firestore     = FirestoreService::getInstance();
     }
 
     public function index()
@@ -79,26 +82,30 @@ class Dashboard extends BaseController
             // ── Build project → assigned-resource maps ────────────────
             // Must be built BEFORE the activeProjects loop so enrichProject sees them.
 
-            // Manpower: assigned_project_id is a plain string doc ID
             $manpowerByProject = [];
             foreach ($allManpower as $m) {
-                $apid = trim((string)($m['assigned_project_id'] ?? ''));
+                $rawApid = $m['assigned_project_id'] ?? '';
+                $apid = $rawApid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $rawApid->id()
+                    : trim((string)$rawApid);
                 if ($apid === '') continue;
                 $fn   = trim((string)($m['first_name'] ?? ''));
                 $ln   = trim((string)($m['last_name']  ?? ''));
                 $name = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper($m['name'] ?? '');
                 if ($name === '') continue;
-                $manpowerByProject[$apid][] = ['name' => $name, 'id' => $m['id'], 'unit_id' => ''];
+                $mpStatus  = strtolower(trim((string)($m['status'] ?? '')));
+                $isTransit = in_array($mpStatus, ['in-transit', 'transfer pending']);
+                $manpowerByProject[$apid][] = ['name' => $name, 'id' => $m['id'], 'unit_id' => '', 'transit' => $isTransit];
             }
 
             // Equipment + Tools: reuse $allResources — no second getAllResources() call
             $equipmentByProject = [];
             $toolsByProject     = [];
-            try {
-                foreach ($allResources as $res) {
+            foreach ($allResources as $res) {
+                try {
                     $resId    = $res['id'];
                     $resName  = strtoupper(trim((string)($res['name'] ?? '')));
-                    $category = $res['category'] ?? '';
+                    $category = strtolower(trim((string)($res['category'] ?? '')));
 
                     foreach ($this->resourceModel->getResourceItems($resId) as $item) {
                         $apid = $item['assigned_project_id'] ?? null;
@@ -107,18 +114,20 @@ class Dashboard extends BaseController
                             : trim((string)($apid ?? ''));
                         if ($itemPid === '') continue;
 
-                        $unitId = $item['__id'] ?? $item['id'] ?? '';
-                        $pill   = ['name' => $resName, 'id' => $resId, 'unit_id' => $unitId];
+                        $unitId    = $item['__id'] ?? $item['id'] ?? '';
+                        $itemStatus = strtolower(trim((string)($item['status'] ?? '')));
+                        $isTransit  = in_array($itemStatus, ['in-transit', 'transfer pending']);
+                        $pill       = ['name' => $resName, 'id' => $resId, 'unit_id' => $unitId, 'transit' => $isTransit];
 
-                        if ($category === 'Tools') {
+                        if ($category === 'tools') {
                             $toolsByProject[$itemPid][] = $pill;
                         } else {
                             $equipmentByProject[$itemPid][] = $pill;
                         }
                     }
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Dashboard: resource item scan failed for ' . ($res['id'] ?? '?') . ' - ' . $e->getMessage());
                 }
-            } catch (\Throwable $e) {
-                log_message('warning', 'Dashboard: resource item scan failed - ' . $e->getMessage());
             }
 
             $activeProjects = [];
@@ -224,6 +233,7 @@ class Dashboard extends BaseController
                         }
 
                         $mlBlockers[] = [
+                            'project_id'           => (string)($p['id'] ?? ''),
                             'project_name'         => $p['project_name'] ?? 'Unknown Project',
                             'predicted'            => $predictedBlocker,
                             'estimated_delay_days' => (int) round((float) $estimatedDelay),
@@ -237,6 +247,87 @@ class Dashboard extends BaseController
             } catch (\Throwable $e) {
                 log_message('warning', 'Dashboard: ML service init failed - ' . $e->getMessage());
             }
+
+            // ── Annotate projects with ML delay data; notify if threshold met ──────
+            $mlDelayById = [];
+            foreach ($mlBlockers as $bl) {
+                $pid = $bl['project_id'] ?? '';
+                if ($pid !== '') {
+                    $mlDelayById[$pid] = (int)($bl['estimated_delay_days'] ?? 0);
+                }
+            }
+
+            // Also treat past-deadline projects as needing notification
+            $notifSvc = new \App\Services\NotificationService();
+            $db       = $this->firestore->getDb();
+            $nowTs    = time();
+
+            foreach ($activeProjects as &$ap) {
+                $pid       = (string)($ap['id'] ?? '');
+                $mlDelay   = $mlDelayById[$pid] ?? 0;
+                $threshold = max(0, (int)($ap['delay_ping_days'] ?? 0));
+
+                // Mark delayed if ML says so and meets threshold
+                $isDelayed       = ($mlDelay > 0) && ($threshold === 0 || $mlDelay >= $threshold);
+                $isPastDeadline  = $ap['_past_deadline'] ?? false;
+
+                if ($isDelayed) {
+                    $ap['_ml_delay_days'] = $mlDelay;
+                    $ap['_status']        = 'DELAYED';
+                }
+
+                // Send ping notification (max once every 24h per project)
+                if ($isDelayed || $isPastDeadline) {
+                    try {
+                        $snap     = $db->collection('project')->document($pid)->snapshot();
+                        $lastPing = $snap->exists() ? (int)($snap->data()['delay_last_notified_at'] ?? 0) : 0;
+
+                        if (($nowTs - $lastPing) >= 86400) {
+                            $title  = $isPastDeadline ? 'Project Past Deadline' : 'Project Delay Alert';
+                            $msgTxt = $isPastDeadline
+                                ? ($ap['project_name'] ?? 'A project') . ' has passed its deadline.'
+                                : ($ap['project_name'] ?? 'A project') . " is predicted to be delayed by {$mlDelay} day(s).";
+
+                            // Notify admins and OMs
+                            $targets = (new \App\Models\Model_Users())
+                                ->getUsersByRole(['Administrator', 'Operations Manager']);
+                            foreach ($targets as $t) {
+                                $uid = (string)($t['id'] ?? '');
+                                if ($uid) {
+                                    $notifSvc->send($uid, 'projectDelay', $title, $msgTxt, ['project_id' => $pid]);
+                                }
+                            }
+
+                            // Notify the assigned PM
+                            $pmUid = (string)($ap['_pm_uid'] ?? '');
+                            if ($pmUid) {
+                                $notifSvc->send($pmUid, 'projectDelay', $title, $msgTxt, ['project_id' => $pid]);
+                            }
+
+                            // Stamp the project so we don't re-ping for 24h
+                            $db->collection('project')->document($pid)->update([
+                                ['path' => 'delay_last_notified_at', 'value' => $nowTs],
+                            ]);
+                        }
+                    } catch (\Throwable $e) {
+                        log_message('error', 'Dashboard: delay notification failed for ' . $pid . ' - ' . $e->getMessage());
+                    }
+                }
+            }
+            unset($ap);
+
+            // Re-sort each region: Past Deadline first, then Delayed, then others
+            $urgency = function (array $p): int {
+                if ($p['_past_deadline'] ?? false) return 0;
+                if (($p['_ml_delay_days'] ?? 0) > 0) return 1;
+                return 2;
+            };
+            foreach ($projectsByRegion as &$regionArr) {
+                usort($regionArr, function ($a, $b) use ($urgency) {
+                    return $urgency($a) <=> $urgency($b);
+                });
+            }
+            unset($regionArr);
 
             // ── FastAPI MCDA Tool Availability (optional, falls back to Firestore data) ──
             $availableToolsMcda = [];
@@ -378,6 +469,40 @@ class Dashboard extends BaseController
         }
     }
 
+    // ── Live polling fingerprint ──────────────────────────────────────
+
+    public function live(): object
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthorized']);
+        }
+        try {
+            // Lightweight: only reads project docs (no subcollection items enumeration)
+            $projects = $this->projectModel->getActiveProjects();
+            $parts    = [];
+            foreach ($projects as $p) {
+                $resCount = count((array)($p['resources'] ?? []));
+                $parts[]  = ($p['id'] ?? '') . ':' . $resCount . ':' . (int)($p['overall_progress'] ?? 0);
+            }
+
+            // Include in-flight request statuses
+            $activeStatuses = ['Pending', 'Pending Secondary', 'Pending Secondary Approval', 'Approved', 'In-Transit'];
+            $reqParts = [];
+            foreach ($this->requestModel->getAll([]) as $r) {
+                if (in_array($r['status'] ?? '', $activeStatuses)) {
+                    $reqParts[] = ($r['id'] ?? '') . ':' . ($r['status'] ?? '');
+                }
+            }
+            sort($reqParts);
+            $parts = array_merge($parts, $reqParts);
+
+            return $this->response->setJSON(['version' => md5(implode('|', $parts))]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Dashboard::live - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed']);
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private function enrichProject(array $p, array $assignedResources = []): array
@@ -398,7 +523,7 @@ class Dashboard extends BaseController
         $tools     = [];
         $manpower  = [];
 
-        // Source 1: inline resources field (written by mobile drag-and-drop)
+        // Source 1: inline resources field (written by mobile drag-and-drop / transfer sync)
         if (!empty($p['resources']) && is_array($p['resources'])) {
             foreach ($p['resources'] as $res) {
                 $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
@@ -408,6 +533,7 @@ class Dashboard extends BaseController
                     'name'    => $name,
                     'id'      => (string)($res['ref_id']  ?? ''),
                     'unit_id' => (string)($res['unit_id'] ?? ''),
+                    'transit' => !empty($res['transit']),
                 ];
                 if ($cat === 'manpower')      $manpower[]  = $pill;
                 elseif ($cat === 'equipment') $equipment[] = $pill;
@@ -416,11 +542,12 @@ class Dashboard extends BaseController
         }
 
         // Source 2: web-assigned resources (assigned_project_id on manpower/item docs)
-        // Deduplicate by name+unit_id to avoid double-counting
+        // Deduplicate by id+unit_id (resource identity) to avoid double-counting the same
+        // physical resource when its name differs between sources (e.g. with vs. without middle name).
         $seen = [];
         $merge = function (array &$target, array $incoming) use (&$seen): void {
             foreach ($incoming as $pill) {
-                $key = ($pill['id'] ?? '') . '|' . ($pill['unit_id'] ?? '') . '|' . strtolower($pill['name'] ?? '');
+                $key = ($pill['id'] ?? '') . '|' . ($pill['unit_id'] ?? '');
                 if (isset($seen[$key])) continue;
                 $seen[$key] = true;
                 $target[] = $pill;
@@ -428,9 +555,9 @@ class Dashboard extends BaseController
         };
 
         // Seed seen set with pills already added from Source 1
-        foreach ($equipment as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
-        foreach ($tools     as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
-        foreach ($manpower  as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'').'|'.strtolower($pill['name']??'')] = true;
+        foreach ($equipment as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'')] = true;
+        foreach ($tools     as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'')] = true;
+        foreach ($manpower  as $pill) $seen[($pill['id']??'').'|'.($pill['unit_id']??'')] = true;
 
         $merge($equipment, $assignedResources['equipment'] ?? []);
         $merge($tools,     $assignedResources['tools']     ?? []);
@@ -442,7 +569,15 @@ class Dashboard extends BaseController
         $p['_client']       = strtoupper(trim((string)($p['client_name'] ?? '')));
         $p['_project_type'] = strtoupper(trim((string)($p['project_type'] ?? '')));
         $rawStatus          = strtoupper(trim((string)($p['status'] ?? '')));
-        $p['_status']       = in_array($rawStatus, ['COMPLETED', 'DONE']) ? 'DONE' : 'ONGOING';
+        $p['_past_deadline'] = ($rawStatus === 'PAST DEADLINE');
+        $p['_ml_delay_days'] = 0;   // filled after ML loop
+        if (in_array($rawStatus, ['COMPLETED', 'DONE'])) {
+            $p['_status'] = 'DONE';
+        } elseif ($p['_past_deadline']) {
+            $p['_status'] = 'PAST_DEADLINE';
+        } else {
+            $p['_status'] = 'ONGOING';
+        }
 
         // Normalize PM/SE UIDs for role-based monitor filtering
         $pmRaw = $p['personnel']['project_manager_id'] ?? $p['project_manager_id'] ?? null;

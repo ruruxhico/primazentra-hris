@@ -7,12 +7,12 @@ $projects = $projects ?? [];
 $role     = $role ?? '';
 
 $status    = $req['status'] ?? 'Pending';
-$category  = $req['category'] ?? '';
+$category  = $req['resource_category'] ?? '';
 $resName   = $req['resource_name'] ?? '';
-$sourceName= $req['source_site_name'] ?? ($req['approved_source_project_name'] ?? 'To be assigned');
+$sourceName= $req['source_site_name'] ?? 'To be assigned';
 $destName  = $req['destination_site_name'] ?? '—';
-$qty       = $req['quantity'] ?? 1;
-$model     = $req['model'] ?? '';
+$qty       = $req['requested_quantity'] ?? $req['quantity'] ?? 1;
+$model     = $req['requested_model_id'] ?? $req['model'] ?? '';
 $reqBy     = $req['requested_by_name'] ?? '—';
 $reqRole   = $req['requested_by_role'] ?? '—';
 $createdAt = $req['created_at_fmt'] ?? '—';
@@ -20,19 +20,21 @@ $reserved  = is_array($req['reserved_resources'] ?? null) ? $req['reserved_resou
 
 $badgeMap = [
     'pending'                    => 'pz-badge-pending',
-    'pending secondary'          => 'pz-badge-pending-secondary',
     'pending secondary approval' => 'pz-badge-pending-secondary',
-    'approved'                   => 'pz-badge-approved',
+    'in-transit'                 => 'pz-badge-in-transit',
     'rejected'                   => 'pz-badge-rejected',
     'completed'                  => 'pz-badge-completed',
 ];
 $badgeCls = $badgeMap[strtolower($status)] ?? 'pz-badge-pending';
 
 $canApprove          = in_array($role, ['Administrator', 'Operations Manager', 'Project Manager']);
+$canAcceptDelivery   = ($canAcceptDelivery ?? false);
 $isPending           = strtolower($status) === 'pending';
-$isPendingSecondary  = in_array(strtolower($status), ['pending secondary', 'pending secondary approval']);
+$isPendingSecondary  = strtolower($status) === 'pending secondary approval';
+$isInTransit         = strtolower($status) === 'in-transit';
 $sourceKnown         = !empty($req['source_project_id']);
-$primaryApproverRole = $req['approved_by_role'] ?? '';
+$primaryApproval     = is_array($req['primary_approval'] ?? null) ? $req['primary_approval'] : [];
+$primaryApproverRole = $primaryApproval['role'] ?? $req['approved_by_role'] ?? '';
 $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === $primaryApproverRole;
 ?>
 
@@ -60,7 +62,7 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             <h2><?= esc($category) ?></h2>
             <p class="pz-card-subtitle"><?= esc($resName ?: $model ?: '—') ?></p>
         </div>
-        <span class="pz-badge <?= $badgeCls ?>"><?= esc(strtoupper($status)) ?></span>
+        <span id="pzReqStatusBadge" class="pz-badge <?= $badgeCls ?>"><?= esc(strtoupper($status)) ?></span>
     </div>
 </div>
 
@@ -90,30 +92,36 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
         <span class="pz-info-label">Quantity</span>
         <span class="pz-info-value"><?= esc($qty) ?></span>
 
-        <?php if ($model): ?>
-        <span class="pz-info-label">Model</span>
-        <span class="pz-info-value"><?= esc($model) ?></span>
-        <?php endif; ?>
-
         <span class="pz-info-label">Created at</span>
         <span class="pz-info-value"><?= esc($createdAt) ?></span>
 
-        <?php if (!empty($req['approved_by_name'])): ?>
+        <?php
+        // $primaryApproval already set in header block above
+        $primaryName = $primaryApproval['name'] ?? $req['approved_by_name'] ?? '';
+        $primaryRole = $primaryApproval['role'] ?? $req['approved_by_role'] ?? '';
+        $primaryAt   = $primaryApproval['approved_at'] ?? $req['approved_at_fmt'] ?? '';
+        // 2nd approval only when final approver differs from 1st (non-bypass 2-step flow)
+        $finalApproverName = $req['approved_by_name'] ?? '';
+        $finalName = (!empty($primaryApproval) && $finalApproverName !== '' && $finalApproverName !== ($primaryApproval['name'] ?? ''))
+            ? $finalApproverName : '';
+        $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
+        ?>
+        <?php if ($primaryName !== ''): ?>
         <div class="pz-info-divider"></div>
         <span class="pz-info-label">1st Approval</span>
         <span class="pz-info-value">
-            <?= esc($req['approved_by_name']) ?>
-            <?php if (!empty($req['approved_by_role'])): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($req['approved_by_role']) ?></span><?php endif; ?>
-            <?= !empty($req['approved_at_fmt']) ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($req['approved_at_fmt']) . '</span>' : '' ?>
+            <?= esc($primaryName) ?>
+            <?php if ($primaryRole !== ''): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($primaryRole) ?></span><?php endif; ?>
+            <?= $primaryAt !== '' ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($primaryAt) . '</span>' : '' ?>
         </span>
         <?php endif; ?>
 
-        <?php if (!empty($req['secondary_approved_by_name'])): ?>
+        <?php if ($finalName !== ''): ?>
         <span class="pz-info-label">2nd Approval</span>
         <span class="pz-info-value">
-            <?= esc($req['secondary_approved_by_name']) ?>
-            <?php if (!empty($req['secondary_approved_by_role'])): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($req['secondary_approved_by_role']) ?></span><?php endif; ?>
-            <?= !empty($req['secondary_approved_at_fmt']) ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($req['secondary_approved_at_fmt']) . '</span>' : '' ?>
+            <?= esc($finalName) ?>
+            <?php if ($finalRole !== ''): ?><span class="role-badge" style="font-size:0.7rem;margin-left:.3rem;"><?= esc($finalRole) ?></span><?php endif; ?>
+            <?= !empty($req['approved_at_fmt']) ? '<span style="opacity:.6;font-size:0.85rem;margin-left:.3rem;">· ' . esc($req['approved_at_fmt']) . '</span>' : '' ?>
         </span>
         <?php endif; ?>
     </div>
@@ -126,18 +134,91 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
         <p style="font-size:1rem; color:#7a6040; margin:0">No resources reserved yet. Approval will lock source items before transfer.</p>
     <?php else: ?>
         <?php foreach ($reserved as $res): ?>
+        <?php $scanned = (bool)($res['scanned'] ?? false); ?>
         <div style="display:flex; align-items:center; justify-content:space-between; padding:.5rem 0; border-bottom:1px solid #f0e8d0;">
             <div>
-                <div style="font-weight:700; font-size:1rem; color:#2c1a00"><?= esc(is_array($res) ? ($res['name'] ?? $res['id'] ?? '') : $res) ?></div>
-                <?php if (is_array($res) && !empty($res['matched_by'])): ?>
-                <div style="font-size:1rem; color:#9a7b3a">Matched by: <?= esc($res['matched_by']) ?></div>
+                <div style="font-weight:700; font-size:1rem; color:#2c1a00"><?= esc(is_array($res) ? ($res['display_name'] ?? $res['name'] ?? $res['id'] ?? '') : $res) ?></div>
+                <?php if (is_array($res) && !empty($res['equipment_type'])): ?>
+                <div style="font-size:0.82rem; color:#9a7b3a"><?= esc($res['equipment_type']) ?></div>
+                <?php endif; ?>
+                <?php if ($scanned && !empty($res['scanned_by'])): ?>
+                <div style="font-size:0.8rem; color:#16a34a">Scanned by <?= esc($res['scanned_by']) ?></div>
                 <?php endif; ?>
             </div>
-            <span class="pz-badge pz-badge-pending">Pending</span>
+            <?php if ($scanned): ?>
+                <span class="pz-badge pz-badge-completed">Scanned</span>
+            <?php else: ?>
+                <span class="pz-badge pz-badge-pending">Pending Scan</span>
+            <?php endif; ?>
         </div>
         <?php endforeach; ?>
     <?php endif; ?>
 </div>
+
+<!-- In-transit info banner -->
+<?php if ($isInTransit): ?>
+<div class="pz-card" style="border-left:4px solid #64748b;">
+    <p class="pz-card-section">In-Transit</p>
+    <div style="display:flex;align-items:flex-start;gap:.75rem;font-size:0.92rem;color:#374151;">
+        <span class="material-symbols-outlined" style="font-size:1.4rem;color:#64748b;flex-shrink:0;margin-top:.05rem">local_shipping</span>
+        <div>
+            <p style="margin:0 0 .35rem;font-weight:600;color:#1e293b">Resource is on its way to <strong><?= esc($destName) ?></strong></p>
+            <p style="margin:0;color:#6b7280;font-size:0.87rem">The resource has been approved and is now in transit. It will appear grayed-out in the destination project's monitoring card until the Site Engineer confirms receipt.</p>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<!-- Accept Delivery section (Site Engineer only, when In-Transit) -->
+<?php if ($canAcceptDelivery): ?>
+<?php $isManpower = strtolower($category) === 'manpower'; ?>
+<div class="pz-card" style="border-left:4px solid #16a34a;">
+    <p class="pz-card-section">Accept Delivery</p>
+    <div style="display:flex;align-items:flex-start;gap:.75rem;margin-bottom:1.25rem;">
+        <span class="material-symbols-outlined" style="font-size:1.4rem;color:#16a34a;flex-shrink:0;margin-top:.05rem">inventory</span>
+        <div style="font-size:0.92rem;color:#374151;">
+            <p style="margin:0 0 .25rem;font-weight:600;color:#1e293b">Confirm receipt of <strong><?= esc($resName) ?></strong></p>
+            <p style="margin:0;color:#6b7280;font-size:0.87rem">
+                <?php if ($isManpower): ?>
+                    Type the worker's full name exactly to confirm their arrival at <strong><?= esc($destName) ?></strong>.
+                <?php else: ?>
+                    Scan the QR/barcode or manually enter the serial number to confirm the item has arrived at <strong><?= esc($destName) ?></strong>.
+                <?php endif; ?>
+            </p>
+        </div>
+    </div>
+    <form method="POST" action="<?= base_url('requests/accept-delivery/' . $req['id']) ?>">
+        <?= csrf_field() ?>
+        <?php if ($isManpower): ?>
+        <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:.4rem;">
+                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">badge</span>
+                Worker's Full Name
+            </label>
+            <input type="text" name="confirm_name" required autocomplete="off"
+                   placeholder="e.g. Juan Dela Cruz"
+                   style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:.5rem;font-size:0.93rem;box-sizing:border-box;">
+            <p style="margin:.35rem 0 0;font-size:0.78rem;color:#6b7280;">Enter exactly as it appears on the worker's profile (case-insensitive).</p>
+        </div>
+        <?php else: ?>
+        <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#374151;margin-bottom:.4rem;">
+                <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">qr_code_scanner</span>
+                Serial Number / QR Code
+            </label>
+            <input type="text" name="serial_number" required autocomplete="off"
+                   placeholder="Scan or type the serial number"
+                   style="width:100%;padding:.55rem .75rem;border:1px solid #d1d5db;border-radius:.5rem;font-size:0.93rem;box-sizing:border-box;font-family:monospace;">
+            <p style="margin:.35rem 0 0;font-size:0.78rem;color:#6b7280;">Scan the item's QR/barcode or type the serial number manually (case-insensitive).</p>
+        </div>
+        <?php endif; ?>
+        <button type="submit" class="pz-btn pz-btn-success">
+            <span class="material-symbols-outlined"><?= $isManpower ? 'how_to_reg' : 'qr_code_scanner' ?></span>
+            <?= $isManpower ? 'Confirm Arrival' : 'Confirm Receipt' ?>
+        </button>
+    </form>
+</div>
+<?php endif; ?>
 
 <!-- Approval section -->
 <?php if ($canApprove && ($isPending || $isPendingSecondary)): ?>
@@ -148,10 +229,11 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
         <!-- Primary approval info -->
         <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:.7rem 1rem;margin-bottom:.85rem;font-size:0.92rem;color:#0c4a6e;">
             <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;margin-right:.3rem;">verified</span>
-            <strong>1st approval:</strong> <?= esc($req['approved_by_name'] ?? '—') ?>
+            <strong>1st approval:</strong> <?= esc($primaryApproval['name'] ?? $req['approved_by_name'] ?? '—') ?>
             <?php if ($primaryApproverRole): ?><span style="opacity:.7"> · <?= esc($primaryApproverRole) ?></span><?php endif; ?>
-            <?php if (!empty($req['approved_at_fmt'])): ?><span style="opacity:.7"> · <?= esc($req['approved_at_fmt']) ?></span><?php endif; ?>
-            <br><span style="opacity:.8">Approved source:</span> <strong><?= esc($req['approved_source_project_name'] ?? '—') ?></strong>
+            <?php $pa1At = $primaryApproval['approved_at'] ?? $req['approved_at_fmt'] ?? ''; ?>
+            <?php if ($pa1At !== ''): ?><span style="opacity:.7"> · <?= esc($pa1At) ?></span><?php endif; ?>
+            <br><span style="opacity:.8">Approved source:</span> <strong><?= esc($req['source_site_name'] ?? '—') ?></strong>
         </div>
 
         <?php if ($sameRoleBlocked): ?>
@@ -329,5 +411,53 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+</script>
+<?php $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  var _reqId  = '<?= esc($req['id']) ?>';
+  var _ready  = false;
+
+  // Status badge element — already in the DOM
+  function updateBadge(status) {
+    var badge = document.getElementById('pzReqStatusBadge');
+    if (!badge || typeof window.pzBadgeClass !== 'function') return;
+    badge.className = 'pz-badge ' + window.pzBadgeClass(status);
+    badge.textContent = status.toUpperCase();
+  }
+
+  function attachDocListener(db) {
+    db.collection('resource_requests').doc(_reqId).onSnapshot(
+      function (snap) {
+        if (!_ready) { _ready = true; return; } // skip initial fire
+        if (!snap.exists) return;
+        var data = snap.data();
+        var newStatus = data.status || '';
+
+        // Update badge immediately — no reload needed
+        updateBadge(newStatus);
+
+        // For section changes (approval buttons, accept delivery appearing/disappearing),
+        // show the bar so the user can refresh when they're ready
+        window.pzShowLiveBar && window.pzShowLiveBar(
+          'Request status changed to ' + newStatus.toUpperCase() + ' — refresh for full update'
+        );
+      },
+      function (err) { console.warn('[PZ] Request doc listener:', err.message); }
+    );
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) attachDocListener(window.pzFirebaseDb);
+  });
+  setTimeout(function () {
+    if (window.pzFirebaseDb && !window._pzReqDocListener) {
+      window._pzReqDocListener = true;
+      attachDocListener(window.pzFirebaseDb);
+    }
+  }, 5000);
+}());
 </script>
 <?php $this->endSection() ?>

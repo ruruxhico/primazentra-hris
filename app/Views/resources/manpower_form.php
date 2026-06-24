@@ -87,36 +87,6 @@
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="pz-form-group">
-                    <label>Assigned Project / Site</label>
-                    <select id="assigned_project_id" name="assigned_project_id">
-                        <option value="">Select Project (Optional)</option>
-                        <?php if (!empty($projects) && is_array($projects)): ?>
-                            <?php foreach ($projects as $proj): ?>
-                                <option value="<?= esc((string)($proj['value'] ?? '')) ?>"
-                                        data-label="<?= esc((string)($proj['label'] ?? '')) ?>"
-                                        <?= ((string)($manpower['assigned_project_id'] ?? '') === (string)($proj['value'] ?? '')) ? 'selected' : '' ?>>
-                                    <?= esc((string)($proj['label'] ?? $proj['value'])) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </select>
-                    <?php
-                        $displayProject = '';
-                        if (!empty($manpower['assigned_project_id']) && !empty($projects)) {
-                            foreach ($projects as $proj) {
-                                if ((string)($proj['value'] ?? '') === (string)($manpower['assigned_project_id'] ?? '')) {
-                                    $displayProject = $proj['label'] ?? '';
-                                    break;
-                                }
-                            }
-                        }
-                        $displayProject = $displayProject ?: ($manpower['current_site_deployment'] ?? ($manpower['location']['address'] ?? ''));
-                    ?>
-                    <div id="selectedProjectAddress" style="font-size:.75rem;color:#9a7b3a;margin-top:.2rem;<?= $displayProject ? '' : 'display:none' ?>">
-                        <?= esc((string)$displayProject) ?>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -149,22 +119,3 @@
 
 <?= $this->endSection() ?>
 
-<?= $this->section('scripts') ?>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    var sel  = document.getElementById('assigned_project_id');
-    var addr = document.getElementById('selectedProjectAddress');
-    if (!sel || !addr) return;
-
-    function updateAddr() {
-        var opt   = sel.options[sel.selectedIndex];
-        var label = opt ? opt.getAttribute('data-label') || '' : '';
-        addr.textContent    = label;
-        addr.style.display  = label ? 'block' : 'none';
-    }
-
-    sel.addEventListener('change', updateAddr);
-    updateAddr();
-});
-</script>
-<?= $this->endSection() ?>

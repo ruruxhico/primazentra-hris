@@ -35,7 +35,7 @@ class Model_ResourceRequests extends Model_BaseFirestore
         }
         if (!empty($filters['category'])) {
             $c = strtolower($filters['category']);
-            $requests = array_values(array_filter($requests, fn($r) => strtolower($r['category'] ?? '') === $c));
+            $requests = array_values(array_filter($requests, fn($r) => strtolower($r['resource_category'] ?? '') === $c));
         }
         if (!empty($filters['search'])) {
             $q = strtolower($filters['search']);
@@ -68,10 +68,14 @@ class Model_ResourceRequests extends Model_BaseFirestore
     {
         $db  = $this->firestore->getDb();
         $now = new Timestamp(new \DateTime());
-        $data['created_at'] = $now;
-        $data['updated_at'] = $now;
-        $data['status']     = 'Pending';
+        $data['created_at']       = $now;
+        $data['updated_at']       = $now;
+        $data['status']           = 'Pending';
+        $data['approval_stage']   = 'Primary';
+        $data['transfer_state']   = 'Awaiting Approval';
+        $data['transfer_locked']  = false;
         $data['reserved_resources'] = [];
+        $data['approval_history']   = [];
         $ref = $db->collection($this->collection)->add($data);
         return $ref->id();
     }

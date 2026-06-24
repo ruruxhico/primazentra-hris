@@ -200,21 +200,27 @@
             <?php else: ?>
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($projects as $index => $project): ?>
-                    <tr>
+                    <tr data-proj-id="<?= esc($project['id'] ?? '') ?>"
+                        data-proj-status="<?= esc(strtolower($project['status'] ?? '')) ?>"
+                        data-proj-region="<?= esc(strtolower($project['region'] ?? '')) ?>"
+                        data-proj-type="<?= esc(strtolower($project['project_type'] ?? '')) ?>"
+                        data-proj-client="<?= esc(strtolower($project['client'] ?? $project['client_id'] ?? '')) ?>"
+                        data-proj-pm="<?= esc($project['project_manager_id'] ?? '') ?>"
+                        data-proj-se="<?= esc($project['site_engineer_id'] ?? '') ?>">
                         <td class="pz-col-check">
                             <input type="checkbox" class="row-cb" value="<?= esc($project['id'] ?? '') ?>" data-name="<?= esc($project['project_name'] ?? '') ?>">
                         </td>
                         <td><?= $offset + $index + 1 ?></td>
-                        <td><strong><?= esc(view_text($project['project_name'] ?? 'N/A', 'N/A')) ?></strong></td>
+                        <td data-proj-name><strong><?= esc(view_text($project['project_name'] ?? 'N/A', 'N/A')) ?></strong></td>
                         <td><?= esc(view_text($project['project_type'] ?? 'N/A', 'N/A')) ?></td>
-                        <td><?= esc(view_text($project['location_label'] ?? ($project['location']['address'] ?? 'N/A'), 'N/A')) ?></td>
+                        <td data-proj-loc><?= esc(view_text($project['location_label'] ?? ($project['location']['address'] ?? 'N/A'), 'N/A')) ?></td>
                         <td class="text-center">
-                            <span class="progress-badge">
+                            <span class="progress-badge" data-proj-progress>
                                 <?= esc(view_text($project['progress_label'] ?? ($project['overall_progress'] ?? 0))) ?>%
                             </span>
                         </td>
-                        <td><?= esc(view_text($project['project_manager_name'] ?? 'N/A', 'N/A')) ?></td>
-                        <td><?= esc(view_text($project['site_engineer_name'] ?? 'N/A', 'N/A')) ?></td>
+                        <td data-proj-pm><?= esc(view_text($project['project_manager_name'] ?? 'N/A', 'N/A')) ?></td>
+                        <td data-proj-se><?= esc(view_text($project['site_engineer_name'] ?? 'N/A', 'N/A')) ?></td>
                         <td class="text-center" style="white-space: nowrap;">
                             <a href="<?= base_url('projects/show/' . $project['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
                             <?php if (pz_can('edit_project')): ?>
@@ -330,23 +336,48 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // — Auto-submit on any filter change —
-    if (filterForm) {
-        filterForm.querySelectorAll('select').forEach(function (sel) {
-            sel.addEventListener('change', function () { filterForm.submit(); });
+    const search = document.getElementById('searchProjects');
+    const table  = document.getElementById('projectsTable');
+
+    function applyProjectFilters() {
+        if (!table) return;
+        const q = search ? search.value.trim().toLowerCase() : '';
+        const fs = {
+            status : (filterForm?.querySelector('[name="status"]')?.value  || '').toLowerCase(),
+            region : (filterForm?.querySelector('[name="region"]')?.value  || '').toLowerCase(),
+            type   : (filterForm?.querySelector('[name="type"]')?.value    || '').toLowerCase(),
+            client : (filterForm?.querySelector('[name="client"]')?.value  || '').toLowerCase(),
+            pm     : filterForm?.querySelector('[name="pm_id"]')?.value  || '',
+            se     : filterForm?.querySelector('[name="se_id"]')?.value  || '',
+            sort   : filterForm?.querySelector('[name="sort"]')?.value   || '',
+        };
+        const rows = Array.from(table.querySelectorAll('tbody tr[data-proj-id]'));
+        rows.forEach(row => {
+            const d = row.dataset;
+            let show = true;
+            if (q        && !row.innerText.toLowerCase().includes(q))               show = false;
+            if (fs.status && (d.projStatus||'') !== fs.status)                      show = false;
+            if (fs.region && (d.projRegion||'') !== fs.region)                      show = false;
+            if (fs.type   && (d.projType  ||'') !== fs.type)                        show = false;
+            if (fs.client && (d.projClient||'') !== fs.client)                      show = false;
+            if (fs.pm     && d.projPm !== fs.pm)                                    show = false;
+            if (fs.se     && d.projSe !== fs.se)                                    show = false;
+            row.style.display = show ? '' : 'none';
         });
+        if (fs.sort) {
+            const tbody = table.querySelector('tbody');
+            const visible = rows.filter(r => r.style.display !== 'none');
+            visible.sort((a, b) => {
+                const pa = parseInt(a.querySelector('[data-proj-progress]')?.textContent) || 0;
+                const pb = parseInt(b.querySelector('[data-proj-progress]')?.textContent) || 0;
+                return fs.sort === 'progress_desc' ? pb - pa : pa - pb;
+            });
+            visible.forEach(r => tbody.appendChild(r));
+        }
     }
 
-    const search = document.getElementById('searchProjects');
-    const table = document.getElementById('projectsTable');
-    if (search && table) {
-        search.addEventListener('input', function () {
-            const q = this.value.trim().toLowerCase();
-            table.querySelectorAll('tbody tr').forEach(row => {
-                row.style.display = q === '' || row.innerText.toLowerCase().includes(q) ? '' : 'none';
-            });
-        });
-    }
+    if (filterForm) filterForm.querySelectorAll('select').forEach(s => s.addEventListener('change', applyProjectFilters));
+    if (search)     search.addEventListener('input', applyProjectFilters);
 
     // ── Bulk select ─────────────────────────────────────────────
     const bulkBar     = document.getElementById('bulkActionBar');
@@ -411,16 +442,16 @@ document.addEventListener('DOMContentLoaded', function () {
     let pendingArchiveRow     = null;
     let pendingBulkArchiveItems = [];
 
-    document.querySelectorAll('.action-delete').forEach(btn => {
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            pendingDeleteId = this.dataset.id;
-            pendingRow = this.closest('tr');
-            const name = this.dataset.name || 'this project';
-            setConfirmType('delete');
-            confirmMessage.innerText = 'Delete "' + name + '"?';
-            confirmDialog.classList.add('open');
-        });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.action-delete');
+        if (!btn) return;
+        e.preventDefault();
+        pendingDeleteId = btn.dataset.id;
+        pendingRow      = btn.closest('tr');
+        const name = btn.dataset.name || 'this project';
+        setConfirmType('delete');
+        confirmMessage.innerText = 'Delete "' + name + '"?';
+        confirmDialog.classList.add('open');
     });
 
     confirmCancel?.addEventListener('click', function () {
@@ -552,17 +583,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ── Archive ──────────────────────────────────────────────────────────────
     const ARCHIVE_URL = '<?= base_url('projects/archive') ?>';
-    document.querySelectorAll('.action-archive').forEach(function (btn) {
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            const row  = this.closest('tr');
-            row.dataset.name = this.dataset.name || 'this project';
-            pendingArchiveId  = this.dataset.id;
-            pendingArchiveRow = row;
-            setConfirmType('archive');
-            confirmMessage.innerText = 'Archive "' + (this.dataset.name || 'this project') + '"? It will be removed from active projects and stored in the archive.';
-            confirmDialog.classList.add('open');
-        });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.action-archive');
+        if (!btn) return;
+        e.preventDefault();
+        const row  = btn.closest('tr');
+        row.dataset.name = btn.dataset.name || 'this project';
+        pendingArchiveId  = btn.dataset.id;
+        pendingArchiveRow = row;
+        setConfirmType('archive');
+        confirmMessage.innerText = 'Archive "' + (btn.dataset.name || 'this project') + '"? It will be removed from active projects and stored in the archive.';
+        confirmDialog.classList.add('open');
     });
 
     // ── Export / Import ──────────────────────────────────────────────────────
@@ -728,3 +759,106 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <?= $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  window._pzPageListeners = true;
+
+  var _base  = window.pzBaseUrl || '';
+  var _page  = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+
+  function flashRow(row) {
+    row.style.transition = 'background .2s';
+    row.style.background = '#dbeafe';
+    setTimeout(function () { row.style.background = ''; }, 1000);
+  }
+
+  function pzUpdateProjectRow(id, data) {
+    var row = document.querySelector('tr[data-proj-id="' + id + '"]');
+    if (!row) return;
+    var nameEl = row.querySelector('[data-proj-name]');
+    var progEl = row.querySelector('[data-proj-progress]');
+    var pmEl   = row.querySelector('[data-proj-pm]');
+    var seEl   = row.querySelector('[data-proj-se]');
+    var locEl  = row.querySelector('[data-proj-loc]');
+    if (nameEl) nameEl.innerHTML = '<strong>' + (data.project_name || 'N/A').toUpperCase() + '</strong>';
+    if (progEl) progEl.textContent = Math.round(parseFloat(data.overall_progress || 0)) + '%';
+    if (pmEl)   pmEl.textContent   = data.project_manager_name || 'N/A';
+    if (seEl)   seEl.textContent   = data.site_engineer_name   || 'N/A';
+    if (locEl && data.location && data.location.address) locEl.textContent = data.location.address;
+    flashRow(row);
+  }
+
+  function buildProjectRow(id, data) {
+    var name = (data.project_name || 'N/A').toUpperCase();
+    var type = data.project_type || 'N/A';
+    var loc  = (data.location && data.location.address) ? data.location.address : 'N/A';
+    var prog = Math.round(parseFloat(data.overall_progress || 0));
+    var pm   = data.project_manager_name || 'N/A';
+    var se   = data.site_engineer_name   || 'N/A';
+    var no   = document.querySelectorAll('tr[data-proj-id]').length + 1;
+    return '<tr data-proj-id="' + id + '" class="pz-row-new">'
+         + '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + id + '" data-name="' + name + '"></td>'
+         + '<td>' + no + '</td>'
+         + '<td data-proj-name><strong>' + name + '</strong></td>'
+         + '<td>' + type + '</td>'
+         + '<td data-proj-loc>' + loc  + '</td>'
+         + '<td class="text-center"><span class="progress-badge" data-proj-progress>' + prog + '%</span></td>'
+         + '<td data-proj-pm>' + pm + '</td>'
+         + '<td data-proj-se>' + se + '</td>'
+         + '<td class="text-center" style="white-space:nowrap">'
+         + '<a href="' + _base + 'projects/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
+         + '<a href="' + _base + 'projects/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
+         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
+         + '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>'
+         + '</td></tr>';
+  }
+
+  var _setupDone = false;
+  function setup(db) {
+    if (_setupDone) return; _setupDone = true;
+    var _ready = false;
+    db.collection('project').onSnapshot(function (snap) {
+      if (!_ready) { _ready = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        var id = chg.doc.id;
+
+        if (chg.type === 'modified') { pzUpdateProjectRow(id, chg.doc.data()); return; }
+
+        if (chg.type === 'added' && _page === 1) {
+          if (document.querySelector('tr[data-proj-id="' + id + '"]')) return;
+          var tbody = document.querySelector('table tbody');
+          if (!tbody) return;
+          var empty = tbody.querySelector('td[colspan]');
+          if (empty) empty.closest('tr').remove();
+          var tmp = document.createElement('tbody');
+          tmp.innerHTML = buildProjectRow(id, chg.doc.data());
+          tbody.appendChild(tmp.firstElementChild);
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var row = document.querySelector('tr[data-proj-id="' + id + '"]');
+          if (!row) return;
+          row.style.transition = 'opacity .4s, background .4s';
+          row.style.background = '#fee2e2';
+          row.style.opacity    = '0';
+          setTimeout(function () {
+            row.remove();
+            var tbody = document.querySelector('table tbody');
+            if (tbody && !tbody.querySelector('tr[data-proj-id]')) {
+              tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No projects found.</td></tr>';
+            }
+          }, 400);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Projects listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
+</script>
+<?php $this->endSection() ?>

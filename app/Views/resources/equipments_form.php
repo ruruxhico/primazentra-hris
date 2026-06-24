@@ -112,11 +112,7 @@
                                         </div>
                                         <div class="unit-field">
                                             <label>Brand</label>
-                                            <input type="text" name="items[<?= $index ?>][brand]" value="<?= esc((string)($item['brand'] ?? '')) ?>" placeholder="e.g. Caterpillar">
-                                        </div>
-                                        <div class="unit-field">
-                                            <label>Model Number</label>
-                                            <input type="text" name="items[<?= $index ?>][model_number]" value="<?= esc((string)($item['model_number'] ?? '')) ?>" placeholder="e.g. CAT-950GC">
+                                            <input type="text" name="items[<?= $index ?>][brand]" value="<?= esc((string)($item['brand_name'] ?? $item['brand'] ?? '')) ?>" placeholder="e.g. Caterpillar">
                                         </div>
                                         <div class="unit-field">
                                             <label>Condition</label>
@@ -214,10 +210,6 @@
                 <div class="unit-field">
                     <label>Brand</label>
                     <input type="text" name="__INDEX__[brand]" placeholder="e.g. Caterpillar">
-                </div>
-                <div class="unit-field">
-                    <label>Model Number</label>
-                    <input type="text" name="__INDEX__[model_number]" placeholder="e.g. CAT-950GC">
                 </div>
                 <div class="unit-field">
                     <label>Condition</label>

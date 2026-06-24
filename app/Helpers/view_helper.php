@@ -3,12 +3,11 @@
 if (!function_exists('rr_badge')) {
     function rr_badge(string $status): string {
         $map = [
-            'pending'                      => 'pz-badge-pending',
-            'pending secondary'            => 'pz-badge-pending-secondary',
-            'pending secondary approval'   => 'pz-badge-pending-secondary',
-            'approved'                     => 'pz-badge-approved',
-            'rejected'                     => 'pz-badge-rejected',
-            'completed'                    => 'pz-badge-completed',
+            'pending'                    => 'pz-badge-pending',
+            'pending secondary approval' => 'pz-badge-pending-secondary',
+            'in-transit'                 => 'pz-badge-in-transit',
+            'rejected'                   => 'pz-badge-rejected',
+            'completed'                  => 'pz-badge-completed',
         ];
         $cls = $map[strtolower($status)] ?? 'pz-badge-pending';
         return '<span class="pz-badge ' . $cls . '">' . esc(strtoupper($status)) . '</span>';

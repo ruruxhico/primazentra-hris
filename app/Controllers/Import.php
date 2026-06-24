@@ -32,8 +32,8 @@ class Import extends BaseController
             'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'FIELD WORKER / FOREMAN', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'e.g. Welding; Masonry', 'AVAILABLE / DEPLOYED / ON-LEAVE'],
         ],
         'resource_units' => [
-            'headers' => ['Serial Number', 'Brand', 'Model Number', 'Condition'],
-            'notes'   => ['Optional — auto-generated if blank', 'Optional, e.g. Makita', 'Optional, e.g. DP4011', 'New / Functional / Worn / Broken (defaults to New if blank)'],
+            'headers' => ['Serial Number', 'Brand', 'Condition'],
+            'notes'   => ['Optional — auto-generated if blank', 'Optional, e.g. Makita', 'New / Functional / Worn / Broken (defaults to New if blank)'],
         ],
     ];
 
@@ -239,7 +239,7 @@ class Import extends BaseController
         return [$imported, $skipped, null];
     }
 
-    // Columns (0-indexed): 0:Serial Number | 1:Brand | 2:Model Number | 3:Condition
+    // Columns (0-indexed): 0:Serial Number | 1:Brand | 2:Condition
     private function importResourceUnits(array $rows, string $resourceId): array
     {
         if ($resourceId === '') return [0, 0, 'No resource ID provided.'];
@@ -256,10 +256,9 @@ class Import extends BaseController
         foreach ($rows as $row) {
             $serial    = trim((string)($row[0] ?? ''));
             $brand     = trim((string)($row[1] ?? ''));
-            $modelNo   = trim((string)($row[2] ?? ''));
-            $condition = trim((string)($row[3] ?? ''));
+            $condition = trim((string)($row[2] ?? ''));
 
-            if ($serial === '' && $brand === '' && $modelNo === '' && $condition === '') {
+            if ($serial === '' && $brand === '' && $condition === '') {
                 $skipped++;
                 continue;
             }
@@ -280,7 +279,6 @@ class Import extends BaseController
             $db->collection('resource')->document($resourceId)->collection('items')->newDocument()->set([
                 'serial_number' => $serial,
                 'brand'         => $brand,
-                'model_number'  => $modelNo,
                 'condition'     => $condition,
                 'status'        => 'In-Storage',
                 'location'      => ['type' => '', 'address' => ''],
@@ -349,7 +347,6 @@ class Import extends BaseController
                 ],
                 'next_availability' => trim((string) ($row[6] ?? '')),
                 'asset_details'    => [
-                    'model_number'       => trim((string) ($row[1] ?? '')),
                     'total_quantity'     => $total,
                     'available_quantity' => $total,
                     'condition_summary'  => [],

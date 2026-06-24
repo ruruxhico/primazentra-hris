@@ -10,6 +10,7 @@ use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use App\Services\NotificationService;
 use Config\GoogleMaps;
+use Google\Cloud\Core\Timestamp;
 
 class Projects extends BaseController
 {
@@ -116,12 +117,25 @@ class Projects extends BaseController
             }
 
             // â€” Sort â€”
+            // Delayed/Past Deadline always bubble to the top; secondary sort by requested column
+            $urgencyWeight = function (array $p): int {
+                $s = strtolower($p['status'] ?? '');
+                if ($s === 'past deadline') return 0;
+                if ($s === 'delayed')       return 1;
+                return 2;
+            };
             if ($filterSort === 'progress_desc') {
-                usort($projects, fn($a, $b) =>
-                    (float) ($b['overall_progress'] ?? 0) <=> (float) ($a['overall_progress'] ?? 0));
+                usort($projects, function ($a, $b) use ($urgencyWeight) {
+                    $uw = $urgencyWeight($a) <=> $urgencyWeight($b);
+                    return $uw !== 0 ? $uw : (float)($b['overall_progress'] ?? 0) <=> (float)($a['overall_progress'] ?? 0);
+                });
             } elseif ($filterSort === 'progress_asc') {
-                usort($projects, fn($a, $b) =>
-                    (float) ($a['overall_progress'] ?? 0) <=> (float) ($b['overall_progress'] ?? 0));
+                usort($projects, function ($a, $b) use ($urgencyWeight) {
+                    $uw = $urgencyWeight($a) <=> $urgencyWeight($b);
+                    return $uw !== 0 ? $uw : (float)($a['overall_progress'] ?? 0) <=> (float)($b['overall_progress'] ?? 0);
+                });
+            } else {
+                usort($projects, fn($a, $b) => $urgencyWeight($a) <=> $urgencyWeight($b));
             }
 
             // â€” Paginate â€”
@@ -201,8 +215,9 @@ class Projects extends BaseController
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
-                $projectData['created_at'] = time();
-                $projectData['updated_at'] = time();
+                $now = new Timestamp(new \DateTime());
+                $projectData['created_at'] = $now;
+                $projectData['updated_at'] = $now;
 
                 log_message('info', 'Projects::create - POST received. Preparing to write project: ' . ($projectData['project_name'] ?? '(no name)'));
 
@@ -286,8 +301,8 @@ class Projects extends BaseController
                 }
 
                 $projectData = $this->buildProjectPayload();
-                $projectData['created_at'] = $existing['created_at'] ?? time();
-                $projectData['updated_at'] = time();
+                $projectData['created_at'] = $existing['created_at'] ?? new Timestamp(new \DateTime());
+                $projectData['updated_at'] = new Timestamp(new \DateTime());
 
                 // Preserve terminal statuses set outside the form
                 $existingStatus = (string)($existing['status'] ?? '');
@@ -299,7 +314,6 @@ class Projects extends BaseController
                 $addTasksNow = (bool) $this->request->getPost('add_tasks_now');
                 if (!$addTasksNow) {
                     $projectData['overall_progress'] = $existing['overall_progress'] ?? $existing['completion_percent'] ?? 0;
-                    $projectData['completion_percent'] = $projectData['overall_progress'];
                 }
 
                 log_message('info', 'Projects::update - POST received for project id: ' . $id . '; name: ' . ($projectData['project_name'] ?? '(no name)'));
@@ -535,17 +549,17 @@ class Projects extends BaseController
                 $cumActual  = 0.0;
 
                 foreach ($milestones as $m) {
-                    $weight = (float) ($m['weight'] ?? 0);
+                    $weight = (float) ($m['weight_percent'] ?? $m['weight'] ?? 0);
                     $isDone = in_array(strtolower((string)($m['status'] ?? '')), ['done', 'completed'], true)
-                              || !empty($m['actualCompletionDate']);
+                              || !empty($m['actual_completion_date']) || !empty($m['actualCompletionDate']);
 
                     $cumPlanned += $weight;
                     if ($isDone) $cumActual += $weight;
 
-                    $dated = !empty($m['targetDate']);
+                    $dated = !empty($m['target_date']) || !empty($m['targetDate']);
                     $milestoneSummary[] = [
-                        'name'       => (string) ($m['name']       ?? ''),
-                        'targetDate' => $dated ? (string) $m['targetDate'] : null,
+                        'name'        => (string) ($m['milestone_name'] ?? $m['name'] ?? ''),
+                        'target_date' => $dated ? (string) ($m['target_date'] ?? $m['targetDate']) : null,
                         'plannedPct' => $dated ? round($cumPlanned, 2) : null,
                         'actualPct'  => round($cumActual, 2),
                         'variance'   => $dated ? round($cumActual - $cumPlanned, 2) : null,
@@ -677,7 +691,7 @@ class Projects extends BaseController
             }
 
             if ($this->request->getMethod() === 'post') {
-                // Preserve status / actualCompletionDate from existing milestones (matched by order)
+                // Preserve status / actual_completion_date from existing milestones (matched by order)
                 $existing       = $this->getMilestonesOrdered($id);
                 $existByOrder   = [];
                 foreach ($existing as $m) {
@@ -693,20 +707,21 @@ class Projects extends BaseController
                     if ($name === '') continue;
                     $ex = $existByOrder[$order] ?? [];
                     $milestones[] = [
-                        'name'                 => $name,
-                        'order'                => $order,
-                        'weight'               => (float)($m['weight'] ?? 0),
-                        'qty'                  => max(1, (int)($m['qty'] ?? 1)),
-                        'unit'                 => trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs',
-                        'targetDate'           => trim((string)($m['target_date'] ?? '')) ?: null,
-                        'actualCompletionDate' => $ex['actualCompletionDate'] ?? null,
-                        'status'               => $ex['status'] ?? 'Pending',
+                        'milestone_name'         => $name,
+                        'order'                  => $order,
+                        'weight_percent'         => (float)($m['weight'] ?? 0),
+                        'target_quantity'        => max(1, (int)($m['qty'] ?? 1)),
+                        'completed_quantity'     => (int)($ex['completed_quantity'] ?? 0),
+                        'unit'                   => trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs',
+                        'target_date'            => trim((string)($m['target_date'] ?? '')) ?: null,
+                        'actual_completion_date' => $ex['actual_completion_date'] ?? null,
+                        'status'                 => $ex['status'] ?? 'Pending',
                     ];
                     $order++;
                 }
 
                 if (!empty($milestones)) {
-                    $total = round(array_sum(array_column($milestones, 'weight')), 1);
+                    $total = round(array_sum(array_column($milestones, 'weight_percent')), 1);
                     if (abs($total - 100.0) > 0.5) {
                         return redirect()->back()->withInput()
                             ->with('error', 'Milestone weights must sum to 100 %. Current total: ' . number_format($total, 1) . ' %.');
@@ -804,12 +819,16 @@ class Projects extends BaseController
                     'status'         => $m['status'] ?? 'Available',
                     'current_site'   => $m['current_site_deployment'] ?? ($m['current_site'] ?? ''),
                 ];
-                $apid = (string)($m['assigned_project_id'] ?? '');
+                $rawApid = $m['assigned_project_id'] ?? '';
+                $apid = $rawApid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $rawApid->id()
+                    : trim((string)$rawApid);
                 if ($apid === $id) {
-                    $assignedManpower[]          = ['name' => $name];
+                    $assignedManpower[]          = ['id' => $mpId, 'name' => $name];
                     $assignedManpowerIds[$mpId]  = 'mp:' . $mpId;
                 }
             }
+            usort($allManpower, fn($a, $b) => strcasecmp($a['name'], $b['name']));
 
             // ── Equipment & Tools ──
             $allEquipment     = [];
@@ -847,9 +866,11 @@ class Projects extends BaseController
                 }
 
                 if ($assignedCount > 0) {
-                    $assignedEqGroups[] = ['name' => $resName, 'count' => $assignedCount];
+                    $assignedEqGroups[] = ['id' => $resId, 'name' => $resName, 'count' => $assignedCount];
                 }
             }
+            usort($allEquipment, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+            usort($allTools,     fn($a, $b) => strcasecmp($a['name'], $b['name']));
 
             return view('projects/project_resources', [
                 'pageTitle'           => 'Project Resources — ' . strtoupper($project['project_name'] ?? ''),
@@ -885,6 +906,8 @@ class Projects extends BaseController
         try {
             $db = $this->firestore->getDb();
 
+            $retName     = '';
+            $retCategory = '';
             if ($type === 'manpower') {
                 $db->collection('manpower')->document($refId)->set([
                     'assigned_project_id' => $id,
@@ -895,15 +918,16 @@ class Projects extends BaseController
                 $mpData = $db->collection('manpower')->document($refId)->snapshot()->data() ?? [];
                 $fn = strtoupper(trim((string)($mpData['first_name'] ?? '')));
                 $ln = strtoupper(trim((string)($mpData['last_name']  ?? '')));
-                $mpName = $fn . ($fn && $ln ? ' ' : '') . $ln ?: strtoupper($mpData['name'] ?? '');
-                if ($mpName !== '') {
-                    $db->collection('project')->document($id)->update([[
-                        'path'  => 'resources',
-                        'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
-                            'name' => $mpName, 'ref_id' => $refId, 'unit_id' => '', 'category' => 'manpower',
-                        ]]),
-                    ]]);
+                $retName = $fn . ($fn && $ln ? ' ' : '') . $ln ?: strtoupper($mpData['name'] ?? '');
+                if ($retName !== '') {
+                    $db->collection('project')->document($id)->set(
+                        ['resources' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
+                            'name' => $retName, 'ref_id' => $refId, 'unit_id' => '', 'category' => 'manpower',
+                        ]])],
+                        ['merge' => true]
+                    );
                 }
+                $retCategory = 'Manpower';
             } else {
                 $db->collection('resource')->document($refId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => $db->collection('project')->document($id),
@@ -912,19 +936,26 @@ class Projects extends BaseController
 
                 // Sync to project.resources so mobile sees the assignment
                 $resData = $db->collection('resource')->document($refId)->snapshot()->data() ?? [];
-                $resName  = strtoupper(trim((string)($resData['name'] ?? '')));
-                $category = strtolower(trim((string)($resData['category'] ?? 'equipment')));
-                if ($resName !== '') {
-                    $db->collection('project')->document($id)->update([[
-                        'path'  => 'resources',
-                        'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
-                            'name' => $resName, 'ref_id' => $refId, 'unit_id' => $unitId, 'category' => $category,
-                        ]]),
-                    ]]);
+                $retName  = strtoupper(trim((string)($resData['name'] ?? '')));
+                $retCategory = ucfirst(strtolower(trim((string)($resData['category'] ?? 'Equipment'))));
+                if ($retName !== '') {
+                    $db->collection('project')->document($id)->set(
+                        ['resources' => \Google\Cloud\Firestore\FieldValue::arrayUnion([[
+                            'name' => $retName, 'ref_id' => $refId, 'unit_id' => $unitId, 'category' => $retCategory,
+                        ]])],
+                        ['merge' => true]
+                    );
                 }
             }
 
-            return $this->response->setJSON(['success' => true]);
+            $assignmentId = $type === 'manpower' ? 'mp:' . $refId : 'unit:' . $refId . ':' . $unitId;
+            return $this->response->setJSON([
+                'success'       => true,
+                'csrf_hash'     => csrf_hash(),
+                'assignment_id' => $assignmentId,
+                'name'          => $retName,
+                'category'      => $retCategory,
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Projects::assignResource - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to assign resource']);
@@ -960,7 +991,7 @@ class Projects extends BaseController
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid assignment ID']);
             }
 
-            return $this->response->setJSON(['success' => true]);
+            return $this->response->setJSON(['success' => true, 'csrf_hash' => csrf_hash()]);
         } catch (\Throwable $e) {
             log_message('error', 'Projects::unassignResource - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to unassign']);
@@ -1046,7 +1077,10 @@ class Projects extends BaseController
                 $mpStatus = $m['status'] ?? 'Available';
                 if ($mpStatus !== 'Available') continue;
 
-                $apid = (string)($m['assigned_project_id'] ?? '');
+                $rawApid2 = $m['assigned_project_id'] ?? '';
+                $apid = $rawApid2 instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $rawApid2->id()
+                    : trim((string)$rawApid2);
                 if ($apid !== '' && $apid !== 'null') continue;
 
                 if ($role !== '') {
@@ -1066,9 +1100,11 @@ class Projects extends BaseController
                     if (!$found) continue;
                 }
 
-                $fn = strtoupper(trim((string)($m['first_name'] ?? '')));
-                $ln = strtoupper(trim((string)($m['last_name']  ?? '')));
-                $mpName = $fn . ($fn && $ln ? ' ' : '') . $ln ?: strtoupper($m['name'] ?? '');
+                $mn = strtoupper(trim((string)($m['middle_name'] ?? '')));
+                $fn = strtoupper(trim((string)($m['first_name']  ?? '')));
+                $ln = strtoupper(trim((string)($m['last_name']   ?? '')));
+                $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                       ?: strtoupper($m['name'] ?? '');
                 $candidates[] = ['id' => $m['id'], 'name' => $mpName];
             }
 
@@ -1092,13 +1128,18 @@ class Projects extends BaseController
                 }
             }
             if (!empty($resourceEntries)) {
-                $db->collection('project')->document($id)->update([[
-                    'path'  => 'resources',
-                    'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries),
-                ]]);
+                $db->collection('project')->document($id)->set(
+                    ['resources' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries)],
+                    ['merge' => true]
+                );
             }
 
-            return $this->response->setJSON(['success' => true, 'assigned' => count($toAssign)]);
+            return $this->response->setJSON([
+                'success'   => true,
+                'assigned'  => count($toAssign),
+                'csrf_hash' => csrf_hash(),
+                'workers'   => $toAssign,
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Projects::bulkAssignManpower - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign manpower']);
@@ -1128,7 +1169,7 @@ class Projects extends BaseController
             // Fetch resource name/category once for the project.resources sync
             $resData  = $db->collection('resource')->document($resourceId)->snapshot()->data() ?? [];
             $resName  = strtoupper(trim((string)($resData['name'] ?? '')));
-            $category = strtolower(trim((string)($resData['category'] ?? 'equipment')));
+            $category = ucfirst(strtolower(trim((string)($resData['category'] ?? 'Equipment'))));
 
             $projectExistsCache = [];
             $resourceEntries = [];
@@ -1187,13 +1228,13 @@ class Projects extends BaseController
             }
 
             if (!empty($resourceEntries)) {
-                $db->collection('project')->document($id)->update([[
-                    'path'  => 'resources',
-                    'value' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries),
-                ]]);
+                $db->collection('project')->document($id)->set(
+                    ['resources' => \Google\Cloud\Firestore\FieldValue::arrayUnion($resourceEntries)],
+                    ['merge' => true]
+                );
             }
 
-            return $this->response->setJSON(['success' => true, 'assigned' => $assigned]);
+            return $this->response->setJSON(['success' => true, 'assigned' => $assigned, 'csrf_hash' => csrf_hash()]);
         } catch (\Throwable $e) {
             log_message('error', 'Projects::bulkAssignEquipment - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign equipment']);
@@ -1320,29 +1361,43 @@ class Projects extends BaseController
         $tasks = $this->normalizePhases($this->request->getPost('phases') ?? []);
         $overallProgress = $this->calculateOverallProgress($tasks);
 
+        $db    = $this->firestore->getDb();
+        $pmId  = trim((string)($this->request->getPost('project_manager_id') ?? ''));
+        $seId  = trim((string)($this->request->getPost('site_engineer_id')   ?? ''));
+        $pmRef = $pmId !== '' ? $db->collection('users')->document($pmId) : null;
+        $seRef = $seId !== '' ? $db->collection('users')->document($seId) : null;
+
+        $lat = $this->normalizeNumberOrNull($this->request->getPost('location_lat'));
+        $lng = $this->normalizeNumberOrNull($this->request->getPost('location_lng'));
+        $geopoint = ($lat !== null && $lng !== null)
+            ? new \Google\Cloud\Core\GeoPoint((float)$lat, (float)$lng)
+            : null;
+
+        $startTs = $rawStart !== '' ? new \Google\Cloud\Core\Timestamp(new \DateTime($rawStart)) : null;
+        $endTs   = $rawEnd   !== '' ? new \Google\Cloud\Core\Timestamp(new \DateTime($rawEnd))   : null;
+
         return [
-            'project_name' => $projectName,
-            'project_type' => $projectType,
-            'client_name'  => trim((string) $this->request->getPost('client_name')),
-            'status' => $status,
-            'budget' => $budget,
-            'start_date' => $this->normalizeDateValue($this->request->getPost('start_date')),
-            'end_date' => $this->normalizeDateValue($this->request->getPost('end_date')),
-            'overall_progress' => $overallProgress,
-            'completion_percent' => $overallProgress,
-            'project_manager_id' => $this->request->getPost('project_manager_id'),
-            'site_engineer_id' => $this->request->getPost('site_engineer_id'),
+            'project_name'         => $projectName,
+            'project_type'         => $projectType,
+            'client_name'          => trim((string) $this->request->getPost('client_name')),
+            'status'               => $status,
+            'budget'               => $budget,
+            'start_date'           => $startTs,
+            'end_date'             => $endTs,
+            'overall_progress'     => $overallProgress,
+            'project_manager_id'   => $pmRef,
+            'site_engineer_id'     => $seRef,
+            'project_manager_name' => $this->resolveUserName($pmId),
+            'site_engineer_name'   => $this->resolveUserName($seId),
+            'delay_ping_days'      => max(0, (int)($this->request->getPost('delay_ping_days') ?: 0)),
             'personnel' => [
-                'project_manager_id' => $this->request->getPost('project_manager_id'),
-                'site_engineer_id' => $this->request->getPost('site_engineer_id')
+                'project_manager_id' => $pmRef,
+                'site_engineer_id'   => $seRef,
             ],
             'location' => [
-                'address' => trim((string) $this->request->getPost('location_address')),
-                'geopoint' => [
-                    'lat' => $this->normalizeNumberOrNull($this->request->getPost('location_lat')),
-                    'lng' => $this->normalizeNumberOrNull($this->request->getPost('location_lng'))
-                ]
-            ]
+                'address'  => trim((string) $this->request->getPost('location_address')),
+                'geopoint' => $geopoint,
+            ],
         ];
     }
 
@@ -1390,8 +1445,9 @@ class Projects extends BaseController
 
         foreach ($tasks as $task) {
             $taskId = $task['id'] ?? bin2hex(random_bytes(8));
-            $task['created_at'] = $task['created_at'] ?? time();
-            $task['updated_at'] = time();
+            $taskNow = new Timestamp(new \DateTime());
+            $task['created_at'] = $task['created_at'] ?? $taskNow;
+            $task['updated_at'] = $taskNow;
 
             $tasksRef->document($taskId)->set($task);
         }
@@ -1412,11 +1468,14 @@ class Projects extends BaseController
             $targetDate = trim((string) ($phase['site_date'] ?? ''));
 
             $milestones[] = [
-                'name'                 => $name,
+                'milestone_name'       => $name,
                 'order'                => $order++,
-                'weight'               => (float) ($phase['weight'] ?? 0),
-                'targetDate'           => $targetDate !== '' ? $targetDate : null,
-                'actualCompletionDate' => null,
+                'weight_percent'       => (float) ($phase['weight'] ?? 0),
+                'target_quantity'      => 1,
+                'completed_quantity'   => 0,
+                'unit'                 => 'pcs',
+                'target_date'          => $targetDate !== '' ? $targetDate : null,
+                'actual_completion_date' => null,
                 'status'               => 'Pending',
             ];
         }
@@ -1452,12 +1511,15 @@ class Projects extends BaseController
         foreach ($milestones as $m) {
             $docId = bin2hex(random_bytes(8));
             $ref->document($docId)->set([
-                'name'                 => (string) ($m['name']   ?? ''),
-                'order'                => (int)    ($m['order']  ?? 0),
-                'weight'               => (float)  ($m['weight'] ?? 0),
-                'targetDate'           => $m['targetDate'] ?: null,
-                'actualCompletionDate' => $m['actualCompletionDate'] ?? null,
-                'status'               => (string) ($m['status'] ?? 'Pending'),
+                'milestone_name'         => (string) ($m['milestone_name'] ?? $m['name'] ?? ''),
+                'order'                  => (int)    ($m['order']          ?? 0),
+                'weight_percent'         => (float)  ($m['weight_percent'] ?? $m['weight'] ?? 0),
+                'target_quantity'        => max(1, (int)($m['target_quantity'] ?? 1)),
+                'completed_quantity'     => (int)   ($m['completed_quantity'] ?? 0),
+                'unit'                   => (string) ($m['unit'] ?? 'pcs') ?: 'pcs',
+                'target_date'            => $m['target_date'] ?? $m['targetDate'] ?? null,
+                'actual_completion_date' => $m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null,
+                'status'                 => (string) ($m['status'] ?? 'Pending'),
             ]);
         }
     }
@@ -1635,8 +1697,9 @@ class Projects extends BaseController
 
         foreach ($flatTasks as $task) {
             $taskId = $task['id'] ?? bin2hex(random_bytes(8));
-            $task['created_at'] = $task['created_at'] ?? time();
-            $task['updated_at'] = time();
+            $taskNow = new Timestamp(new \DateTime());
+            $task['created_at'] = $task['created_at'] ?? $taskNow;
+            $task['updated_at'] = $taskNow;
             $ref->document($taskId)->set($task);
         }
     }
@@ -1704,18 +1767,27 @@ class Projects extends BaseController
             $location = ['address' => $project['location']];
         }
 
-        $geopoint = is_array($location['geopoint'] ?? null) ? $location['geopoint'] : [];
+        $rawGeo = $location['geopoint'] ?? null;
+        $geoLat = '';
+        $geoLng = '';
+        if ($rawGeo instanceof \Google\Cloud\Core\GeoPoint) {
+            $geoLat = (string) $rawGeo->latitude();
+            $geoLng = (string) $rawGeo->longitude();
+        } elseif (is_array($rawGeo)) {
+            $geoLat = (string) ($rawGeo['lat'] ?? '');
+            $geoLng = (string) ($rawGeo['lng'] ?? '');
+        }
 
         $project['location'] = $location;
         $project['location_label'] = trim((string) ($location['address'] ?? ''));
         $project['project_manager_name'] = $this->resolveUserName($personnel['project_manager_id'] ?? null);
         $project['site_engineer_name'] = $this->resolveUserName($personnel['site_engineer_id'] ?? null);
-        $project['progress_label'] = number_format((float) ($project['overall_progress'] ?? $project['completion_percent'] ?? 0), 2);
+        $project['progress_label'] = number_format((float) ($project['overall_progress'] ?? 0), 2);
         $project['start_date_value'] = $this->normalizeDateValue($project['start_date'] ?? '');
         $project['end_date_value'] = $this->normalizeDateValue($project['end_date'] ?? '');
         $project['location_address_value'] = (string) ($location['address'] ?? '');
-        $project['location_lat_value'] = (string) ($geopoint['lat'] ?? '');
-        $project['location_lng_value'] = (string) ($geopoint['lng'] ?? '');
+        $project['location_lat_value'] = $geoLat;
+        $project['location_lng_value'] = $geoLng;
 
         $rawPmId = $this->normalizeReferenceValue($personnel['project_manager_id'] ?? null);
         $rawSeId = $this->normalizeReferenceValue($personnel['site_engineer_id'] ?? null);

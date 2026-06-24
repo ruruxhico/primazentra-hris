@@ -185,7 +185,6 @@ class Staff extends BaseController
                     'contact_no' => trim((string) ($this->request->getPost('contact_no') ?? '')),
                     'email' => $email,
                     'role' => $role,
-                    'must_change_password' => $this->request->getPost('must_change_password') ? true : false,
                     'created_at' => $now,
                     'updated_at' => $now
                 ];
@@ -206,18 +205,35 @@ class Staff extends BaseController
                     }
                 }
 
-                $docRef = $this->firestore->getDb()->collection('users')->document($newId);
-                $docRef->set($data);
+                // Create Firebase Auth account and send temp password
+                $tempPassword = $this->generateTempPassword();
+                $firebaseAuth = $this->firestore->getAuth();
+                $firebaseUser = $firebaseAuth->createUserWithEmailAndPassword($email, $tempPassword);
+                $firebaseUid  = (string) $firebaseUser->uid;
 
-                // Verify write succeeded
-                $snapshot = $docRef->snapshot();
-                if (!$snapshot->exists()) {
-                    throw new \RuntimeException('Firestore write verification failed.');
+                $firebaseAuth->updateUser($firebaseUid, [
+                    'displayName' => trim($firstName . ' ' . $lastName),
+                ]);
+
+                $data['firebase_uid']            = $firebaseUid;
+                $data['must_change_password']     = true;
+                $data['temp_password_expires_at'] = time() + (15 * 60);
+
+                // Use Firebase UID as Firestore document ID (consistent with Auth::register)
+                $docRef = $this->firestore->getDb()->collection('users')->document($firebaseUid);
+
+                try {
+                    $docRef->set($data);
+                } catch (\Throwable $firestoreErr) {
+                    $firebaseAuth->deleteUser($firebaseUid);
+                    throw $firestoreErr;
                 }
 
-                log_message('info', 'Staff::create success. Document ID: ' . $newId);
+                $this->sendWelcomeEmail($email, $firstName, $tempPassword);
 
-                return redirect()->to('staff')->with('success', 'Staff member created successfully!');
+                log_message('info', 'Staff::create success. UID: ' . $firebaseUid);
+
+                return redirect()->to('staff')->with('success', 'Staff member created. Credentials sent to ' . $email . '.');
             } catch (\Exception $e) {
                 log_message('error', 'Staff::create - ' . $e->getMessage());
                 return redirect()->back()->withInput()->with('error', 'Failed to create staff member: ' . $e->getMessage());
@@ -346,9 +362,10 @@ class Staff extends BaseController
 
             $tempPassword = $this->generateTempPassword();
 
-            // Update Firebase Auth password
+            // Firebase Auth UID may differ from the Firestore document ID for older records
+            $firebaseUid  = $data['firebase_uid'] ?? $id;
             $firebaseAuth = $this->firestore->getAuth();
-            $firebaseAuth->updateUser($id, ['password' => $tempPassword]);
+            $firebaseAuth->updateUser($firebaseUid, ['password' => $tempPassword]);
 
             // Reset must_change_password + fresh 15-minute expiry
             $this->firestore->getDb()->collection('users')->document($id)->update([
@@ -488,5 +505,59 @@ class Staff extends BaseController
         }
 
         return $this->response->setStatusCode(405)->setJSON(['success' => false, 'message' => 'Method not allowed']);
+    }
+
+    private function generateTempPassword(): string
+    {
+        $chars   = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+        $special = '!@#$%';
+        $pw = '';
+        for ($i = 0; $i < 10; $i++) {
+            $pw .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        $pw .= $special[random_int(0, strlen($special) - 1)];
+        $arr = str_split($pw);
+        shuffle($arr);
+        return implode('', $arr);
+    }
+
+    private function sendWelcomeEmail(string $email, string $firstName, string $tempPassword): void
+    {
+        $mailer      = service('email');
+        $emailConfig = config('Email');
+
+        $mailer->initialize([
+            'protocol'       => (string) env('EMAIL_PROTOCOL',       $emailConfig->protocol),
+            'mailPath'       => (string) env('EMAIL_MAIL_PATH',      $emailConfig->mailPath ?? ''),
+            'SMTPHost'       => (string) env('EMAIL_SMTP_HOST',      $emailConfig->SMTPHost),
+            'SMTPUser'       => (string) env('EMAIL_SMTP_USER',      $emailConfig->SMTPUser),
+            'SMTPPass'       => (string) env('EMAIL_SMTP_PASS',      $emailConfig->SMTPPass),
+            'SMTPPort'       => (int)    env('EMAIL_SMTP_PORT',      $emailConfig->SMTPPort),
+            'SMTPCrypto'     => (string) env('EMAIL_SMTP_CRYPTO',    $emailConfig->SMTPCrypto),
+            'SMTPAuthMethod' => (string) env('EMAIL_SMTP_AUTH_METHOD', $emailConfig->SMTPAuthMethod ?? 'login'),
+            'SMTPTimeout'    => (int)    env('EMAIL_SMTP_TIMEOUT',   $emailConfig->SMTPTimeout ?? 5),
+            'mailType'       => 'html',
+            'charset'        => 'UTF-8',
+            'wordWrap'       => true,
+            'validate'       => false,
+            'CRLF'           => (string) env('EMAIL_CRLF',    $emailConfig->CRLF    ?? "\r\n"),
+            'newline'        => (string) env('EMAIL_NEWLINE', $emailConfig->newline  ?? "\r\n"),
+        ]);
+
+        $fromEmail = $emailConfig->fromEmail ?: (string) env('EMAIL_FROM', 'no-reply@primazentra.local');
+        $fromName  = $emailConfig->fromName  ?: (string) env('EMAIL_FROM_NAME', 'PrimaZentra');
+
+        $mailer->setFrom($fromEmail, $fromName);
+        $mailer->setTo($email);
+        $mailer->setSubject('Your PrimaZentra Account Credentials');
+        $mailer->setMessage(view('emails/welcome_credentials', [
+            'firstName'    => $firstName,
+            'email'        => $email,
+            'tempPassword' => $tempPassword,
+        ]));
+
+        if (!$mailer->send(false)) {
+            throw new \RuntimeException('Email send failed: ' . $mailer->printDebugger(['headers']));
+        }
     }
 }

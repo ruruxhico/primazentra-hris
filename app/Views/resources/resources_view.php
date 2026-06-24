@@ -122,21 +122,21 @@
                     <tr><td colspan="7" class="empty-state">No equipment found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($equipment as $idx => $item):
-                    $total = (int)($item['total_quantity_display']    ?? $item['asset_details']['total_quantity']    ?? 0);
-                    $avail = (int)($item['available_units_display']   ?? $item['asset_details']['available_quantity'] ?? 0);
+                    $total = (int)($item['total_quantity']    ?? $item['asset_details']['total_quantity']    ?? 0);
+                    $avail = (int)($item['available_quantity'] ?? $item['asset_details']['available_quantity'] ?? 0);
                     $inuse = $total - $avail;
                 ?>
-                <tr>
+                <tr data-res-id="<?= esc((string)$item['id']) ?>">
                     <td class="pz-col-check">
                         <input type="checkbox" class="row-cb eq-cb"
                                value="<?= esc((string)$item['id']) ?>"
                                data-name="<?= esc((string)($item['name'] ?? '')) ?>">
                     </td>
                     <td><?= $eqOffset + $idx + 1 ?></td>
-                    <td><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
-                    <td class="text-center"><?= $total ?></td>
-                    <td class="text-center"><?= $avail ?></td>
-                    <td class="text-center"><?= $inuse > 0 ? $inuse : '—' ?></td>
+                    <td data-res-name><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
+                    <td class="text-center" data-res-total><?= $total ?></td>
+                    <td class="text-center" data-res-avail><?= $avail ?></td>
+                    <td class="text-center" data-res-inuse><?= $inuse > 0 ? $inuse : '—' ?></td>
                     <td class="text-center" style="white-space:nowrap">
                         <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
                             <span class="material-symbols-outlined">visibility</span>
@@ -252,21 +252,21 @@
                     <tr><td colspan="7" class="empty-state">No tools found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($tools as $idx => $item):
-                    $total = (int)($item['total_quantity_display']  ?? $item['asset_details']['total_quantity']    ?? 0);
-                    $avail = (int)($item['available_units_display'] ?? $item['asset_details']['available_quantity'] ?? 0);
+                    $total = (int)($item['total_quantity']    ?? $item['asset_details']['total_quantity']    ?? 0);
+                    $avail = (int)($item['available_quantity'] ?? $item['asset_details']['available_quantity'] ?? 0);
                     $inuse = $total - $avail;
                 ?>
-                <tr>
+                <tr data-res-id="<?= esc((string)$item['id']) ?>">
                     <td class="pz-col-check">
                         <input type="checkbox" class="row-cb tools-cb"
                                value="<?= esc((string)$item['id']) ?>"
                                data-name="<?= esc((string)($item['name'] ?? '')) ?>">
                     </td>
                     <td><?= $toolsOffset + $idx + 1 ?></td>
-                    <td><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
-                    <td class="text-center"><?= $total ?></td>
-                    <td class="text-center"><?= $avail ?></td>
-                    <td class="text-center"><?= $inuse > 0 ? $inuse : '—' ?></td>
+                    <td data-res-name><strong><?= esc(strtoupper((string)($item['name'] ?? 'N/A'))) ?></strong></td>
+                    <td class="text-center" data-res-total><?= $total ?></td>
+                    <td class="text-center" data-res-avail><?= $avail ?></td>
+                    <td class="text-center" data-res-inuse><?= $inuse > 0 ? $inuse : '—' ?></td>
                     <td class="text-center" style="white-space:nowrap">
                         <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
                             <span class="material-symbols-outlined">visibility</span>
@@ -412,18 +412,21 @@
                     $role = (string)($person['manpower_details']['role']           ?? $person['role']           ?? '');
                     $spec = (string)($person['manpower_details']['specialization'] ?? $person['specialization'] ?? '');
                 ?>
-                <tr>
+                <tr data-mp-id="<?= esc((string)$person['id']) ?>"
+                    data-mp-role-val="<?= esc(strtolower($role)) ?>"
+                    data-mp-spec-val="<?= esc(strtolower($spec)) ?>"
+                    data-mp-status-val="<?= esc(strtolower($mpStatusRaw)) ?>">
                     <td class="pz-col-check">
                         <input type="checkbox" class="row-cb mp-cb"
                                value="<?= esc((string)$person['id']) ?>"
                                data-name="<?= esc((string)($person['name'] ?? '')) ?>">
                     </td>
                     <td><?= $mpOffset + $idx + 1 ?></td>
-                    <td><strong><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></strong></td>
-                    <td><?= esc($role) ?></td>
-                    <td><?= esc($spec) ?></td>
+                    <td data-mp-name><strong><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></strong></td>
+                    <td data-mp-role><?= esc($role) ?></td>
+                    <td data-mp-spec><?= esc($spec) ?></td>
                     <td class="text-center">
-                        <span class="mp-status-badge <?= $stClass ?>"><?= esc($mpStatusRaw) ?></span>
+                        <span class="mp-status-badge <?= $stClass ?>" data-mp-status><?= esc($mpStatusRaw) ?></span>
                     </td>
                     <td class="text-center" style="white-space:nowrap">
                         <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View">
@@ -626,8 +629,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<td>' + spec + '</td>' +
                 '<td class="text-center"><span class="mp-status-badge ' + stCls + '">' + escHtml(status) + '</span></td>';
         } else {
-            const total = (d.asset_details && d.asset_details.total_quantity)     || 0;
-            const avail = (d.asset_details && d.asset_details.available_quantity) || 0;
+            const total = parseInt(d.total_quantity    || 0, 10);
+            const avail = parseInt(d.available_quantity || 0, 10);
             const inuse = total - avail;
             cellsHtml =
                 '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbClass + '" value="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '"></td>' +
@@ -647,16 +650,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const row = document.createElement('tr');
         row.innerHTML = cellsHtml;
-        row.querySelector('.action-delete').addEventListener('click', function () {
-            pendingDeleteId = this.dataset.id;
-            pendingRow      = row;
-            setConfirmType('delete');
-            confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
-            confirmDialog.classList.add('open');
-        });
-        row.querySelector('.action-archive').addEventListener('click', function () {
-            wireArchiveBtn(this, row);
-        });
         row.querySelector('.row-cb').addEventListener('change', updateBulkBar);
 
         row.style.opacity = '0'; row.style.background = '#edf7e6';
@@ -682,44 +675,73 @@ document.addEventListener('DOMContentLoaded', function () {
     wireFilterToggle('toolsFilterToggle', 'toolsFilterPanel', <?= $toolsActiveCount > 0 ? 'true' : 'false' ?>);
     wireFilterToggle('mpFilterToggle',    'mpFilterPanel',    <?= $mpActiveCount > 0 ? 'true' : 'false' ?>);
 
-    /* ── Sort chips (equipment & tools) ── */
-    function wireSortChips(formId, hiddenId) {
-        const form = document.getElementById(formId);
-        const inp  = document.getElementById(hiddenId);
-        if (!form || !inp) return;
+    /* ── Sort chips (equipment & tools) — live DOM sort ── */
+    function wireSortChips(formId, tableId) {
+        const form  = document.getElementById(formId);
+        const table = document.getElementById(tableId);
+        if (!form || !table) return;
+        const origOrder = Array.from(table.querySelectorAll('tbody tr[data-res-id]'));
+        let activeSort = '';
         form.querySelectorAll('.sort-chip').forEach(chip => {
             chip.addEventListener('click', function () {
-                inp.value = inp.value === this.dataset.val ? '' : this.dataset.val;
-                form.submit();
+                const val = this.dataset.val;
+                activeSort = activeSort === val ? '' : val;
+                form.querySelectorAll('.sort-chip').forEach(c => c.classList.toggle('active', c.dataset.val === activeSort));
+                const tbody = table.querySelector('tbody');
+                const q     = form.closest('.rv-panel')?.querySelector('.rv-search')?.value.trim().toLowerCase() || '';
+                if (!activeSort) {
+                    origOrder.forEach(r => tbody.appendChild(r));
+                } else {
+                    const attr = activeSort === 'total_desc' ? '[data-res-total]' : '[data-res-avail]';
+                    const rows = Array.from(tbody.querySelectorAll('tr[data-res-id]'));
+                    rows.sort((a, b) => (parseInt(b.querySelector(attr)?.textContent)||0) - (parseInt(a.querySelector(attr)?.textContent)||0));
+                    rows.forEach(r => tbody.appendChild(r));
+                }
             });
         });
     }
-    wireSortChips('eqFilterForm',    'eqSortInput');
-    wireSortChips('toolsFilterForm', 'toolsSortInput');
+    wireSortChips('eqFilterForm',    'equipmentTable');
+    wireSortChips('toolsFilterForm', 'toolsTable');
 
-    /* ── Manpower filter chips ── */
+    /* ── Manpower filter chips — live DOM filter ── */
+    const mpFilters = { role: '', spec: '', status: '' };
+
+    function applyMpFilter() {
+        const q = (document.getElementById('searchManpower')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('#manpowerTable tbody tr[data-mp-id]').forEach(row => {
+            let show = true;
+            if (q && !row.innerText.toLowerCase().includes(q)) show = false;
+            if (mpFilters.role   && (row.dataset.mpRoleVal   ||'') !== mpFilters.role)   show = false;
+            if (mpFilters.spec   && (row.dataset.mpSpecVal   ||'') !== mpFilters.spec)   show = false;
+            if (mpFilters.status && (row.dataset.mpStatusVal ||'') !== mpFilters.status) show = false;
+            row.style.display = show ? '' : 'none';
+        });
+    }
+
     const mpForm = document.getElementById('mpFilterForm');
     if (mpForm) {
-        function wireMpChips(selector, hiddenId) {
-            const inp = document.getElementById(hiddenId);
+        function wireMpChips(selector, key) {
             mpForm.querySelectorAll(selector).forEach(chip => {
                 chip.addEventListener('click', function () {
-                    inp.value = inp.value === this.dataset.val ? '' : this.dataset.val;
-                    mpForm.submit();
+                    const val = this.dataset.val.toLowerCase();
+                    mpFilters[key] = mpFilters[key] === val ? '' : val;
+                    mpForm.querySelectorAll(selector).forEach(c => c.classList.toggle('active', c.dataset.val.toLowerCase() === mpFilters[key]));
+                    applyMpFilter();
                 });
             });
         }
-        wireMpChips('.mp-role-chip',   'mpRoleInput');
-        wireMpChips('.mp-spec-chip',   'mpSpecInput');
-        wireMpChips('.mp-status-chip', 'mpStatusInput');
+        wireMpChips('.mp-role-chip',   'role');
+        wireMpChips('.mp-spec-chip',   'spec');
+        wireMpChips('.mp-status-chip', 'status');
     }
 
-    /* ── Search (client-side filter on visible table) ── */
-    function wireSearch(inputId, tableId) {
+    /* ── Search — live DOM filter (equipment, tools, manpower) ── */
+    function wireSearch(inputId, tableId, extraFilter) {
         const inp   = document.getElementById(inputId);
         const table = document.getElementById(tableId);
         if (!inp || !table) return;
         inp.addEventListener('input', function () {
+            if (extraFilter) { extraFilter(); return; }
             const q = this.value.trim().toLowerCase();
             table.querySelectorAll('tbody tr').forEach(row => {
                 row.style.display = !q || row.innerText.toLowerCase().includes(q) ? '' : 'none';
@@ -728,7 +750,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     wireSearch('searchEquipment', 'equipmentTable');
     wireSearch('searchTools',     'toolsTable');
-    wireSearch('searchManpower',  'manpowerTable');
+    wireSearch('searchManpower',  'manpowerTable', applyMpFilter);
 
     /* ── Bulk select ── */
     const bulkBar     = document.getElementById('bulkActionBar');
@@ -791,15 +813,15 @@ document.addEventListener('DOMContentLoaded', function () {
     let pendingArchiveRow       = null;
     let pendingBulkArchiveItems = [];
 
-    document.querySelectorAll('.action-delete').forEach(btn => {
-        btn.addEventListener('click', function (e) {
-            e.preventDefault();
-            pendingDeleteId = this.dataset.id;
-            pendingRow      = this.closest('tr');
-            setConfirmType('delete');
-            confirmMessage.innerText = 'Delete "' + (this.dataset.name || 'this resource') + '"?';
-            confirmDialog.classList.add('open');
-        });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.action-delete');
+        if (!btn) return;
+        e.preventDefault();
+        pendingDeleteId = btn.dataset.id;
+        pendingRow      = btn.closest('tr');
+        setConfirmType('delete');
+        confirmMessage.innerText = 'Delete "' + (btn.dataset.name || 'this resource') + '"?';
+        confirmDialog.classList.add('open');
     });
 
     // ── Archive ───────────────────────────────────────────────
@@ -813,8 +835,10 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmMessage.innerText = 'Archive "' + (btn.dataset.name || 'this resource') + '"? It will be moved to the archive and removed from active records.';
         confirmDialog.classList.add('open');
     }
-    document.querySelectorAll('.action-archive').forEach(function (btn) {
-        btn.addEventListener('click', function () { wireArchiveBtn(this, null); });
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.action-archive');
+        if (!btn) return;
+        wireArchiveBtn(btn, null);
     });
 
     confirmCancel?.addEventListener('click', function () {
@@ -1008,3 +1032,213 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <?= $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  window._pzPageListeners = true;
+
+  var _base   = window.pzBaseUrl || '';
+  var _params = new URLSearchParams(window.location.search);
+  var _eqPage = parseInt(_params.get('page_equipment') || '1', 10);
+  var _tPage  = parseInt(_params.get('page_tools')     || '1', 10);
+  var _mpPage = parseInt(_params.get('page_manpower')  || '1', 10);
+
+  function flashRow(row) {
+    row.style.transition = 'background .2s';
+    row.style.background = '#dbeafe';
+    setTimeout(function () { row.style.background = ''; }, 1000);
+  }
+
+  // ── Equipment / Tools ──────────────────────────────────────────────────────
+
+  function resCount(data) {
+    var total = parseInt(data.total_quantity    || 0, 10);
+    var avail = parseInt(data.available_quantity || 0, 10);
+    return { total: total, avail: avail, inuse: Math.max(0, total - avail) };
+  }
+
+  function nextRowNo(tableId) {
+    var rows = document.querySelectorAll('#' + tableId + ' tbody tr[data-res-id]');
+    return rows.length + 1;
+  }
+
+  function pzUpdateResRow(id, data) {
+    var row = document.querySelector('tr[data-res-id="' + id + '"]');
+    if (!row) return;
+    var nameEl  = row.querySelector('[data-res-name]');
+    var totalEl = row.querySelector('[data-res-total]');
+    var availEl = row.querySelector('[data-res-avail]');
+    var inuseEl = row.querySelector('[data-res-inuse]');
+    if (nameEl)  nameEl.innerHTML = '<strong>' + (data.name || 'N/A').toUpperCase() + '</strong>';
+    var c = resCount(data);
+    if (totalEl) totalEl.textContent = c.total;
+    if (availEl) availEl.textContent = c.avail;
+    if (inuseEl) inuseEl.textContent = c.inuse > 0 ? c.inuse : '—';
+    flashRow(row);
+  }
+
+  function buildResRow(id, data, tableId) {
+    var cat   = (data.category || '').toLowerCase();
+    var cbCls = cat === 'equipment' ? 'eq-cb' : 'tools-cb';
+    var name  = (data.name || 'N/A').toUpperCase();
+    var c     = resCount(data);
+    var no    = nextRowNo(tableId);
+    return '<tr data-res-id="' + id + '" class="pz-row-new">'
+         + '<td class="pz-col-check"><input type="checkbox" class="row-cb ' + cbCls + '" value="' + id + '" data-name="' + name + '"></td>'
+         + '<td>' + no + '</td>'
+         + '<td data-res-name><strong>' + name + '</strong></td>'
+         + '<td class="text-center" data-res-total>' + c.total + '</td>'
+         + '<td class="text-center" data-res-avail>' + c.avail + '</td>'
+         + '<td class="text-center" data-res-inuse>' + (c.inuse > 0 ? c.inuse : '—') + '</td>'
+         + '<td class="text-center" style="white-space:nowrap">'
+         + '<a href="' + _base + 'resources/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
+         + '<a href="' + _base + 'resources/edit/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
+         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
+         + '<button type="button" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>'
+         + '</td></tr>';
+  }
+
+  // ── Manpower ───────────────────────────────────────────────────────────────
+
+  function mpStatusClass(status) {
+    var k = (status || '').toLowerCase().replace(/[-\s]/g, '');
+    return k === 'available' ? 'mp-status-available'
+         : k === 'deployed'  ? 'mp-status-deployed'
+         : k === 'onleave'   ? 'mp-status-onleave'
+         : 'mp-status-other';
+  }
+
+  function pzUpdateMpRow(id, data) {
+    var row = document.querySelector('tr[data-mp-id="' + id + '"]');
+    if (!row) return;
+    var nameEl   = row.querySelector('[data-mp-name]');
+    var roleEl   = row.querySelector('[data-mp-role]');
+    var specEl   = row.querySelector('[data-mp-spec]');
+    var statusEl = row.querySelector('[data-mp-status]');
+    var role   = (data.manpower_details && data.manpower_details.role)           || data.role           || '';
+    var spec   = (data.manpower_details && data.manpower_details.specialization) || data.specialization || '';
+    var status = data.status || 'Available';
+    if (nameEl)   nameEl.innerHTML    = '<strong>' + (data.name || 'N/A').toUpperCase() + '</strong>';
+    if (roleEl)   roleEl.textContent  = role;
+    if (specEl)   specEl.textContent  = spec;
+    if (statusEl) { statusEl.className = 'mp-status-badge ' + mpStatusClass(status); statusEl.textContent = status; }
+    flashRow(row);
+  }
+
+  function buildMpRow(id, data) {
+    var name   = (data.name || 'N/A').toUpperCase();
+    var role   = (data.manpower_details && data.manpower_details.role)           || data.role           || '';
+    var spec   = (data.manpower_details && data.manpower_details.specialization) || data.specialization || '';
+    var status = data.status || 'Available';
+    var no     = document.querySelectorAll('#manpowerTable tbody tr[data-mp-id]').length + 1;
+    return '<tr data-mp-id="' + id + '" class="pz-row-new">'
+         + '<td class="pz-col-check"><input type="checkbox" class="row-cb mp-cb" value="' + id + '" data-name="' + name + '"></td>'
+         + '<td>' + no + '</td>'
+         + '<td data-mp-name><strong>' + name + '</strong></td>'
+         + '<td data-mp-role>' + role + '</td>'
+         + '<td data-mp-spec>' + spec + '</td>'
+         + '<td class="text-center"><span class="mp-status-badge ' + mpStatusClass(status) + '" data-mp-status>' + status + '</span></td>'
+         + '<td class="text-center" style="white-space:nowrap">'
+         + '<a href="' + _base + 'resources/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
+         + '<a href="' + _base + 'resources/edit/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
+         + '<button type="button" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>'
+         + '</td></tr>';
+  }
+
+  // ── Setup ──────────────────────────────────────────────────────────────────
+
+  var _setupDone = false;
+  function setup(db) {
+    if (_setupDone) return; _setupDone = true;
+
+    // Equipment + Tools share the `resource` collection
+    var _resReady = false;
+    db.collection('resource').onSnapshot(function (snap) {
+      if (!_resReady) { _resReady = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        var id   = chg.doc.id;
+        var data = chg.doc.data();
+        var cat  = (data.category || '').toLowerCase();
+
+        if (chg.type === 'modified') { pzUpdateResRow(id, data); return; }
+
+        if (chg.type === 'added') {
+          if (document.querySelector('tr[data-res-id="' + id + '"]')) return;
+          var tableId = cat === 'equipment' ? 'equipmentTable' : (cat === 'tools' ? 'toolsTable' : null);
+          var page    = cat === 'equipment' ? _eqPage : _tPage;
+          if (!tableId || page > 1) return;
+          var tbody = document.querySelector('#' + tableId + ' tbody');
+          if (!tbody) return;
+          var empty = tbody.querySelector('.empty-state');
+          if (empty) empty.closest('tr').remove();
+          var tmp = document.createElement('tbody');
+          tmp.innerHTML = buildResRow(id, data, tableId);
+          tbody.appendChild(tmp.firstElementChild);
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var row = document.querySelector('tr[data-res-id="' + id + '"]');
+          if (!row) return;
+          var tableId = cat === 'equipment' ? 'equipmentTable' : 'toolsTable';
+          row.style.transition = 'opacity .4s, background .4s';
+          row.style.background = '#fee2e2';
+          row.style.opacity    = '0';
+          setTimeout(function () {
+            row.remove();
+            var tbody = document.querySelector('#' + tableId + ' tbody');
+            if (tbody && !tbody.querySelector('tr[data-res-id]')) {
+              tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No ' + cat + ' found.</td></tr>';
+            }
+          }, 400);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Resource listener:', err.message); });
+
+    // Manpower
+    var _mpReady = false;
+    db.collection('manpower').onSnapshot(function (snap) {
+      if (!_mpReady) { _mpReady = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        var id   = chg.doc.id;
+        var data = chg.doc.data();
+
+        if (chg.type === 'modified') { pzUpdateMpRow(id, data); return; }
+
+        if (chg.type === 'added' && _mpPage === 1) {
+          if (document.querySelector('tr[data-mp-id="' + id + '"]')) return;
+          var tbody = document.querySelector('#manpowerTable tbody');
+          if (!tbody) return;
+          var empty = tbody.querySelector('.empty-state');
+          if (empty) empty.closest('tr').remove();
+          var tmp = document.createElement('tbody');
+          tmp.innerHTML = buildMpRow(id, data);
+          tbody.appendChild(tmp.firstElementChild);
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var row = document.querySelector('tr[data-mp-id="' + id + '"]');
+          if (!row) return;
+          row.style.transition = 'opacity .4s, background .4s';
+          row.style.background = '#fee2e2';
+          row.style.opacity    = '0';
+          setTimeout(function () {
+            row.remove();
+            var tbody = document.querySelector('#manpowerTable tbody');
+            if (tbody && !tbody.querySelector('tr[data-mp-id]')) {
+              tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No manpower records found.</td></tr>';
+            }
+          }, 400);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Manpower listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
+</script>
+<?php $this->endSection() ?>

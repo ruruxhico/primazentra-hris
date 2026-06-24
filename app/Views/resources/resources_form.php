@@ -150,12 +150,6 @@
             <p class="pz-form-section-title">Asset Details</p>
             <div class="pz-form-row cols-2">
                 <div class="pz-form-group">
-                    <label for="model_number">Model Number *</label>
-                    <input type="text" id="model_number" name="model_number"
-                           value="<?= esc((string)($resource['asset_details']['model_number'] ?? '')) ?>"
-                           placeholder="e.g., HD500-PRO" required>
-                </div>
-                <div class="pz-form-group">
                     <label for="total_quantity">Total Quantity *</label>
                     <input type="number" id="total_quantity" name="total_quantity" min="1"
                            value="<?= esc((string)($resource['asset_details']['total_quantity'] ?? '')) ?>"

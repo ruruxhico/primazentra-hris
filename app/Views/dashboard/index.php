@@ -1,6 +1,7 @@
 ﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
+<link rel="stylesheet" href="<?= base_url('css/dashboard-summary.css') ?>?v=<?= time() ?>">
 <?php if (!empty($googleMapsBrowserKey)): ?>
 <script>
 window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
@@ -88,139 +89,228 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     $bCol3 = array_slice($blockerRows, $third * 2);
     ?>
 
-    <style>
-    /* Summary section cards */
-    .pz-sc { background:#FBF6E8; border:2px solid #C8A951; border-radius:10px; overflow:hidden; box-sizing:border-box; margin-bottom:.75rem; }
-    .pz-sc-title { font-weight:800; font-size:.88rem; color:#2c1a00; text-transform:uppercase; letter-spacing:.05em; padding:.55rem .9rem .4rem; background:#FBF6E8; border-bottom:1px solid #E8D9A8; }
-    .pz-sc-tbl { width:100%; border-collapse:collapse; }
-    .pz-sc-tbl th { background:#C8A951; color:#2c1a00; font-weight:700; text-transform:uppercase; font-size:.72rem; padding:.28rem .55rem; text-align:left; white-space:nowrap; }
-    .pz-sc-tbl td { font-size:.78rem; color:#2c1a00; padding:.24rem .55rem; border-bottom:1px solid #E8D9A8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .pz-sc-tbl tr:last-child td { border-bottom:none; }
-    .pz-sc-tbl tr:nth-child(even) td { background:#f5efd6; }
-    .pz-sc-divider { width:1px; background:#E8D9A8; padding:0; }
-    /* Bottom row */
-    .pz-sc-row { display:flex; gap:.75rem; align-items:flex-start; }
-    .pz-sc-row > div { flex:1 1 0; min-width:0; }
-    .pz-sc-row .pz-sc { margin-bottom:0; }
-    /* Responsive: stack on small screens */
-    @media (max-width:600px) {
-        .pz-sc-row { flex-direction:column; }
-        .pz-sc-row > div { width:100%; }
-        .pz-bl-hide { display:none; } /* hide right half of blockers on mobile */
-    }
-    </style>
+    <?php
+    $bHalf  = (int) ceil(count($blockerRows) / 2);
+    $bLeft  = array_slice($blockerRows, 0, $bHalf);
+    $bRight = array_slice($blockerRows, $bHalf);
+    $usingMcdaTools = !empty($availableToolsMcda);
+    $toolsDisplay   = $usingMcdaTools ? $availableToolsMcda : $availableTools;
 
-    <!-- ── BLOCKERS CARD ── -->
-    <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:.75rem;”>
-        <div class=”pz-sc-title” style=”font-weight:800;font-size:.88rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.55rem .9rem .4rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Predicted Blockers</div>
-        <?php if (empty($activeList)): ?>
-            <p style=”text-align:center;font-style:italic;color:#888;margin:.75rem;font-size:.82rem;”>No predicted blockers — all projects on track.</p>
+    $blockerPageSize = 6;
+    $tablePageSize   = 6;
+    $blockerPages    = max(1, (int) ceil(count($blockerRows) / $blockerPageSize));
+    $toolPages       = max(1, (int) ceil(count($toolsDisplay) / $tablePageSize));
+    $deployPages     = max(1, (int) ceil(count($availableManpower) / $tablePageSize));
+
+    $blockerPageRows = array_slice($blockerRows, 0, $blockerPageSize);
+    $bLeft           = array_slice($blockerPageRows, 0, 3);
+    $bRight          = array_slice($blockerPageRows, 3, 3);
+    $toolsPageRows   = array_slice($toolsDisplay, 0, $tablePageSize);
+    $deployPageRows  = array_slice($availableManpower, 0, $tablePageSize);
+
+    $summaryPagerData = json_encode([
+        'blockers' => $blockerRows,
+        'tools'    => array_values($toolsDisplay),
+        'deploy'   => array_values($availableManpower),
+        'usingMcdaTools' => $usingMcdaTools,
+    ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+    ?>
+
+    <!-- ── PREDICTED BLOCKERS ── -->
+    <div class="pz-sc">
+        <div class="pz-sc-head">Predicted Blockers</div>
+        <?php if (empty($blockerRows)): ?>
+            <p class="pz-sc-empty">No predicted blockers — all projects on track.</p>
         <?php else: ?>
-        <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
-            <thead>
-                <tr>
-                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:28%;”>Project</th>
-                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:16%;”>Status</th>
-                    <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:6%;”>Delay</th>
-                    <th class=”pz-bl-hide” style=”background:#E8D9A8;width:2px;padding:0;”></th>
-                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:28%;”>Project</th>
-                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:16%;”>Status</th>
-                    <th class=”pz-bl-hide” style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:6%;”>Delay</th>
-                </tr>
-            </thead>
-            <tbody>
-            <?php
-            $maxRows = max(count($bCol1), count($bCol2));
-            for ($ri = 0; $ri < $maxRows; $ri++):
-                $L = $bCol1[$ri] ?? null;
-                $R = $bCol2[$ri] ?? null;
-            ?>
-            <tr>
-                <td style=”font-weight:700;max-width:0;overflow:hidden;text-overflow:ellipsis;”><?= $L ? esc($L['name']) : '' ?></td>
-                <td style=”color:<?= $L ? esc($L['statusc']) : '#888' ?>;”><?= $L ? esc($L['status']) : '' ?></td>
-                <td style=”font-weight:700;color:<?= $L ? esc($L['delayc']) : '#888' ?>;”><?= $L ? esc($L['delay']) : '' ?></td>
-                <td class=”pz-bl-hide pz-sc-divider” style=”width:2px;background:#E8D9A8;padding:0;”></td>
-                <td class=”pz-bl-hide” style=”font-weight:700;max-width:0;overflow:hidden;text-overflow:ellipsis;”><?= $R ? esc($R['name']) : '' ?></td>
-                <td class=”pz-bl-hide” style=”color:<?= $R ? esc($R['statusc']) : '#888' ?>;”><?= $R ? esc($R['status']) : '' ?></td>
-                <td class=”pz-bl-hide” style=”font-weight:700;color:<?= $R ? esc($R['delayc']) : '#888' ?>;”><?= $R ? esc($R['delay']) : '' ?></td>
-            </tr>
-            <?php endfor; ?>
-            </tbody>
-        </table>
-        <?php endif; ?>
-    </div><!-- /blockers -->
-
-    <!-- ── TOOLS + DEPLOY ── -->
-    <div class=”pz-sc-row” style=”display:flex;gap:.75rem;align-items:flex-start;”>
-
-        <!-- Available Tools -->
-        <?php
-        $usingMcdaTools = !empty($availableToolsMcda);
-        $toolsDisplay   = $usingMcdaTools ? $availableToolsMcda : $availableTools;
-        ?>
-        <div style=”flex:1 1 0;min-width:0;”>
-            <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:0;”>
-                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>
-                    Available Tools
-                    <?php if ($usingMcdaTools): ?>
-                        <span style=”font-size:.68rem;font-weight:600;color:#1e6b45;margin-left:6px;letter-spacing:0;”>AI-Optimized</span>
-                    <?php endif; ?>
-                </div>
-                <?php if (empty($toolsDisplay)): ?>
-                    <p style=”text-align:center;font-style:italic;color:#888;margin:.6rem;font-size:.82rem;”>No tools available.</p>
-                <?php else: ?>
-                <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
-                    <thead><tr>
-                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Name</th>
-                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;width:3.5rem;text-align:center;”>Qty</th>
-                        <?php if ($usingMcdaTools): ?>
-                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Next Deployment</th>
-                        <?php endif; ?>
-                    </tr></thead>
-                    <tbody>
-                    <?php foreach ($toolsDisplay as $t): ?>
+        <div class="pz-sc-cols" id="pzBlockerCols">
+            <div class="pz-sc-half">
+                <table class="pz-sc-tbl">
+                    <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                    <tbody id="pzBlockerLeftBody">
+                    <?php foreach ($bLeft as $row): ?>
                     <tr>
-                        <td style=”font-weight:700;”><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
-                        <td style=”text-align:center;color:#5a3e00;”><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
-                        <?php if ($usingMcdaTools): ?>
-                        <td style=”color:#5a3e00;font-size:.75rem;”><?= esc($t['next_deployment'] ?? '—') ?></td>
-                        <?php endif; ?>
+                        <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
+                        <td><?= esc($row['status']) ?></td>
+                        <td class="pz-sc-r <?= $row['delayc'] === '#c0392b' ? 'pz-delay-warn' : 'pz-delay-ok' ?>"><?= esc($row['delay']) ?></td>
                     </tr>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
-                <?php endif; ?>
             </div>
+            <div class="pz-sc-divider" id="pzBlockerDivider"<?= empty($bRight) ? ' style="display:none"' : '' ?>></div>
+            <div class="pz-sc-half" id="pzBlockerRightHalf"<?= empty($bRight) ? ' style="display:none"' : '' ?>>
+                <table class="pz-sc-tbl">
+                    <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                    <tbody id="pzBlockerRightBody">
+                    <?php foreach ($bRight as $row): ?>
+                    <tr>
+                        <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
+                        <td><?= esc($row['status']) ?></td>
+                        <td class="pz-sc-r <?= $row['delayc'] === '#c0392b' ? 'pz-delay-warn' : 'pz-delay-ok' ?>"><?= esc($row['delay']) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="pz-sc-nav">
+            <button type="button" class="pz-sc-nav-btn" id="pzBlockerPrev" disabled>&lt;</button>
+            <span class="pz-sc-nav-label" id="pzBlockerPageLabel">1 / <?= $blockerPages ?></span>
+            <button type="button" class="pz-sc-nav-btn" id="pzBlockerNext" <?= $blockerPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
+        </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- ── AVAILABLE TOOLS  +  AVAILABLE TO DEPLOY (side by side) ── -->
+    <div class="pz-sc-row">
+
+        <!-- Available Tools -->
+        <div class="pz-sc">
+            <div class="pz-sc-head">
+                Available Tools<?php if ($usingMcdaTools): ?> <span style="font-size:.6rem;color:#1e6b45;font-weight:700;">AI</span><?php endif; ?>
+            </div>
+            <?php if (empty($toolsDisplay)): ?>
+                <p class="pz-sc-empty">No tools available.</p>
+            <?php else: ?>
+            <table class="pz-sc-tbl">
+                <thead><tr>
+                    <th>Name</th>
+                    <th style="width:3rem;text-align:center">Qty</th>
+                    <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
+                </tr></thead>
+                <tbody id="pzToolsBody">
+                <?php foreach ($toolsPageRows as $t): ?>
+                <tr>
+                    <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
+                    <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                    <?php if ($usingMcdaTools): ?>
+                    <td style="color:#777;font-size:.75rem"><?= esc($t['next_deployment'] ?? '—') ?></td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="pz-sc-nav">
+                <button type="button" class="pz-sc-nav-btn" id="pzToolsPrev" disabled>&lt;</button>
+                <span class="pz-sc-nav-label" id="pzToolsPageLabel">1 / <?= $toolPages ?></span>
+                <button type="button" class="pz-sc-nav-btn" id="pzToolsNext" <?= $toolPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
+            </div>
+            <?php endif; ?>
         </div>
 
         <!-- Available to Deploy -->
-        <div style=”flex:1 1 0;min-width:0;”>
-            <div class=”pz-sc” style=”background:#FBF6E8;border:2px solid #C8A951;border-radius:10px;overflow:hidden;margin-bottom:0;”>
-                <div class=”pz-sc-title” style=”font-weight:800;font-size:.85rem;color:#2c1a00;text-transform:uppercase;letter-spacing:.05em;padding:.5rem .9rem .38rem;background:#FBF6E8;border-bottom:1px solid #E8D9A8;”>Available to Deploy</div>
-                <?php if (empty($availableManpower)): ?>
-                    <p style=”text-align:center;font-style:italic;color:#888;margin:.6rem;font-size:.82rem;”>No manpower available.</p>
-                <?php else: ?>
-                <table class=”pz-sc-tbl” style=”width:100%;border-collapse:collapse;”>
-                    <thead><tr>
-                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Name</th>
-                        <th style=”background:#C8A951;color:#2c1a00;font-weight:700;text-transform:uppercase;font-size:.72rem;padding:.28rem .55rem;”>Role</th>
-                    </tr></thead>
-                    <tbody>
-                    <?php foreach ($availableManpower as $mp): ?>
-                    <tr>
-                        <td style=”font-weight:700;”><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
-                        <td style=”color:#5a3e00;”><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php endif; ?>
+        <div class="pz-sc">
+            <div class="pz-sc-head">Available to Deploy</div>
+            <?php if (empty($availableManpower)): ?>
+                <p class="pz-sc-empty">No manpower available.</p>
+            <?php else: ?>
+            <table class="pz-sc-tbl">
+                <thead><tr><th>Name</th><th>Role</th></tr></thead>
+                <tbody id="pzDeployBody">
+                <?php foreach ($deployPageRows as $mp): ?>
+                <tr>
+                    <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
+                    <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
+                </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            <div class="pz-sc-nav">
+                <button type="button" class="pz-sc-nav-btn" id="pzDeployPrev" disabled>&lt;</button>
+                <span class="pz-sc-nav-label" id="pzDeployPageLabel">1 / <?= $deployPages ?></span>
+                <button type="button" class="pz-sc-nav-btn" id="pzDeployNext" <?= $deployPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
             </div>
+            <?php endif; ?>
         </div>
 
-    </div><!-- /tools+deploy -->
+    </div><!-- /pz-sc-row -->
 
 </section><!-- #summary -->
+
+<script>
+(function () {
+    var D = <?= $summaryPagerData ?>;
+    var PAGE = 6;
+    var bPage = 1, tPage = 1, dPage = 1;
+    var bTotal = Math.ceil((D.blockers || []).length / PAGE) || 1;
+    var tTotal = Math.ceil((D.tools   || []).length / PAGE) || 1;
+    var dTotal = Math.ceil((D.deploy  || []).length / PAGE) || 1;
+
+    function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function blockerRow(r) {
+        var dc = (r.delayc === '#c0392b') ? 'pz-delay-warn' : 'pz-delay-ok';
+        return '<tr><td class="pz-sc-name" title="'+esc(r.name)+'">'+esc(r.name)+'</td>'
+             + '<td>'+esc(r.status)+'</td>'
+             + '<td class="pz-sc-r '+dc+'">'+esc(r.delay)+'</td></tr>';
+    }
+
+    function renderBlockers(p) {
+        var rows  = D.blockers.slice((p-1)*PAGE, p*PAGE);
+        var left  = rows.slice(0, 3);
+        var right = rows.slice(3, 6);
+        var lb = document.getElementById('pzBlockerLeftBody');
+        var rb = document.getElementById('pzBlockerRightBody');
+        var div = document.getElementById('pzBlockerDivider');
+        var rh  = document.getElementById('pzBlockerRightHalf');
+        if (lb) lb.innerHTML = left.map(blockerRow).join('');
+        if (rb) rb.innerHTML = right.map(blockerRow).join('');
+        var hasRight = right.length > 0;
+        if (div) div.style.display = hasRight ? '' : 'none';
+        if (rh)  rh.style.display  = hasRight ? '' : 'none';
+        document.getElementById('pzBlockerPageLabel').textContent = p + ' / ' + bTotal;
+        document.getElementById('pzBlockerPrev').disabled = (p <= 1);
+        document.getElementById('pzBlockerNext').disabled = (p >= bTotal);
+    }
+
+    function toolRow(t) {
+        var qty = t.qty ?? (t.asset_details && t.asset_details.available_quantity) ?? t.available_units_display ?? '0';
+        var row = '<tr><td class="pz-sc-name" title="'+esc((t.name||'').toUpperCase())+'">'+esc((t.name||'N/A').toUpperCase())+'</td>'
+                + '<td style="text-align:center">'+esc(String(qty))+'</td>';
+        if (D.usingMcdaTools) row += '<td style="color:#777;font-size:.75rem">'+esc(t.next_deployment||'—')+'</td>';
+        return row + '</tr>';
+    }
+
+    function renderTools(p) {
+        var rows = D.tools.slice((p-1)*PAGE, p*PAGE);
+        var tb = document.getElementById('pzToolsBody');
+        if (!tb) return;
+        tb.innerHTML = rows.map(toolRow).join('');
+        document.getElementById('pzToolsPageLabel').textContent = p + ' / ' + tTotal;
+        document.getElementById('pzToolsPrev').disabled = (p <= 1);
+        document.getElementById('pzToolsNext').disabled = (p >= tTotal);
+    }
+
+    function deployRow(m) {
+        var role = ((m.manpower_details && m.manpower_details.role) || m.role || 'Field Worker').toUpperCase();
+        return '<tr><td class="pz-sc-name" title="'+esc((m.name||'').toUpperCase())+'">'+esc((m.name||'N/A').toUpperCase())+'</td>'
+             + '<td>'+esc(role)+'</td></tr>';
+    }
+
+    function renderDeploy(p) {
+        var rows = D.deploy.slice((p-1)*PAGE, p*PAGE);
+        var tb = document.getElementById('pzDeployBody');
+        if (!tb) return;
+        tb.innerHTML = rows.map(deployRow).join('');
+        document.getElementById('pzDeployPageLabel').textContent = p + ' / ' + dTotal;
+        document.getElementById('pzDeployPrev').disabled = (p <= 1);
+        document.getElementById('pzDeployNext').disabled = (p >= dTotal);
+    }
+
+    function wire(prevId, nextId, getP, setP, render) {
+        var prev = document.getElementById(prevId);
+        var next = document.getElementById(nextId);
+        if (prev) prev.addEventListener('click', function () { var p = getP(); if (p > 1) { setP(p - 1); render(p - 1); } });
+        if (next) next.addEventListener('click', function () { var p = getP(); if (p < (nextId === 'pzBlockerNext' ? bTotal : nextId === 'pzToolsNext' ? tTotal : dTotal)) { setP(p + 1); render(p + 1); } });
+    }
+
+    wire('pzBlockerPrev','pzBlockerNext', function(){return bPage;}, function(v){bPage=v;}, renderBlockers);
+    wire('pzToolsPrev',  'pzToolsNext',   function(){return tPage;}, function(v){tPage=v;}, renderTools);
+    wire('pzDeployPrev', 'pzDeployNext',  function(){return dPage;}, function(v){dPage=v;}, renderDeploy);
+})();
+</script>
 
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -275,6 +365,8 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                         <button type="button" class="db-filter-pill active" data-status="ALL">All</button>
                         <button type="button" class="db-filter-pill" data-status="ONGOING">Ongoing</button>
                         <button type="button" class="db-filter-pill" data-status="DONE">Done</button>
+                        <button type="button" class="db-filter-pill db-filter-pill--warning" data-status="DELAYED">Delayed</button>
+                        <button type="button" class="db-filter-pill db-filter-pill--danger" data-status="PAST_DEADLINE">Past Deadline</button>
                     </div>
                 </div>
                 <?php if (!empty($monitorClients)): ?>
@@ -302,7 +394,8 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                  data-region="<?= esc($proj['_region']) ?>"
                  data-client="<?= esc($proj['_client'] ?? '') ?>"
                  data-type="<?= esc($proj['_project_type'] ?? '') ?>"
-                 data-status="<?= esc($proj['_status'] ?? 'ONGOING') ?>">
+                 data-status="<?= esc($proj['_status'] ?? 'ONGOING') ?>"
+                 data-delay="<?= (int)($proj['_ml_delay_days'] ?? 0) ?>">
                 <?php echo db_render_card($proj, 'monitor'); ?>
             </div>
             <?php endforeach; ?>
@@ -402,13 +495,24 @@ function db_render_card(array $p, string $context = 'summary'): string
     $tools     = (array)($p['_tools']     ?? []);
     $manpower  = (array)($p['_manpower']  ?? []);
     $mapsUrl   = esc($p['_maps_url']);
-    $cardId    = 'card-' . preg_replace('/[^a-zA-Z0-9]/', '', (string)($p['id'] ?? uniqid()));
-    $lat       = $p['_lat'] ?? null;
-    $lng       = $p['_lng'] ?? null;
+    $cardId      = 'card-' . preg_replace('/[^a-zA-Z0-9]/', '', (string)($p['id'] ?? uniqid()));
+    $lat         = $p['_lat'] ?? null;
+    $lng         = $p['_lng'] ?? null;
+    $isPastDl    = !empty($p['_past_deadline']);
+    $mlDelay     = (int)($p['_ml_delay_days'] ?? 0);
+    $cardClasses = 'db-project-card';
+    if ($isPastDl)      $cardClasses .= ' db-card--past-deadline';
+    elseif ($mlDelay > 0) $cardClasses .= ' db-card--delayed';
 
     ob_start();
     ?>
-    <div class="db-project-card" id="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>" data-pname="<?= esc(strtoupper($p['project_name'] ?? '')) ?>">
+    <div class="<?= $cardClasses ?>" id="<?= $cardId ?>" data-pid="<?= esc($p['id'] ?? '') ?>" data-pname="<?= esc(strtoupper($p['project_name'] ?? '')) ?>">
+        <?php if ($isPastDl || $mlDelay > 0): ?>
+        <div class="db-card-delay-banner <?= $isPastDl ? 'db-card-delay-banner--deadline' : '' ?>">
+            <span class="material-symbols-outlined">schedule</span>
+            <?= $isPastDl ? 'Past Deadline' : "Delayed ~{$mlDelay}d (ML)" ?>
+        </div>
+        <?php endif; ?>
 
         <!-- Project name -->
         <?php if ($context === 'monitor'): ?>
@@ -462,9 +566,13 @@ function db_render_card(array $p, string $context = 'summary'): string
                             $resId     = is_array($res) ? ($res['id']      ?? '') : '';
                             $resUnitId = is_array($res) ? ($res['unit_id'] ?? '') : '';
                             $isPending = is_array($res) && !empty($res['pending']);
+                            $isTransit = is_array($res) && !empty($res['transit']);
                             $reqId     = is_array($res) ? (string)($res['req_id'] ?? '') : '';
+                            $pillClass = 'db-pill';
+                            if ($isPending)      $pillClass .= ' db-pill--pending';
+                            elseif ($isTransit)  $pillClass .= ' db-pill--transit';
                         ?>
-                        <div class="db-pill<?= $isPending ? ' db-pill--pending' : '' ?>"
+                        <div class="<?= $pillClass ?>"
                              data-res-name="<?= esc($resName) ?>"
                              data-res-id="<?= esc($resId) ?>"
                              data-unit-id="<?= esc($resUnitId) ?>"
@@ -1394,33 +1502,8 @@ document.addEventListener('DOMContentLoaded', function () {
         rAfId = requestAnimationFrame(edgeScrollLoop);
     }
 
-    // ── Poll for resolved pending transfers ──────────────────────────
-    var PENDING_JSON_URL = '<?= base_url('requests/pending-json') ?>';
-
-    function pollPendingTransfers() {
-        var pendingPills = document.querySelectorAll('.db-pill--pending[data-req-id]');
-        if (!pendingPills.length) return;
-
-        var knownIds = new Set();
-        pendingPills.forEach(function (p) { if (p.dataset.reqId) knownIds.add(p.dataset.reqId); });
-        if (!knownIds.size) return;
-
-        fetch(PENDING_JSON_URL)
-            .then(function (r) { return r.json(); })
-            .then(function (reqs) {
-                var activeIds = new Set(reqs.map(function (r) { return r.id; }));
-                var resolved  = false;
-                knownIds.forEach(function (id) { if (!activeIds.has(id)) resolved = true; });
-                if (resolved) {
-                    showToast('A transfer request was resolved — refreshing…');
-                    setTimeout(function () { location.reload(); }, 2000);
-                }
-            })
-            .catch(function () {});
-    }
-
-    // Start polling every 30 s (only meaningful when pending pills exist)
-    setInterval(pollPendingTransfers, 30000);
+    // Pending pill resolution is now handled by the Firestore onSnapshot listener
+    // in the firebase-scripts section below — no polling needed.
 
     ['equipment', 'tools', 'manpower'].forEach(function (cat) {
         var zones = document.querySelectorAll('.db-res-drop-zone[data-cat="' + cat + '"]');
@@ -1554,3 +1637,231 @@ function toggleMapPanel() {
 </script>
 
 <?= $this->endSection() ?>
+
+<?php $this->section('firebase-scripts') ?>
+<script>
+(function () {
+  // Block the global page-aware listener — dashboard owns its own listeners
+  window._pzPageListeners = true;
+
+  var CAT_ICONS = { equipment: 'construction', tools: 'handyman', manpower: 'engineering' };
+
+  function buildPill(res, cat) {
+    var cls  = 'db-pill' + (res.transit ? ' db-pill--transit' : '');
+    var name = (res.name  || '').toUpperCase();
+    var icon = CAT_ICONS[cat] || 'category';
+    return '<div class="' + cls + '"'
+         + ' data-res-name="' + name + '"'
+         + ' data-res-id="'   + (res.ref_id  || '') + '"'
+         + ' data-unit-id="'  + (res.unit_id || '') + '">'
+         + '<span class="db-pill-icons">'
+         + '<span class="material-symbols-outlined">drag_indicator</span>'
+         + '<span class="material-symbols-outlined">' + icon + '</span>'
+         + '</span>'
+         + '<span class="db-pill-name">' + name + '</span>'
+         + '</div>';
+  }
+
+  function flashCard(card) {
+    card.style.transition = 'outline .15s';
+    card.style.outline    = '2px solid #3b82f6';
+    setTimeout(function () { card.style.outline = ''; }, 1000);
+  }
+
+  function pzUpdateCard(docId, data) {
+    var card = document.querySelector('.db-project-card[data-pid="' + docId + '"]');
+    if (!card) return;
+
+    // ── Progress bar ──────────────────────────────────────────────────────
+    var prog = Math.min(100, Math.max(0, parseFloat(data.overall_progress || 0)));
+    var fill = card.querySelector('.db-progress-fill');
+    var pct  = card.querySelector('.db-progress-pct');
+    if (fill) fill.style.width = Math.round(prog) + '%';
+    if (pct)  pct.textContent  = Math.round(prog) + '%';
+
+    // ── Resource pills ────────────────────────────────────────────────────
+    var resources = Array.isArray(data.resources) ? data.resources : [];
+    var grps = { equipment: [], tools: [], manpower: [] };
+    resources.forEach(function (r) {
+      var cat = (r.category || '').toLowerCase();
+      if (grps[cat]) grps[cat].push(r);
+    });
+
+    var changed = false;
+    ['equipment', 'tools', 'manpower'].forEach(function (cat) {
+      var zone = card.querySelector('.db-res-drop-zone[data-cat="' + cat + '"]');
+      if (!zone) return;
+      var items = grps[cat];
+
+      // Update accordion count badge
+      var grpEl = card.querySelector('.db-res-group[data-cat="' + cat + '"]');
+      var cnt   = grpEl ? grpEl.querySelector('.db-res-group-count') : null;
+      if (cnt && parseInt(cnt.textContent, 10) !== items.length) {
+        cnt.textContent = items.length;
+        changed = true;
+      }
+
+      // Compare and re-render only if content actually changed
+      var newHtml = items.length === 0
+        ? '<p class="db-empty" style="font-size:0.8rem;padding:0.25rem 0;margin:0;">None assigned</p>'
+        : items.map(function (r) { return buildPill(r, cat); }).join('');
+
+      if (zone.innerHTML.trim() !== newHtml.trim()) {
+        zone.innerHTML = newHtml;
+        changed = true;
+      }
+    });
+
+    // Brief blue outline flash to signal this card just updated
+    if (changed) flashCard(card);
+  }
+
+  var _ready = false;
+  function setup(db) {
+    if (_ready) return;
+    _ready = true;
+
+    // ── Detect Philippine region from address (mirrors PHP detectRegion) ──
+    function detectRegion(addr) {
+      var a = (addr || '').toLowerCase();
+      var map = {
+        'LUZON':    ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','cagayan'],
+        'VISAYAS':  ['cebu','iloilo','bacolod','tacloban','dumaguete','ormoc','leyte','samar','bohol','negros','panay','aklan','antique','capiz','biliran'],
+        'MINDANAO': ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao'],
+      };
+      for (var region in map) {
+        var kws = map[region];
+        for (var i = 0; i < kws.length; i++) {
+          if (a.indexOf(kws[i]) !== -1) return region;
+        }
+      }
+      return 'LUZON';
+    }
+
+    // ── Build a dashboard card for a newly-added project ──────────────────
+    function buildDashCard(id, data) {
+      var name    = (data.project_name || 'Project').toUpperCase().replace(/</g, '&lt;');
+      var prog    = Math.min(100, Math.max(0, parseFloat(data.overall_progress || 0)));
+      var cardId  = 'card-' + id.replace(/[^a-zA-Z0-9]/g, '');
+      var base    = window.pzBaseUrl || '';
+
+      function fmtDate(v) {
+        if (!v) return 'N/A';
+        if (v && typeof v.toDate === 'function') v = v.toDate();
+        if (v instanceof Date) return v.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+        if (typeof v === 'number') return new Date(v * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+        return String(v).toUpperCase();
+      }
+
+      function resGroup(cat, icon, label) {
+        return '<div class="db-res-group open" data-cat="' + cat + '">'
+             + '<div class="db-res-group-hdr" onclick="dbToggleGroup(this.parentElement)">'
+             + '<span class="material-symbols-outlined db-res-chevron">chevron_right</span>'
+             + '<span class="material-symbols-outlined">' + icon + '</span>'
+             + label + ' <span class="db-res-group-count">0</span></div>'
+             + '<div class="db-res-group-body"><div class="db-res-drop-zone" data-cat="' + cat + '" data-proj="' + cardId + '" data-pid="' + id + '">'
+             + '<p class="db-empty" style="font-size:.8rem;padding:.25rem 0;margin:0">None assigned</p>'
+             + '</div></div></div>';
+      }
+
+      return '<div class="db-project-card pz-row-new" id="' + cardId + '" data-pid="' + id + '" data-pname="' + name + '">'
+           + '<a href="' + base + 'projects/show/' + id + '" class="db-project-name-box db-project-name-link">'
+           + name + ' <span class="material-symbols-outlined">open_in_new</span></a>'
+           + '<div class="db-progress"><div class="db-progress-fill" style="width:' + prog + '%"></div>'
+           + '<span class="db-progress-pct">' + Math.round(prog) + '%</span></div>'
+           + '<div class="db-dates">'
+           + '<div class="db-date-row"><span class="db-date-label">Start Date:</span><span class="db-date-val">' + fmtDate(data.start_date) + '</span></div>'
+           + '<div class="db-date-row"><span class="db-date-label">End Date:</span><span class="db-date-val">' + fmtDate(data.end_date) + '</span></div>'
+           + '</div>'
+           + '<div class="db-res-accordion">'
+           + resGroup('equipment', 'construction', 'Equipment')
+           + resGroup('tools',     'handyman',     'Tools')
+           + resGroup('manpower',  'engineering',  'Manpower')
+           + '</div>'
+           + '<div class="db-card-footer">'
+           + '<a href="' + base + 'messages/project/' + id + '" class="db-icon-btn" title="Messages" style="text-decoration:none"><span class="material-symbols-outlined db-icon-chat">chat_bubble</span></a>'
+           + '<button class="db-icon-btn db-icon-emergency" data-pid="' + id + '" data-pname="' + name + '" onclick="openReportModal(\'emergency\',this.dataset.pid,this.dataset.pname)" title="Emergency Reports"><span class="material-symbols-outlined">warning</span></button>'
+           + '<button class="db-icon-btn db-icon-report" data-pid="' + id + '" data-pname="' + name + '" onclick="openReportModal(\'daily\',this.dataset.pid,this.dataset.pname)" title="Progress Reports"><span class="material-symbols-outlined">description</span></button>'
+           + '<button class="db-btn-locate" data-lat="" data-lng="" data-name="' + name + '" title="Focus on map">Locate Site</button>'
+           + '</div>'
+           + '</div>';
+    }
+
+    // ── Ensure a region section exists, return its card row div ──────────
+    function ensureRegionRow(region) {
+      var existing = document.querySelector('.db-monitor-region[data-region-group="' + region + '"]');
+      if (existing) return existing.querySelector('.row');
+      var container = document.querySelector('.db-monitor-region')?.parentElement
+                   || document.getElementById('dbNoResults')?.parentElement;
+      if (!container) return null;
+      var div = document.createElement('div');
+      div.className = 'db-monitor-region';
+      div.setAttribute('data-region-group', region);
+      div.innerHTML = '<h3 class="db-region-title">' + region + '</h3><div class="row g-3 mb-2"></div>';
+      container.insertBefore(div, document.getElementById('dbNoResults'));
+      return div.querySelector('.row');
+    }
+
+    var _projInit = false;
+    db.collection('project').onSnapshot(function (snap) {
+      if (!_projInit) { _projInit = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        if (chg.type === 'modified') { pzUpdateCard(chg.doc.id, chg.doc.data()); return; }
+
+        if (chg.type === 'added') {
+          if (document.querySelector('.db-project-card[data-pid="' + chg.doc.id + '"]')) return;
+          var data    = chg.doc.data();
+          var addr    = (data.location && data.location.address) ? data.location.address : '';
+          var region  = detectRegion(addr);
+          var row     = ensureRegionRow(region);
+          if (!row) return;
+          var col = document.createElement('div');
+          col.className   = 'col-xl-6 col-12 db-monitor-col';
+          col.dataset.region = region;
+          col.dataset.client = data.client_name || '';
+          col.dataset.type   = data.project_type || '';
+          var rawS = (data.status || '').toUpperCase();
+          col.dataset.status = (rawS === 'PAST DEADLINE') ? 'PAST_DEADLINE' : (rawS === 'DELAYED' ? 'DELAYED' : (rawS === 'DONE' || rawS === 'COMPLETED' ? 'DONE' : 'ONGOING'));
+          col.dataset.delay  = '0';
+          col.innerHTML = buildDashCard(chg.doc.id, data);
+          row.appendChild(col);
+          // Hide the "no results" message if visible
+          var noRes = document.getElementById('dbNoResults');
+          if (noRes) noRes.style.display = 'none';
+          return;
+        }
+
+        if (chg.type === 'removed') {
+          var card = document.querySelector('.db-project-card[data-pid="' + chg.doc.id + '"]');
+          if (!card) return;
+          card.style.transition = 'opacity .5s, transform .5s';
+          card.style.opacity    = '0';
+          card.style.transform  = 'scale(.97)';
+          setTimeout(function () {
+            var col = card.closest('.db-monitor-col');
+            if (col) col.remove(); else card.remove();
+          }, 500);
+        }
+      });
+    }, function (err) { console.warn('[PZ] Dashboard project listener:', err.message); });
+
+    var _reqInit = false;
+    db.collection('resource_requests').onSnapshot(function (snap) {
+      if (!_reqInit) { _reqInit = true; return; }
+      snap.docChanges().forEach(function (chg) {
+        if (chg.type !== 'modified') return;
+        var s  = chg.doc.data().status || '';
+        var el = document.querySelector('[data-req-id="' + chg.doc.id + '"][data-req-status]');
+        if (el && window.pzBadgeClass) {
+          el.innerHTML = '<span class="pz-badge ' + window.pzBadgeClass(s) + '">' + s.toUpperCase() + '</span>';
+        }
+      });
+    }, function (err) { console.warn('[PZ] Dashboard request listener:', err.message); });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+  });
+}());
+</script>
+<?php $this->endSection() ?>
