@@ -25,13 +25,28 @@
 <div class="resource-header">
     <h1>Projects</h1>
     <?php if (($isPm ?? false)): ?>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem;">
+    <div style="margin-left:auto;display:flex;align-items:center;gap:.75rem;">
         <?php if (!($isViewAll ?? false)): ?>
-            <span style="font-size:.82rem;color:#666;">Showing your assigned projects.</span>
-            <a href="<?= base_url('projects?view_all=1') ?>" class="btn-toolbar" style="font-size:.82rem;padding:5px 12px;">View All Ongoing</a>
+            <span style="font-size:.8rem;color:#888;font-style:italic;">Showing your assigned projects</span>
+            <a href="<?= base_url('projects?view_all=1') ?>"
+               style="display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:20px;
+                      background:#f0f4ff;color:#3a5bbf;border:1.5px solid #3a5bbf;
+                      font-size:.8rem;font-weight:600;text-decoration:none;letter-spacing:.3px;
+                      transition:background .15s;">
+                <span class="material-symbols-outlined" style="font-size:15px;">public</span>
+                View All Projects
+            </a>
         <?php else: ?>
-            <span style="font-size:.82rem;color:#666;">Showing all projects.</span>
-            <a href="<?= base_url('projects') ?>" class="btn-toolbar" style="font-size:.82rem;padding:5px 12px;">My Projects Only</a>
+            <span style="font-size:.8rem;color:#888;font-style:italic;">Showing all projects</span>
+            <a href="<?= base_url('projects') ?>"
+               style="display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:20px;
+                      background:#8C701C;color:#fff;border:1.5px solid #8C701C;
+                      font-size:.8rem;font-weight:700;text-decoration:none;letter-spacing:.3px;
+                      box-shadow:0 2px 8px rgba(140,112,28,.35);
+                      transition:background .15s;">
+                <span class="material-symbols-outlined" style="font-size:15px;">person</span>
+                My Projects Only
+            </a>
         <?php endif; ?>
     </div>
     <?php endif; ?>
@@ -72,14 +87,17 @@
     </a>
     <?php endif; ?>
 
+    <?php if (pz_can('create_project')): ?>
     <button class="rv-btn rv-btn-import" id="importBtn" data-module="projects">
         <span class="material-symbols-outlined">download</span> Import
     </button>
+    <?php endif; ?>
 
     <button class="rv-btn rv-btn-export" id="exportBtn" data-module="projects">
         <span class="material-symbols-outlined">upload</span> Export
     </button>
 
+    <?php if (pz_can('delete_project')): ?>
     <div class="rv-btn-group-view">
         <a href="<?= base_url('projects/deleted') ?>" class="rv-btn-trash">
             <span class="material-symbols-outlined">restore_from_trash</span> Deleted
@@ -88,6 +106,7 @@
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Filter Panel -->
@@ -99,7 +118,7 @@
                 <label>Status</label>
                 <select name="status">
                     <option value="">All Statuses</option>
-                    <?php foreach (['Planned' => 'Planned', 'On-going' => 'On-going', 'Completed' => 'Completed', 'Past Deadline' => 'Past Deadline', 'Archived' => 'Archived'] as $val => $label): ?>
+                    <?php foreach (['Planned' => 'Planned', 'On-going' => 'On-going', 'Completed' => 'Completed', 'Past Deadline' => 'Past Deadline'] as $val => $label): ?>
                     <option value="<?= $val ?>" <?= ($af['status'] ?? '') === $val ? 'selected' : '' ?>><?= $label ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -168,7 +187,7 @@
 
         </div>
         <div class="filter-footer">
-            <a href="<?= base_url('projects') ?>" class="btn btn-secondary">Reset</a>
+            <a href="<?= base_url('projects') ?>" class="rv-filter-reset">Reset</a>
         </div>
     </form>
 </div>
@@ -179,7 +198,7 @@
     <table id="projectsTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
             <tr>
-                <th class="pz-col-check"><input type="checkbox" class="select-all-cb" title="Select all"></th>
+                <th class="pz-col-check"><?php if (pz_can('edit_project')): ?><input type="checkbox" class="select-all-cb" title="Select all"><?php endif; ?></th>
                 <th>NO.</th>
                 <th>PROJECT NAME</th>
                 <th>TYPE</th>
@@ -208,7 +227,7 @@
                         data-proj-pm="<?= esc($project['project_manager_id'] ?? '') ?>"
                         data-proj-se="<?= esc($project['site_engineer_id'] ?? '') ?>">
                         <td class="pz-col-check">
-                            <input type="checkbox" class="row-cb" value="<?= esc($project['id'] ?? '') ?>" data-name="<?= esc($project['project_name'] ?? '') ?>">
+                            <?php if (pz_can('edit_project')): ?><input type="checkbox" class="row-cb" value="<?= esc($project['id'] ?? '') ?>" data-name="<?= esc($project['project_name'] ?? '') ?>"><?php endif; ?>
                         </td>
                         <td><?= $offset + $index + 1 ?></td>
                         <td data-proj-name><strong><?= esc(view_text($project['project_name'] ?? 'N/A', 'N/A')) ?></strong></td>
@@ -259,6 +278,7 @@
 </div><!-- /.pager-section#projects-section -->
 
 <!-- Bulk Action Bar -->
+<?php if (pz_can('edit_project')): ?>
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">
     <span class="bulk-count" id="bulkCount">0 selected</span>
     <button type="button" class="bulk-archive-btn" id="bulkArchiveBtn">
@@ -268,6 +288,7 @@
         <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
 </div>
+<?php endif; ?>
 
 </div><!-- /.page-module -->
 
@@ -767,6 +788,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var _base  = window.pzBaseUrl || '';
   var _page  = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+  var CAN_EDIT_PROJECT = <?= pz_can('edit_project') ? 'true' : 'false' ?>;
 
   function flashRow(row) {
     row.style.transition = 'background .2s';
@@ -809,9 +831,9 @@ document.addEventListener('DOMContentLoaded', function () {
          + '<td data-proj-se>' + se + '</td>'
          + '<td class="text-center" style="white-space:nowrap">'
          + '<a href="' + _base + 'projects/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
-         + '<a href="' + _base + 'projects/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
-         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
-         + '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>'
+         + (CAN_EDIT_PROJECT ? '<a href="' + _base + 'projects/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '')
+         + (CAN_EDIT_PROJECT ? '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '')
+         + (CAN_EDIT_PROJECT ? '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>' : '')
          + '</td></tr>';
   }
 

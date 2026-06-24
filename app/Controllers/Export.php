@@ -68,9 +68,19 @@ class Export extends BaseController
         foreach ($db->collection('project')->documents() as $doc) {
             if (!$doc->exists()) continue;
             $p   = $doc->data();
-            $loc = is_array($p['location'] ?? null) ? $p['location'] : [];
-            $geo = is_array($loc['geopoint'] ?? null) ? $loc['geopoint'] : [];
-            $addr = $loc['address'] ?? '';
+            $loc    = is_array($p['location'] ?? null) ? $p['location'] : [];
+            $addr   = $loc['address'] ?? '';
+            $geoRaw = $loc['geopoint'] ?? null;
+            if ($geoRaw instanceof \Google\Cloud\Core\GeoPoint) {
+                $lat = $geoRaw->latitude();
+                $lng = $geoRaw->longitude();
+            } elseif (is_array($geoRaw)) {
+                $lat = $geoRaw['lat'] ?? $geoRaw['latitude'] ?? '';
+                $lng = $geoRaw['lng'] ?? $geoRaw['longitude'] ?? '';
+            } else {
+                $lat = '';
+                $lng = '';
+            }
             $rows[] = [
                 $doc->id(),
                 $p['project_name'] ?? '',
@@ -81,8 +91,8 @@ class Export extends BaseController
                 $p['budget'] ?? 0,
                 $this->resolveRegion($addr),
                 $addr,
-                $geo['lat'] ?? '',
-                $geo['lng'] ?? '',
+                $lat,
+                $lng,
                 $this->resolveUserName($p['personnel']['project_manager_id'] ?? $p['project_manager_id'] ?? null),
                 $this->resolveUserName($p['personnel']['site_engineer_id'] ?? $p['site_engineer_id'] ?? null),
                 $this->formatDateMDY($p['start_date'] ?? ''),
@@ -161,35 +171,44 @@ class Export extends BaseController
             $modelCode = $r['model_code'] ?? '';
             $modelName = $r['name'] ?? '';
 
-            $itemDocs = $db->collection('resource')->document($modelId)->collection('items')->documents();
-            $hasItems = false;
-
-            foreach ($itemDocs as $itemDoc) {
+            // Collect items from subcollection first
+            $itemList = [];
+            foreach ($db->collection('resource')->document($modelId)->collection('items')->documents() as $itemDoc) {
                 if (!$itemDoc->exists()) continue;
-                $item     = $itemDoc->data();
-                $hasItems = true;
-                $loc      = is_array($item['location'] ?? null) ? $item['location'] : [];
+                $d = $itemDoc->data();
+                $d['__id'] = $itemDoc->id();
+                $itemList[] = $d;
+            }
+            // Fallback: items stored as array field on the document (mobile/legacy format)
+            if (empty($itemList) && !empty($r['items']) && is_array($r['items'])) {
+                foreach ($r['items'] as $idx => $d) {
+                    if (!isset($d['__id'])) $d['__id'] = (string)($d['unit_id'] ?? $d['serial_number'] ?? $idx);
+                    $itemList[] = $d;
+                }
+            }
 
+            if (empty($itemList)) {
+                $rows[] = array_merge([$modelId, $modelCode, $modelName], array_fill(0, 11, ''));
+                continue;
+            }
+
+            foreach ($itemList as $item) {
+                $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
                 $rows[] = [
                     $modelId,
                     $modelCode,
                     $modelName,
-                    $itemDoc->id(),
+                    $item['__id'] ?? '',
                     $item['serial_number'] ?? '',
                     $item['condition'] ?? '',
                     $item['status'] ?? '',
                     $item['brand'] ?? ($item['brand_name'] ?? ''),
-                    $loc['address'] ?? ($item['location_address'] ?? ''),
-                    $loc['type'] ?? ($item['location_type'] ?? ''),
-                    $item['assigned_project_id'] ?? '',
+                    $loc['address'] ?? ($item['location_address'] ?? ($item['address'] ?? '')),
+                    $loc['type']    ?? ($item['location_type']    ?? ''),
+                    $this->docRefToStr($item['assigned_project_id'] ?? null),
                     $this->formatDateMDY($item['created_at'] ?? ''),
                     $this->formatDateMDY($item['updated_at'] ?? ''),
                 ];
-            }
-
-            // Row for model with no units yet
-            if (!$hasItems) {
-                $rows[] = array_merge([$modelId, $modelCode, $modelName], array_fill(0, 11, ''));
             }
         }
 
@@ -208,21 +227,39 @@ class Export extends BaseController
         $rows = [];
         $db = $this->firestore->getDb();
 
-        $itemDocs = $db->collection('resource')->document($resourceId)->collection('items')->documents();
-        foreach ($itemDocs as $itemDoc) {
+        // Subcollection items
+        $itemList = [];
+        foreach ($db->collection('resource')->document($resourceId)->collection('items')->documents() as $itemDoc) {
             if (!$itemDoc->exists()) continue;
-            $item = $itemDoc->data();
-            $loc  = is_array($item['location'] ?? null) ? $item['location'] : [];
+            $d = $itemDoc->data();
+            $d['__id'] = $itemDoc->id();
+            $itemList[] = $d;
+        }
+        // Fallback: items stored as array field on the document (mobile/legacy format)
+        if (empty($itemList)) {
+            $resSnap = $db->collection('resource')->document($resourceId)->snapshot();
+            if ($resSnap->exists()) {
+                $resData = $resSnap->data();
+                if (!empty($resData['items']) && is_array($resData['items'])) {
+                    foreach ($resData['items'] as $idx => $d) {
+                        if (!isset($d['__id'])) $d['__id'] = (string)($d['unit_id'] ?? $d['serial_number'] ?? $idx);
+                        $itemList[] = $d;
+                    }
+                }
+            }
+        }
 
+        foreach ($itemList as $item) {
+            $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
             $rows[] = [
-                $itemDoc->id(),
+                $item['__id'] ?? '',
                 $item['serial_number'] ?? '',
                 $item['condition'] ?? '',
                 $item['status'] ?? '',
                 $item['brand'] ?? ($item['brand_name'] ?? ''),
-                $loc['address'] ?? ($item['location_address'] ?? ''),
-                $loc['type'] ?? ($item['location_type'] ?? ''),
-                $item['assigned_project_id'] ?? '',
+                $loc['address'] ?? ($item['location_address'] ?? ($item['address'] ?? '')),
+                $loc['type']    ?? ($item['location_type']    ?? ''),
+                $this->docRefToStr($item['assigned_project_id'] ?? null),
                 $this->formatDateMDY($item['created_at'] ?? ''),
                 $this->formatDateMDY($item['updated_at'] ?? ''),
             ];
@@ -266,7 +303,7 @@ class Export extends BaseController
                 $m['specialization'] ?? ($md['specialization'] ?? ''),
                 $skills,
                 $m['status']         ?? ($md['status']         ?? ''),
-                $m['assigned_project_id'] ?? ($md['assigned_project_id'] ?? ''),
+                $this->docRefToStr($m['assigned_project_id'] ?? ($md['assigned_project_id'] ?? null)),
                 $loc['address'] ?? '',
                 $loc['type']    ?? '',
                 $this->formatDateMDY($m['created_at'] ?? ''),
@@ -328,7 +365,10 @@ class Export extends BaseController
             $rowNum = $i + 2;
             $col = 'A';
             foreach ($row as $cell) {
-                $sheet->setCellValue($col . $rowNum, $cell);
+                $safe = $cell instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $cell->id()
+                    : (is_object($cell) && !is_numeric($cell) ? '' : $cell);
+                $sheet->setCellValue($col . $rowNum, $safe);
                 $col++;
             }
             // Alternating row color
@@ -428,7 +468,9 @@ class Export extends BaseController
             $rowClass = $i % 2 === 0 ? '' : ' alt';
             $tbody .= "<tr class=\"r{$rowClass}\">";
             foreach ($row as $ci => $cell) {
-                $cellStr = (string) $cell;
+                $cellStr = $cell instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $cell->id()
+                    : (is_object($cell) ? '' : (string) $cell);
                 if (isset($statusColIdxs[$ci]) && $cellStr !== '') {
                     $tbody .= '<td>' . $this->statusBadge($cellStr) . '</td>';
                 } elseif (isset($progressColIdxs[$ci])) {
@@ -601,10 +643,22 @@ HTML;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    private function docRefToStr(mixed $val): string
+    {
+        if ($val instanceof \Google\Cloud\Firestore\DocumentReference) return $val->id();
+        return (string)($val ?? '');
+    }
+
     private function resolveUserName(mixed $userId): string
     {
         if (empty($userId)) return '';
-        $id = is_string($userId) ? preg_replace('#^.*/#', '', $userId) : '';
+        if ($userId instanceof \Google\Cloud\Firestore\DocumentReference) {
+            $id = $userId->id();
+        } elseif (is_string($userId)) {
+            $id = preg_replace('#^.*/#', '', $userId);
+        } else {
+            return '';
+        }
         if ($id === '') return '';
         try {
             $doc = $this->firestore->getDb()->collection('users')->document($id)->snapshot();

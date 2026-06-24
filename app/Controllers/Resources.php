@@ -518,6 +518,7 @@ class Resources extends BaseController
                         session()->get('userName')
                     );
 
+                    $this->cleanupDeletedFromProjects($id);
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
@@ -529,6 +530,7 @@ class Resources extends BaseController
                             session()->get('userName')
                         );
                     }
+                    $this->cleanupDeletedFromProjects($id);
                     $this->manpowerModel->deleteManpower($id);
                 }
 
@@ -555,6 +557,7 @@ class Resources extends BaseController
                         session()->get('userName')
                     );
 
+                    $this->cleanupDeletedFromProjects($id);
                     $this->deleteResourceItems($id);
                     $this->model->deleteResource($id);
                 } else {
@@ -566,6 +569,7 @@ class Resources extends BaseController
                             session()->get('userName')
                         );
                     }
+                    $this->cleanupDeletedFromProjects($id);
                     $this->manpowerModel->deleteManpower($id);
                 }
                 return redirect()->to('resources')->with('success', 'Resource deleted successfully!');
@@ -1246,6 +1250,51 @@ class Resources extends BaseController
             $item['updated_at'] = new \Google\Cloud\Core\Timestamp(new \DateTime());
 
             $itemsRef->document($itemId)->set($item);
+        }
+    }
+
+    private function cleanupDeletedFromProjects(string $id): void
+    {
+        $db = $this->firestore->getDb();
+        $projectIds = [];
+
+        // Equipment/tools: collect project IDs from items subcollection
+        try {
+            foreach ($db->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                if (!$itemDoc->exists()) continue;
+                $apid = $itemDoc->data()['assigned_project_id'] ?? null;
+                $apid = $apid instanceof \Google\Cloud\Firestore\DocumentReference ? $apid->id() : (string)($apid ?? '');
+                if ($apid !== '') $projectIds[$apid] = true;
+            }
+        } catch (\Throwable $e) {}
+
+        // Manpower: collect project ID from the manpower doc itself
+        try {
+            $mpSnap = $db->collection('manpower')->document($id)->snapshot();
+            if ($mpSnap->exists()) {
+                $apid = $mpSnap->data()['assigned_project_id'] ?? null;
+                $apid = $apid instanceof \Google\Cloud\Firestore\DocumentReference ? $apid->id() : (string)($apid ?? '');
+                if ($apid !== '') $projectIds[$apid] = true;
+            }
+        } catch (\Throwable $e) {}
+
+        foreach (array_keys($projectIds) as $projectId) {
+            try {
+                $projSnap = $db->collection('project')->document($projectId)->snapshot();
+                if (!$projSnap->exists()) continue;
+                $resources = (array)($projSnap->data()['resources'] ?? []);
+                $filtered  = array_values(array_filter($resources, function ($r) use ($id) {
+                    $refId = (string)($r['ref_id'] ?? $r['id'] ?? '');
+                    return $refId !== $id;
+                }));
+                if (count($filtered) !== count($resources)) {
+                    $db->collection('project')->document($projectId)->update([
+                        ['path' => 'resources', 'value' => $filtered],
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Resources::cleanupDeletedFromProjects - ' . $e->getMessage());
+            }
         }
     }
 

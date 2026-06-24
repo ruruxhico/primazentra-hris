@@ -1,7 +1,7 @@
 ﻿<?= $this->extend('layouts/main') ?>
 
 <?= $this->section('head') ?>
-<link rel="stylesheet" href="<?= base_url('css/dashboard-summary.css') ?>?v=<?= time() ?>">
+<link rel="stylesheet" href="<?= asset_url('css/dashboard-summary.css') ?>?v=<?= filemtime(ROOTPATH . 'public/css/dashboard-summary.css') ?>">
 <?php if (!empty($googleMapsBrowserKey)): ?>
 <script>
 window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
@@ -32,6 +32,47 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
         <div class="dnd-modal-actions">
             <button class="dnd-modal-cancel" id="dndCancelBtn">Cancel</button>
             <button class="dnd-modal-confirm" id="dndConfirmBtn">Confirm Request</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resource Request Modal (PM → project card REQUEST button) -->
+<div id="reqModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;display:none;align-items:center;justify-content:center;">
+    <div id="reqModalBox" style="background:#fff;border-radius:14px;padding:1.6rem 1.5rem 1.25rem;width:min(380px,92vw);box-shadow:0 8px 32px rgba(0,0,0,.22);position:relative;">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.1rem;">
+            <span class="material-symbols-outlined" style="font-size:1.5rem;color:#8a6420;">add_circle</span>
+            <span style="font-size:1.05rem;font-weight:700;color:#2c1a00;">Request Resources</span>
+        </div>
+        <div id="reqModalProjName" style="font-size:.83rem;font-weight:600;color:#8a6420;letter-spacing:.04em;margin-bottom:1rem;padding:.35rem .6rem;background:#fdf7e9;border-radius:6px;border:1px solid #e8d89a;"></div>
+
+        <div style="margin-bottom:.85rem;">
+            <label style="display:block;font-size:.8rem;font-weight:600;color:#5a4020;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em;">Resource Category</label>
+            <select id="reqCategory" style="width:100%;padding:.52rem .7rem;border:1px solid #d5c68a;border-radius:7px;font-size:.93rem;background:#fdf9f0;color:#2c1a00;appearance:auto;">
+                <option value="">Choose category</option>
+                <option value="Manpower">Manpower</option>
+                <option value="Equipment">Equipment</option>
+                <option value="Tools">Tools</option>
+            </select>
+        </div>
+
+        <div id="reqModelGroup" style="display:none;margin-bottom:.85rem;">
+            <label style="display:block;font-size:.8rem;font-weight:600;color:#5a4020;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em;">Select Model</label>
+            <select id="reqModel" style="width:100%;padding:.52rem .7rem;border:1px solid #d5c68a;border-radius:7px;font-size:.93rem;background:#fdf9f0;color:#2c1a00;appearance:auto;">
+                <option value="">Choose model</option>
+            </select>
+        </div>
+
+        <div style="margin-bottom:1.1rem;">
+            <label id="reqQtyLabel" style="display:block;font-size:.8rem;font-weight:600;color:#5a4020;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em;">How many are needed?</label>
+            <input type="number" id="reqQty" min="1" value="1"
+                   style="width:100%;padding:.52rem .7rem;border:1px solid #d5c68a;border-radius:7px;font-size:.93rem;background:#fdf9f0;color:#2c1a00;box-sizing:border-box;">
+        </div>
+
+        <div id="reqModalError" style="display:none;margin-bottom:.75rem;padding:.5rem .75rem;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;font-size:.85rem;color:#991b1b;"></div>
+
+        <div style="display:flex;gap:.55rem;justify-content:flex-end;">
+            <button id="reqCancelBtn" style="padding:.5rem 1.1rem;border:1px solid #d5c68a;border-radius:7px;background:#fdf9f0;color:#5a4020;font-size:.9rem;font-weight:600;cursor:pointer;">Cancel</button>
+            <button id="reqSubmitBtn" style="padding:.5rem 1.25rem;border:none;border-radius:7px;background:#8a6420;color:#fff;font-size:.9rem;font-weight:600;cursor:pointer;">Submit Request</button>
         </div>
     </div>
 </div>
@@ -619,6 +660,13 @@ function db_render_card(array $p, string $context = 'summary'): string
                     data-lng="<?= $lng !== null ? (float)$lng : '' ?>"
                     data-name="<?= esc(strtoupper($p['project_name'] ?? '')) ?>"
                     title="Focus on map">Locate Site</button>
+            <?php if (pz_is('Project Manager')): ?>
+            <button class="db-btn-request"
+                    data-pid="<?= esc($p['id'] ?? '') ?>"
+                    data-pname="<?= esc(strtoupper($p['project_name'] ?? '')) ?>"
+                    onclick="openRequestModal(this.dataset.pid, this.dataset.pname)"
+                    title="Request Resources">Request</button>
+            <?php endif; ?>
             <?php else: ?>
             <span class="material-symbols-outlined db-icon-warn" title="Warnings">warning</span>
             <a href="<?= $mapsUrl ?>" class="db-btn-locate" target="_blank" rel="noopener">Locate Site</a>
@@ -1390,7 +1438,7 @@ $mapsKey     = esc($googleMapsBrowserKey ?? '');
 <?php endif; ?>
 
 <!-- -- SortableJS â€” drag-to-reorder/reassign resource pills -- -->
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.3/Sortable.min.js"></script>
+<script src="<?= asset_url('js/Sortable.min.js') ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var dragging        = false;
@@ -1862,6 +1910,133 @@ function toggleMapPanel() {
   firebase.auth().onAuthStateChanged(function (user) {
     if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
   });
+}());
+</script>
+
+<!-- ── Resource Request Modal (PM project card REQUEST button) ────────── -->
+<script>
+(function () {
+    var CATALOG = <?= (function() use ($allResources) {
+        $seen = [];
+        $out  = [];
+        foreach (($allResources ?? []) as $r) {
+            $cat  = strtolower(trim((string)($r['category'] ?? '')));
+            $name = strtoupper(trim((string)($r['name'] ?? '')));
+            if ($name === '' || !in_array($cat, ['equipment', 'tools'])) continue;
+            $key  = $cat . '|' . $name;
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $out[] = ['id' => $r['id'] ?? '', 'name' => $name, 'category' => $cat];
+        }
+        usort($out, fn($a, $b) => strcmp($a['name'], $b['name']));
+        return json_encode(array_values($out));
+    })() ?>;
+
+    var overlay    = document.getElementById('reqModalOverlay');
+    var categoryEl = document.getElementById('reqCategory');
+    var modelGroup = document.getElementById('reqModelGroup');
+    var modelEl    = document.getElementById('reqModel');
+    var qtyEl      = document.getElementById('reqQty');
+    var submitBtn  = document.getElementById('reqSubmitBtn');
+    var cancelBtn  = document.getElementById('reqCancelBtn');
+    var errBox     = document.getElementById('reqModalError');
+    var projName   = document.getElementById('reqModalProjName');
+
+    var _pid = '', _pname = '';
+
+    window.openRequestModal = function (pid, pname) {
+        _pid   = pid;
+        _pname = pname;
+        projName.textContent = pname;
+        categoryEl.value = '';
+        modelEl.innerHTML = '<option value="">Choose model</option>';
+        modelGroup.style.display = 'none';
+        qtyEl.value = '1';
+        errBox.style.display = 'none';
+        overlay.style.display = 'flex';
+    };
+
+    cancelBtn.addEventListener('click', function () {
+        overlay.style.display = 'none';
+    });
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) overlay.style.display = 'none';
+    });
+
+    categoryEl.addEventListener('change', function () {
+        var cat = this.value.toLowerCase();
+        modelEl.innerHTML = '<option value="">Choose model</option>';
+        errBox.style.display = 'none';
+
+        if (cat === 'equipment' || cat === 'tools') {
+            CATALOG.filter(function (r) { return r.category === cat; })
+                   .forEach(function (r) {
+                       var opt = document.createElement('option');
+                       opt.value       = r.id;
+                       opt.textContent = r.name;
+                       modelEl.appendChild(opt);
+                   });
+            modelGroup.style.display = 'block';
+        } else {
+            modelGroup.style.display = 'none';
+        }
+    });
+
+    submitBtn.addEventListener('click', function () {
+        errBox.style.display = 'none';
+        var cat = categoryEl.value;
+        var qty = parseInt(qtyEl.value, 10) || 1;
+        if (!cat) { showErr('Please select a resource category.'); return; }
+
+        var modelId   = '';
+        var modelName = '';
+        if (cat.toLowerCase() === 'equipment' || cat.toLowerCase() === 'tools') {
+            modelId = modelEl.value;
+            if (!modelId) { showErr('Please select a model.'); return; }
+            modelName = (modelEl.options[modelEl.selectedIndex] || {}).text || '';
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting…';
+
+        fetch('<?= base_url('requests/store') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                '<?= csrf_token() ?>': '<?= csrf_hash() ?>',
+            },
+            body: JSON.stringify({
+                request_kind:            'manual',
+                resource_category:       cat,
+                resource_name:           modelName,
+                requested_model_id:      modelId  || null,
+                requested_model_name:    modelName || null,
+                destination_project_id:  _pid,
+                destination_project_name: _pname,
+                requested_quantity:      qty,
+            }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.success) {
+                overlay.style.display = 'none';
+                showToast('Resource request submitted — awaiting approval.');
+            } else {
+                showErr(data.error || 'Failed to submit request.');
+            }
+        })
+        .catch(function () { showErr('Network error — please try again.'); })
+        .finally(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Request';
+        });
+    });
+
+    function showErr(msg) {
+        errBox.textContent = msg;
+        errBox.style.display = 'block';
+    }
 }());
 </script>
 <?php $this->endSection() ?>

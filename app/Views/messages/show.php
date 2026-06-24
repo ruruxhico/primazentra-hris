@@ -34,7 +34,7 @@
             <button class="msg-attach-btn" id="attachBtn" aria-label="Attach file">
                 <span class="material-symbols-outlined">attach_file</span>
             </button>
-            <textarea id="msgInput" rows="1" placeholder="Type a message… (Enter to send, Shift+Enter for newline)" maxlength="2000"></textarea>
+            <textarea id="msgInput" rows="1" placeholder="Type a message… (Enter to send, Shift+Enter for newline)" maxlength="2000" autocapitalize="none" autocorrect="off"></textarea>
             <button class="msg-send-btn" id="sendBtn" aria-label="Send">
                 <span class="material-symbols-outlined">send</span>
             </button>

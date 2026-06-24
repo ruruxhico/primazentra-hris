@@ -63,6 +63,7 @@
         <span class="material-symbols-outlined">upload</span> Export
     </button>
 
+    <?php if (pz_can('edit_staff')): ?>
     <div class="rv-btn-group-view">
         <a href="<?= base_url('staff/deleted') ?>" class="rv-btn-trash">
             <span class="material-symbols-outlined">restore_from_trash</span> Deleted
@@ -71,6 +72,7 @@
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Filter Panel -->
@@ -172,9 +174,11 @@
                         <td class="text-center">
                             <div class="action-wrap">
                                 <a href="<?= base_url('staff/show/' . $person['id']) ?>" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>
+                                <?php if (pz_can('edit_staff')): ?>
                                 <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
                                 <button type="button" class="action-btn action-archive" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
                                 <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -207,6 +211,7 @@
 </div><!-- /.pager-section#staff-section -->
 
 <!-- Bulk Action Bar -->
+<?php if (pz_can('edit_staff')): ?>
 <div class="bulk-action-bar" id="bulkActionBar" style="display:none">
     <span class="bulk-count" id="bulkCount">0 selected</span>
     <button type="button" class="bulk-archive-btn" id="bulkArchiveBtn">
@@ -216,6 +221,7 @@
         <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
 </div>
+<?php endif; ?>
 
 </div><!-- /.page-module -->
 
@@ -563,8 +569,9 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
 (function () {
   window._pzPageListeners = true;
 
-  var _base = window.pzBaseUrl || '';
-  var _page = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+  var _base          = window.pzBaseUrl || '';
+  var _page          = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+  var CAN_EDIT_STAFF = <?= pz_can('edit_staff') ? 'true' : 'false' ?>;
 
   var ROLE_CLS = {
     'Administrator':      'role-badge--administrator',
@@ -619,9 +626,9 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
          + '<td><span class="role-badge ' + (ROLE_CLS[role] || '') + '" data-staff-role>' + (role || 'Staff') + '</span></td>'
          + '<td class="text-center"><div class="action-wrap">'
          + '<a href="' + _base + 'staff/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
-         + '<a href="' + _base + 'staff/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
-         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + fullName + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
-         + '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + fullName + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>'
+         + (CAN_EDIT_STAFF ? '<a href="' + _base + 'staff/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '')
+         + (CAN_EDIT_STAFF ? '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + fullName + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '')
+         + (CAN_EDIT_STAFF ? '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + fullName + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>' : '')
          + '</div></td>'
          + '</tr>';
   }

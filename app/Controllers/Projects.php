@@ -229,8 +229,8 @@ class Projects extends BaseController
                 $this->notifyAssigned(
                     $projectId,
                     (string)($projectData['project_name'] ?? ''),
-                    (string)($projectData['project_manager_id'] ?? ''),
-                    (string)($projectData['site_engineer_id']   ?? '')
+                    $this->docRefId($projectData['project_manager_id'] ?? null),
+                    $this->docRefId($projectData['site_engineer_id']   ?? null)
                 );
 
                 // verify write
@@ -251,8 +251,6 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
-                    $flatTasks = $this->normalizePhases($rawPhases);
-                    $this->writeTasksFlat($projectId, $flatTasks);
                     $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
                 }
 
@@ -326,8 +324,8 @@ class Projects extends BaseController
                 log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
                 // Notify only if PM or SE assignment changed
-                $newPmId = (string)($projectData['project_manager_id'] ?? '');
-                $newSeId = (string)($projectData['site_engineer_id']   ?? '');
+                $newPmId = $this->docRefId($projectData['project_manager_id'] ?? null);
+                $newSeId = $this->docRefId($projectData['site_engineer_id']   ?? null);
                 $oldPmId = (string)($existing['pm_id_normalized'] ?? '');
                 $oldSeId = (string)($existing['se_id_normalized'] ?? '');
                 $this->notifyAssigned(
@@ -343,10 +341,10 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
-                    $flatTasks = $this->normalizePhases($rawPhases);
-                    $this->writeTasksFlat($id, $flatTasks);
                     $this->writeMilestonesFlat($id, $this->normalizeToMilestones($rawPhases));
                 }
+                // Migrate: remove the legacy tasks subcollection if it still exists
+                $this->deleteProjectTasks($id);
 
                 return redirect()->to('projects')->with('success', 'Project updated successfully!');
             }
@@ -450,8 +448,11 @@ class Projects extends BaseController
 
                 // Snapshot project data before deletion
                 $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
-                $data = $snap->exists() ? $snap->data() : [];
-                $name = (string) ($data['project_name'] ?? $id);
+                if (!$snap->exists()) {
+                    return $this->response->setJSON(['success' => true]);
+                }
+                $data = $snap->data();
+                $name = (string) ($data['project_name'] ?? $data['name'] ?? $id);
 
                 // Read tasks subcollection with __id preserved
                 $tasks = [];
@@ -483,8 +484,11 @@ class Projects extends BaseController
             if ($id) {
                 // Snapshot project data before deletion
                 $snap = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
-                $data = $snap->exists() ? $snap->data() : [];
-                $name = (string) ($data['project_name'] ?? $id);
+                if (!$snap->exists()) {
+                    return redirect()->to('projects')->with('error', 'Project not found or already deleted.');
+                }
+                $data = $snap->data();
+                $name = (string) ($data['project_name'] ?? $data['name'] ?? $id);
 
                 // Read tasks subcollection with __id preserved
                 $tasks = [];
@@ -1243,28 +1247,46 @@ class Projects extends BaseController
 
     private function releaseProjectResources(string $projectId): void
     {
-        $db         = $this->firestore->getDb();
-        $projectRef = $db->collection('project')->document($projectId);
+        $db          = $this->firestore->getDb();
+        $projectRef  = $db->collection('project')->document($projectId);
         $deleteField = \Google\Cloud\Firestore\FieldValue::deleteField();
 
-        // ── Manpower ─────────────────────────────────────────────────────────
+        $transferClearFields = [
+            ['path' => 'transfer_source_site_id',        'value' => $deleteField],
+            ['path' => 'transfer_source_site_name',      'value' => $deleteField],
+            ['path' => 'transfer_destination_site_id',   'value' => $deleteField],
+            ['path' => 'transfer_destination_site_name', 'value' => $deleteField],
+            ['path' => 'transfer_request_id',            'value' => $deleteField],
+            ['path' => 'transfer_locked_at',             'value' => $deleteField],
+            ['path' => 'transfer_state',                 'value' => $deleteField],
+            ['path' => 'transfer_locked',                'value' => $deleteField],
+        ];
+
+        // ── Manpower assigned to this project ────────────────────────────────
+        // Transfer Pending here means the manpower is arriving (dest role) → Available + clear
+        // Other statuses → Available
         try {
             $mpDocs = $db->collection('manpower')
                 ->where('assigned_project_id', '=', $projectId)
                 ->documents();
             foreach ($mpDocs as $doc) {
                 if (!$doc->exists()) continue;
-                $doc->reference()->update([
+                $updates = [
                     ['path' => 'assigned_project_id', 'value' => $deleteField],
                     ['path' => 'status',              'value' => 'Available'],
-                ]);
+                ];
+                if (($doc->data()['status'] ?? '') === 'Transfer Pending') {
+                    $updates = array_merge($updates, $transferClearFields);
+                }
+                $doc->reference()->update($updates);
             }
         } catch (\Throwable $e) {
             log_message('warning', 'Projects::releaseProjectResources manpower - ' . $e->getMessage());
         }
 
-        // ── Equipment / Tools ─────────────────────────────────────────────────
-        // Primary: collectionGroup query by DocumentReference (fast, needs index)
+        // ── Equipment / Tools assigned to this project (SOURCE SIDE) ─────────
+        // Transfer Pending = item is outgoing → SKIP (it keeps traveling to its destination)
+        // Other → Available
         $releasedPaths = [];
         try {
             $itemDocs = $db->collectionGroup('items')
@@ -1272,36 +1294,36 @@ class Projects extends BaseController
                 ->documents();
             foreach ($itemDocs as $doc) {
                 if (!$doc->exists()) continue;
+                $releasedPaths[$doc->name()] = true;
+                if (($doc->data()['status'] ?? '') === 'Transfer Pending') continue;
                 $doc->reference()->update([
                     ['path' => 'assigned_project_id', 'value' => $deleteField],
-                    ['path' => 'status',              'value' => 'In-Storage'],
+                    ['path' => 'status',              'value' => 'Available'],
                 ]);
-                $releasedPaths[$doc->name()] = true;
             }
         } catch (\Throwable $e) {
             log_message('warning', 'Projects::releaseProjectResources equipment (ref) - ' . $e->getMessage());
         }
 
-        // Secondary: collectionGroup query by plain string ID (legacy storage format)
+        // Secondary: string ID format (legacy)
         try {
             $itemDocs2 = $db->collectionGroup('items')
                 ->where('assigned_project_id', '=', $projectId)
                 ->documents();
             foreach ($itemDocs2 as $doc) {
                 if (!$doc->exists() || isset($releasedPaths[$doc->name()])) continue;
+                $releasedPaths[$doc->name()] = true;
+                if (($doc->data()['status'] ?? '') === 'Transfer Pending') continue;
                 $doc->reference()->update([
                     ['path' => 'assigned_project_id', 'value' => $deleteField],
-                    ['path' => 'status',              'value' => 'In-Storage'],
+                    ['path' => 'status',              'value' => 'Available'],
                 ]);
-                $releasedPaths[$doc->name()] = true;
             }
         } catch (\Throwable $e) {
             log_message('warning', 'Projects::releaseProjectResources equipment (str) - ' . $e->getMessage());
         }
 
-        // Fallback: full scan across all resource subcollections.
-        // Catches items that slipped past failed index queries or were stored in
-        // any other format. Also fixes items already stuck from past deletes.
+        // Fallback: full scan (catches any storage-format edge cases)
         try {
             foreach ($db->collection('resource')->documents() as $resDoc) {
                 if (!$resDoc->exists()) continue;
@@ -1312,14 +1334,64 @@ class Projects extends BaseController
                         ? $apid->id()
                         : (string)($apid ?? '');
                     if ($pid !== $projectId) continue;
+                    $releasedPaths[$itemDoc->name()] = true;
+                    if (($itemDoc->data()['status'] ?? '') === 'Transfer Pending') continue;
                     $itemDoc->reference()->update([
                         ['path' => 'assigned_project_id', 'value' => $deleteField],
-                        ['path' => 'status',              'value' => 'In-Storage'],
+                        ['path' => 'status',              'value' => 'Available'],
                     ]);
                 }
             }
         } catch (\Throwable $e) {
             log_message('warning', 'Projects::releaseProjectResources equipment (scan) - ' . $e->getMessage());
+        }
+
+        // ── Equipment / Tools incoming to this project (DESTINATION SIDE) ─────
+        // Items with transfer_destination_site_id = projectId and Transfer Pending status
+        // This project is being removed, so cancel the transfer → Available + clear transfer fields
+        try {
+            $incomingDocs = $db->collectionGroup('items')
+                ->where('transfer_destination_site_id', '=', $projectId)
+                ->where('status', '=', 'Transfer Pending')
+                ->documents();
+
+            $srcCleanup = []; // [srcProjectId => [[ref_id, unit_id], ...]]
+            foreach ($incomingDocs as $doc) {
+                if (!$doc->exists()) continue;
+                $itemData = $doc->data();
+                $srcPid   = (string)($itemData['transfer_source_site_id'] ?? '');
+                $unitId   = $doc->id();
+                $refId    = $doc->reference()->parent()->parent()->id();
+                $doc->reference()->update(array_merge([
+                    ['path' => 'assigned_project_id', 'value' => $deleteField],
+                    ['path' => 'status',              'value' => 'Available'],
+                ], $transferClearFields));
+                if ($srcPid !== '') {
+                    $srcCleanup[$srcPid][] = ['ref_id' => $refId, 'unit_id' => $unitId];
+                }
+            }
+
+            // Remove cancelled transit entries from source projects' resources arrays
+            foreach ($srcCleanup as $srcPid => $entries) {
+                try {
+                    $srcSnap = $db->collection('project')->document($srcPid)->snapshot();
+                    if (!$srcSnap->exists()) continue;
+                    $srcRes = (array)($srcSnap->data()['resources'] ?? []);
+                    foreach ($entries as $e) {
+                        $srcRes = array_values(array_filter($srcRes, fn($r) =>
+                            !((string)($r['ref_id'] ?? '') === $e['ref_id'] &&
+                              (string)($r['unit_id'] ?? '') === $e['unit_id'])
+                        ));
+                    }
+                    $db->collection('project')->document($srcPid)->update([
+                        ['path' => 'resources', 'value' => $srcRes],
+                    ]);
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Projects::releaseProjectResources src cleanup - ' . $e->getMessage());
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::releaseProjectResources equipment (incoming) - ' . $e->getMessage());
         }
     }
 
@@ -1339,6 +1411,11 @@ class Projects extends BaseController
         } catch (\Throwable $e) {
             log_message('warning', 'Projects::removeFromProjectResources - ' . $e->getMessage());
         }
+    }
+
+    private function docRefId($ref): string
+    {
+        return $ref instanceof \Google\Cloud\Firestore\DocumentReference ? $ref->id() : (string)($ref ?? '');
     }
 
     private function buildProjectPayload(): array
@@ -1670,20 +1747,49 @@ class Projects extends BaseController
         return $phases;
     }
 
-    /** Load saved tasks and return them as a phase-grouped array. */
+    /** Load saved milestones and return them as a phase-grouped array for the edit form. */
     private function getProjectPhases(string $projectId): array
     {
-        $tasks = [];
+        $milestones = [];
 
-        foreach ($this->firestore->getDb()->collection('project')->document($projectId)->collection('tasks')->documents() as $doc) {
+        foreach ($this->firestore->getDb()->collection('project')->document($projectId)->collection('milestones')->documents() as $doc) {
             if ($doc->exists()) {
                 $data       = $doc->data();
                 $data['id'] = $doc->id();
-                $tasks[]    = $data;
+                $milestones[] = $data;
             }
         }
 
-        return $this->groupTasksIntoPhases($tasks);
+        if (empty($milestones)) {
+            return [];
+        }
+
+        usort($milestones, fn($a, $b) => (int)($a['order'] ?? 0) <=> (int)($b['order'] ?? 0));
+
+        // Map milestone schema → flat task format that groupTasksIntoPhases() expects
+        $flat = [];
+        foreach ($milestones as $m) {
+            $targetDate = $m['target_date'] ?? null;
+            if ($targetDate instanceof \Google\Cloud\Core\Timestamp) {
+                $targetDate = $targetDate->get()->format('Y-m-d');
+            }
+            $qty = max(1, (int)($m['target_quantity'] ?? 1));
+            $flat[] = [
+                'id'                 => $m['id'],
+                'phase_name'         => (string)($m['milestone_name'] ?? ''),
+                'task_name'          => '',
+                'weight_percent'     => (float)($m['weight_percent'] ?? 0),
+                'phase_qty'          => $qty,
+                'qty'                => $qty,
+                'phase_unit'         => (string)($m['unit'] ?? 'pcs'),
+                'unit'               => (string)($m['unit'] ?? 'pcs'),
+                'phase_site_date'    => (string)($targetDate ?? ''),
+                'completion_percent' => 0.0,
+                'status'             => (string)($m['status'] ?? 'Pending'),
+            ];
+        }
+
+        return $this->groupTasksIntoPhases($flat);
     }
 
     /** Write an already-normalised flat task array to Firestore. */
@@ -1791,8 +1897,11 @@ class Projects extends BaseController
 
         $rawPmId = $this->normalizeReferenceValue($personnel['project_manager_id'] ?? null);
         $rawSeId = $this->normalizeReferenceValue($personnel['site_engineer_id'] ?? null);
-        $project['pm_id_normalized'] = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
-        $project['se_id_normalized'] = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
+        $project['pm_id_normalized']   = preg_replace('#^.*/#', '', $rawPmId) ?: $rawPmId;
+        $project['se_id_normalized']   = preg_replace('#^.*/#', '', $rawSeId) ?: $rawSeId;
+        // Overwrite raw Firestore references with plain strings so views can safely esc() them
+        $project['project_manager_id'] = $project['pm_id_normalized'];
+        $project['site_engineer_id']   = $project['se_id_normalized'];
 
         return $project;
     }

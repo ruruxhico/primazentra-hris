@@ -45,9 +45,11 @@
                 <span class="material-symbols-outlined">inventory_2</span> View Units
             </a>
             <?php endif; ?>
+            <?php if (pz_can('add_edit_resources')): ?>
             <a href="<?= base_url('resources/edit/' . $resId) ?>" class="pd-edit-btn">
                 <span class="material-symbols-outlined">edit</span> Edit
             </a>
+            <?php endif; ?>
         </div>
     </div>
 

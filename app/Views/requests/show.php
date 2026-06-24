@@ -27,7 +27,11 @@ $badgeMap = [
 ];
 $badgeCls = $badgeMap[strtolower($status)] ?? 'pz-badge-pending';
 
-$canApprove          = in_array($role, ['Administrator', 'Operations Manager', 'Project Manager']);
+$currentUid          = (string)(session()->get('userId') ?? '');
+$requesterUid        = (string)($req['requested_by_uid'] ?? '');
+$isOwnRequest        = ($currentUid !== '' && $currentUid === $requesterUid);
+$canApprove          = in_array($role, ['Administrator', 'Operations Manager', 'Project Manager'])
+                       && (!$isOwnRequest || $role === 'Administrator');
 $canAcceptDelivery   = ($canAcceptDelivery ?? false);
 $isPending           = strtolower($status) === 'pending';
 $isPendingSecondary  = strtolower($status) === 'pending secondary approval';
@@ -217,6 +221,19 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             <?= $isManpower ? 'Confirm Arrival' : 'Confirm Receipt' ?>
         </button>
     </form>
+</div>
+<?php endif; ?>
+
+<!-- Own-request notice (blocks self-approval for non-Admin) -->
+<?php if ($isOwnRequest && $role !== 'Administrator' && in_array($role, ['Operations Manager', 'Project Manager']) && ($isPending || $isPendingSecondary)): ?>
+<div class="pz-card" style="border-left:4px solid #f59e0b;">
+    <div style="display:flex;align-items:center;gap:.6rem;font-size:0.92rem;color:#78350f;">
+        <span class="material-symbols-outlined" style="font-size:1.3rem;color:#f59e0b;flex-shrink:0;">info</span>
+        <div>
+            <strong>You submitted this request.</strong>
+            Another <?= esc($role) ?>, Operations Manager, or Administrator must approve it.
+        </div>
+    </div>
 </div>
 <?php endif; ?>
 

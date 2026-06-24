@@ -71,13 +71,16 @@
             <span class="material-symbols-outlined">add</span> Add
         </a>
         <?php endif; ?>
+        <?php if (pz_can('import_resources')): ?>
         <button class="rv-btn rv-btn-import" onclick="openImportModal('equipment')">
             <span class="material-symbols-outlined">download</span> Import
         </button>
+        <?php endif; ?>
         <button class="rv-btn rv-btn-export" onclick="openExportModal('equipment','Equipment')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
 
+        <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
             <a href="<?= base_url('resources/deleted?tab=equipment') ?>" class="rv-btn-trash">
                 <span class="material-symbols-outlined">restore_from_trash</span> Deleted
@@ -86,6 +89,7 @@
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
         </div>
+        <?php endif; ?>
     </div>
 
     <div id="eqFilterPanel" class="rv-filter-panel" style="display:none">
@@ -141,6 +145,7 @@
                         <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
                             <span class="material-symbols-outlined">visibility</span>
                         </a>
+                        <?php if (pz_can('add_edit_resources')): ?>
                         <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
@@ -156,6 +161,7 @@
                                 title="Delete">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -201,13 +207,16 @@
             <span class="material-symbols-outlined">add</span> Add
         </a>
         <?php endif; ?>
+        <?php if (pz_can('import_resources')): ?>
         <button class="rv-btn rv-btn-import" onclick="openImportModal('tools')">
             <span class="material-symbols-outlined">download</span> Import
         </button>
+        <?php endif; ?>
         <button class="rv-btn rv-btn-export" onclick="openExportModal('tools','Tools')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
 
+        <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
             <a href="<?= base_url('resources/deleted?tab=tools') ?>" class="rv-btn-trash">
                 <span class="material-symbols-outlined">restore_from_trash</span> Deleted
@@ -216,6 +225,7 @@
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
         </div>
+        <?php endif; ?>
     </div>
 
     <div id="toolsFilterPanel" class="rv-filter-panel" style="display:none">
@@ -271,6 +281,7 @@
                         <a href="<?= base_url('resources/show/' . $item['id']) ?>" class="action-btn" title="View">
                             <span class="material-symbols-outlined">visibility</span>
                         </a>
+                        <?php if (pz_can('add_edit_resources')): ?>
                         <a href="<?= base_url('resources/edit/' . $item['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
@@ -286,6 +297,7 @@
                                 title="Delete">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -331,13 +343,16 @@
             <span class="material-symbols-outlined">add</span> Add
         </a>
         <?php endif; ?>
+        <?php if (pz_can('import_resources')): ?>
         <button class="rv-btn rv-btn-import" onclick="openImportModal('manpower')">
             <span class="material-symbols-outlined">download</span> Import
         </button>
+        <?php endif; ?>
         <button class="rv-btn rv-btn-export" onclick="openExportModal('manpower','Manpower')">
             <span class="material-symbols-outlined">upload</span> Export
         </button>
 
+        <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
             <a href="<?= base_url('resources/deleted?tab=manpower') ?>" class="rv-btn-trash">
                 <span class="material-symbols-outlined">restore_from_trash</span> Deleted
@@ -346,6 +361,7 @@
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
         </div>
+        <?php endif; ?>
     </div>
 
     <div id="mpFilterPanel" class="rv-filter-panel" style="display:none">
@@ -432,6 +448,7 @@
                         <a href="<?= base_url('resources/show/' . $person['id']) ?>" class="action-btn" title="View">
                             <span class="material-symbols-outlined">visibility</span>
                         </a>
+                        <?php if (pz_can('add_edit_resources')): ?>
                         <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
@@ -441,6 +458,7 @@
                                 title="Delete">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -550,8 +568,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'delete_forever';
         if (title) title.textContent = isArchive ? 'Archive' : 'Delete';
     }
-    const DELETE_URL     = '<?= base_url('resources/delete') ?>';
-    const BASE_URL       = '<?= base_url() ?>';
+    const DELETE_URL          = '<?= base_url('resources/delete') ?>';
+    const BASE_URL            = '<?= base_url() ?>';
+    const CAN_EDIT_RESOURCES  = <?= pz_can('add_edit_resources') ? 'true' : 'false' ?>;
 
     /* ── Tabs ── */
     document.querySelectorAll('.rv-tab').forEach(function (tab) {
@@ -643,9 +662,9 @@ document.addEventListener('DOMContentLoaded', function () {
         cellsHtml +=
             '<td class="text-center" style="white-space:nowrap">' +
               '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
-              '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' +
-              '<button type="button" class="action-btn action-archive" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' +
-              '<button type="button" class="action-btn action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' +
+              (CAN_EDIT_RESOURCES ? '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '') +
+              (CAN_EDIT_RESOURCES ? '<button type="button" class="action-btn action-archive" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '') +
+              (CAN_EDIT_RESOURCES ? '<button type="button" class="action-btn action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' : '') +
             '</td>';
 
         const row = document.createElement('tr');
