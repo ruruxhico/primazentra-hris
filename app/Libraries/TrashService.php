@@ -73,7 +73,7 @@ class TrashService
             $subcols    = $d['subcollections'] ?? [];
             if (!$originalId) return ['success' => false, 'message' => 'Invalid trash record'];
 
-            $colMap = ['project' => 'project', 'resource' => 'resource', 'manpower' => 'manpower', 'staff' => 'users'];
+            $colMap = ['project' => 'project', 'resource' => 'resource', 'manpower' => 'manpower', 'staff' => 'users', 'request' => 'resource_requests'];
             $col = $colMap[$module] ?? $module;
 
             $this->db->collection($col)->document($originalId)->set($data);

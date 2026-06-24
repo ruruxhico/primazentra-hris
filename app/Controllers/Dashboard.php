@@ -438,6 +438,7 @@ class Dashboard extends BaseController
                 'availableToolsMcda'  => $availableToolsMcda,
                 'availableResources'  => $availableResources,
                 'deployedResources'   => $deployedResources,
+                'allResources'        => $allResources,
                 'availableManpower'   => $availableManpower,
                 'googleMapsBrowserKey' => (new \Config\GoogleMaps())->browserKey,
             ];
@@ -463,6 +464,7 @@ class Dashboard extends BaseController
                 'availableToolsMcda'  => [],
                 'availableResources'  => [],
                 'deployedResources'   => [],
+                'allResources'        => [],
                 'availableManpower'   => [],
                 'errorMessage'        => 'Unable to load dashboard right now.',
             ]);

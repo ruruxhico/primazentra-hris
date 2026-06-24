@@ -40,7 +40,7 @@ $count = count($items);
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>Name</th>
+                    <th><?= $module === 'request' ? 'ID' : 'Name' ?></th>
 
                     <?php if ($module === 'staff'): ?>
                     <th>Role</th>
@@ -79,7 +79,11 @@ $count = count($items);
             ?>
             <tr data-arch-id="<?= esc($item['id']) ?>">
                 <td><?= $i + 1 ?></td>
-                <td><strong><?= esc($item['name'] ?? '—') ?></strong></td>
+                <td><?php if ($module === 'request'): ?>
+                    <span style="font-family:monospace;letter-spacing:.05em;font-weight:700"><?= esc(strtoupper(substr((string)($item['original_id'] ?? $item['id']), 0, 6))) ?></span>
+                <?php else: ?>
+                    <strong><?= esc($item['name'] ?? '—') ?></strong>
+                <?php endif; ?></td>
 
                 <?php if ($module === 'staff'): ?>
                 <td><?= esc($data['role'] ?? '—') ?></td>
@@ -98,9 +102,9 @@ $count = count($items);
                 <td><?= esc($data['status'] ?? '—') ?></td>
 
                 <?php elseif ($module === 'request'): ?>
-                <td><?= esc($data['source_site'] ?? '—') ?></td>
-                <td><?= esc($data['destination_site'] ?? '—') ?></td>
-                <td><?= esc($data['category'] ?? '—') ?></td>
+                <td><?= esc($data['source_site_name'] ?? $data['source_site'] ?? '—') ?></td>
+                <td><?= esc($data['destination_site_name'] ?? $data['destination_site'] ?? '—') ?></td>
+                <td><?= esc($data['resource_category'] ?? $data['category'] ?? '—') ?></td>
                 <?php endif; ?>
 
                 <td><?= esc($item['archived_by'] ?? 'System') ?></td>
@@ -298,9 +302,9 @@ $count = count($items);
     if (_module === 'manpower')
       return '<td>' + (d.role || '—') + '</td><td>' + (d.status || '—') + '</td>';
     if (_module === 'request')
-      return '<td>' + (d.source_site || '—') + '</td>'
-           + '<td>' + (d.destination_site || '—') + '</td>'
-           + '<td>' + (d.category || '—') + '</td>';
+      return '<td>' + (d.source_site_name || d.source_site || '—') + '</td>'
+           + '<td>' + (d.destination_site_name || d.destination_site || '—') + '</td>'
+           + '<td>' + (d.resource_category || d.category || '—') + '</td>';
     return '';
   }
 
@@ -325,11 +329,13 @@ $count = count($items);
   }
 
   function buildRow(id, item) {
-    var name = (item.name || '—').replace(/</g, '&lt;');
-    var no   = rowCount() + 1;
+    var nameCell = _module === 'request'
+        ? '<td><span style="font-family:monospace;letter-spacing:.05em;font-weight:700">' + (item.original_id || id).substring(0, 6).toUpperCase() + '</span></td>'
+        : '<td><strong>' + (item.name || '—').replace(/</g, '&lt;') + '</strong></td>';
+    var no = rowCount() + 1;
     return '<tr data-arch-id="' + id + '" class="pz-row-new">'
          + '<td>' + no + '</td>'
-         + '<td><strong>' + name + '</strong></td>'
+         + nameCell
          + moduleCells(item)
          + '<td>' + (item.archived_by || 'System') + '</td>'
          + '<td>' + fmtDate(item.archived_at) + '</td>'

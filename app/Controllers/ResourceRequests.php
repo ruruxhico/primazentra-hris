@@ -309,6 +309,14 @@ class ResourceRequests extends BaseController
             return redirect()->to('requests/' . $id)->with('error', 'Request is no longer pending.');
         }
 
+        // Self-approval block: requester cannot approve their own request (Admin exempt)
+        $uid  = session()->get('userId')   ?? '';
+        $user = session()->get('userName') ?? '';
+        $requesterUid = (string)($req['requested_by_uid'] ?? '');
+        if ($uid && $requesterUid && $uid === $requesterUid && $role !== 'Administrator') {
+            return redirect()->to('requests/' . $id)->with('error', 'You cannot approve a request you submitted.');
+        }
+
         // Resolve source project name if missing
         if ($sourcePid && !$sourceName) {
             try {
@@ -316,9 +324,6 @@ class ResourceRequests extends BaseController
                 $sourceName = strtoupper(trim($p['project_name'] ?? $sourcePid));
             } catch (\Throwable $e) { $sourceName = $sourcePid; }
         }
-
-        $uid  = session()->get('userId')   ?? '';
-        $user = session()->get('userName') ?? '';
 
         // Admin bypass only allowed for Administrator role
         if ($bypassSecond && $role !== 'Administrator') {
@@ -448,6 +453,14 @@ class ResourceRequests extends BaseController
             return redirect()->to('requests/' . $id)->with('error', 'Request is not awaiting secondary approval.');
         }
 
+        // Self-approval block: requester cannot approve their own request (Admin exempt)
+        $uid  = session()->get('userId')   ?? '';
+        $user = session()->get('userName') ?? '';
+        $requesterUid = (string)($req['requested_by_uid'] ?? '');
+        if ($uid && $requesterUid && $uid === $requesterUid && $currentRole !== 'Administrator') {
+            return redirect()->to('requests/' . $id)->with('error', 'You cannot approve a request you submitted.');
+        }
+
         // Role must differ from the primary approver (read from primary_approval nested object)
         $primaryRole = $req['primary_approval']['role'] ?? $req['approved_by_role'] ?? '';
         if ($primaryRole && $currentRole === $primaryRole) {
@@ -455,8 +468,6 @@ class ResourceRequests extends BaseController
         }
 
         try {
-            $uid  = session()->get('userId')   ?? '';
-            $user = session()->get('userName') ?? '';
 
             $this->_finalizeTransfer($req, $uid, $user, $currentRole, false);
 
@@ -1073,5 +1084,65 @@ class ResourceRequests extends BaseController
             'backUrl'    => base_url('requests'),
             'items'      => $items,
         ]);
+    }
+
+    public function archive(): object
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setStatusCode(401)->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('archive_request')) {
+            return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+        }
+        try {
+            $ids = (array)($this->request->getPost('ids') ?? []);
+            if (empty($ids)) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'No IDs provided']);
+            $db      = $this->firestore->getDb();
+            $service = new ArchiveService($this->firestore);
+            $user    = session()->get('userName') ?? 'System';
+            foreach ($ids as $id) {
+                $id   = trim((string)$id);
+                if ($id === '') continue;
+                $snap = $db->collection('resource_requests')->document($id)->snapshot();
+                if (!$snap->exists()) continue;
+                $data = $snap->data();
+                $name = 'REQ-' . strtoupper(substr($id, 0, 6));
+                $service->moveToArchive('request', $id, $name, $data, [], $user);
+                $db->collection('resource_requests')->document($id)->delete();
+            }
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::archive - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
+        }
+    }
+
+    public function delete(): object
+    {
+        if (!session()->get('isLoggedIn')) return $this->response->setStatusCode(401)->setJSON(['success' => false]);
+        helper('access');
+        if (!pz_can('delete_request')) {
+            return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Access denied.']);
+        }
+        try {
+            $ids = (array)($this->request->getPost('ids') ?? []);
+            if (empty($ids)) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'No IDs provided']);
+            $db      = $this->firestore->getDb();
+            $service = new TrashService($this->firestore);
+            $user    = session()->get('userName') ?? 'System';
+            foreach ($ids as $id) {
+                $id   = trim((string)$id);
+                if ($id === '') continue;
+                $snap = $db->collection('resource_requests')->document($id)->snapshot();
+                if (!$snap->exists()) continue;
+                $data = $snap->data();
+                $name = 'REQ-' . strtoupper(substr($id, 0, 6));
+                $service->moveToTrash('request', $id, $name, $data, [], $user);
+                $db->collection('resource_requests')->document($id)->delete();
+            }
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::delete - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Delete failed']);
+        }
     }
 }

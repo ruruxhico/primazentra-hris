@@ -78,8 +78,10 @@ $routes->get('profile/change-password',   'Profile::changePassword');
 $routes->post('profile/change-password',  'Profile::processChangePassword');
 
 // Resource Requests & Transfers
-$routes->get('requests/deleted',  'ResourceRequests::deleted');
-$routes->get('requests/archived', 'ResourceRequests::archived');
+$routes->get('requests/deleted',           'ResourceRequests::deleted');
+$routes->get('requests/archived',          'ResourceRequests::archived');
+$routes->post('requests/archive',          'ResourceRequests::archive');
+$routes->post('requests/delete',           'ResourceRequests::delete');
 $routes->get('requests',                          'ResourceRequests::index');
 $routes->get('requests/pending-json',             'ResourceRequests::pendingJson');
 $routes->get('requests/(:segment)',               'ResourceRequests::show/$1');

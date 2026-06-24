@@ -9,9 +9,9 @@
     <title>PrimaZentra | <?= htmlspecialchars(is_array($pageTitle) ? 'Dashboard' : (string) $pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="icon" type="image/x-icon" href="<?= asset_url('favicon.ico') ?>?v=3">
     <link rel="shortcut icon" type="image/x-icon" href="<?= asset_url('favicon.ico') ?>?v=3">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="<?= asset_url('css/bootstrap.min.css') ?>" rel="stylesheet">
     <link rel="stylesheet" href="<?= base_url(is_file(FCPATH . 'css/styles.css') ? 'css/styles.css' : 'public/css/styles.css') ?>?v=<?= filemtime(ROOTPATH . 'public/css/styles.css') ?>">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap">
+    <link rel="stylesheet" href="<?= asset_url('css/material-symbols.css') ?>">
     <?= $this->renderSection('head') ?>
     <!-- Live-change bar (global, all pages) -->
     <style>
@@ -118,7 +118,7 @@
     </div>
   </div>
   <?= $this->renderSection('scripts') ?>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+  <script src="<?= asset_url('js/bootstrap.bundle.min.js') ?>"></script>
 
   <!-- ── Firebase JS SDK (real-time listeners) ── -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>

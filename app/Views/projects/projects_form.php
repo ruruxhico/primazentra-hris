@@ -646,7 +646,7 @@ if (window.location.hostname === 'localhost') {
             { name: 'Site Layout',                              weight: 4.8 },
             { name: 'Trenching, Excavation',                    weight: 4.8 },
             { name: 'Order of Materials and Delivery',          weight: 4.8 },
-            { name: 'Lean Concrete',                            weight: 4.8 },
+            { name: 'Lean concrete',                            weight: 4.8 },
             { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8 },
             { name: 'Formworks Inst',                           weight: 4.8 },
             { name: 'Rebar Inst',                               weight: 4.8 },
