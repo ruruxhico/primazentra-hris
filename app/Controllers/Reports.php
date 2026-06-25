@@ -130,9 +130,10 @@ class Reports extends BaseController
         $filerName = (string)(session()->get('userName') ?? 'Someone');
 
         try {
-            $ref = $this->firestore->getDb()
-                ->collection('project')->document($projectId)
-                ->collection('emergency_reports')->add([
+            $db         = $this->firestore->getDb();
+            $projectRef = $db->collection('project')->document($projectId);
+
+            $ref = $projectRef->collection('emergency_reports')->add([
                     'date'            => $dateTs,
                     'causes'          => $causesList,
                     'other_cause'     => $otherCause,
@@ -142,6 +143,9 @@ class Reports extends BaseController
                     'created_at'      => $now,
                     'updated_at'      => $now,
                 ]);
+
+            // Flag the project so the MCDA excludes it from sourcing candidates
+            $projectRef->update([['path' => 'has_active_emergency', 'value' => true]]);
 
             $reportId = $ref->id();
 
@@ -310,6 +314,21 @@ class Reports extends BaseController
             } catch (\Throwable $e) { /* keep fallbacks */ }
 
             $this->notifyProgress($projectId, $projectName, $filerName, $filerUid, $pmUid, $isUpdate);
+
+            // Trigger 2 — refresh next_availability for all resources at this project.
+            // Only pass progress_percent — workers/site_access are mobile-only fields not present
+            // in the web form, so we let the predictor fetch them from the latest daily report.
+            try {
+                $predictor = new \App\Libraries\ProjectDelayPredictor($this->firestore);
+                $nextAvail = $predictor->predict($projectId, [
+                    'progress_percent' => $progress !== null ? (float)$progress : null,
+                ]);
+                if ($nextAvail) {
+                    $predictor->writeToProjectItems($projectId, $nextAvail);
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Reports::dailyCreate next_availability refresh - ' . $e->getMessage());
+            }
 
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {

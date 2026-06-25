@@ -65,7 +65,7 @@
                            name="milestones[<?= $i ?>][weight]"
                            value="<?= esc($m['weight_percent'] ?? $m['weight'] ?? 0) ?>"
                            step="0.1" min="0" max="100" placeholder="0">
-                    <input type="number" class="ps-ms-num"
+                    <input type="number" class="ps-ms-num ps-ms-qty"
                            name="milestones[<?= $i ?>][qty]"
                            value="<?= esc($m['target_quantity'] ?? $m['qty'] ?? 1) ?>"
                            step="1" min="1" placeholder="1">
@@ -156,7 +156,7 @@
         <span class="material-symbols-outlined ps-ms-drag">drag_indicator</span>
         <input type="text" class="ps-ms-name" placeholder="Milestone name" required>
         <input type="number" class="ps-ms-num weight-input" value="0" step="0.1" min="0" max="100" placeholder="0">
-        <input type="number" class="ps-ms-num" value="1" step="1" min="1" placeholder="1">
+        <input type="number" class="ps-ms-num ps-ms-qty" value="1" step="1" min="1" placeholder="1">
         <select class="ps-ms-select">
             <?php foreach ($units as $u): ?>
             <option value="<?= esc($u) ?>"><?= esc($u) ?></option>
@@ -222,7 +222,7 @@
             var fields = row.querySelectorAll('input, select');
             var names  = ['name', 'weight', 'qty', 'unit', 'target_date'];
             // inputs: name, weight, qty, date / select: unit
-            var fieldEls = row.querySelectorAll('input.ps-ms-name, input.weight-input, input[placeholder="1"], select.ps-ms-select, input.ps-ms-date');
+            var fieldEls = row.querySelectorAll('input.ps-ms-name, input.weight-input, input.ps-ms-qty, select.ps-ms-select, input.ps-ms-date');
             var keys = ['name', 'weight', 'qty', 'unit', 'target_date'];
             fieldEls.forEach(function (el, j) {
                 el.name = 'milestones[' + i + '][' + keys[j] + ']';

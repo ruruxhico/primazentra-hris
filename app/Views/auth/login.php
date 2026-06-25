@@ -35,7 +35,7 @@
                     <label for="loginPassword">PASSWORD</label>
                     <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
                         <span class="auth-icon material-symbols-outlined" aria-hidden="true">lock</span>
-                        <input type="password" id="loginPassword" name="password" placeholder="Password" required>
+                        <input type="password" id="loginPassword" name="password" placeholder="Password" required autocapitalize="none" autocorrect="off" autocomplete="current-password">
                         <button type="button" class="auth-icon-button" data-password-toggle="#loginPassword" aria-label="Show password">
                             <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                         </button>

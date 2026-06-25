@@ -22,7 +22,7 @@ class MLServiceClient
                 'json'            => $projectData,
                 'headers'         => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
                 'timeout'         => $this->timeout,
-                'connect_timeout' => 1,
+                'connect_timeout' => 5,
             ]);
             return json_decode($response->getBody(), true) ?? [];
         } catch (\Throwable $e) {
@@ -37,7 +37,7 @@ class MLServiceClient
                 'json'            => $projectData,
                 'headers'         => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
                 'timeout'         => $this->timeout,
-                'connect_timeout' => 1,
+                'connect_timeout' => 5,
             ]);
             return json_decode($response->getBody(), true) ?? [];
         } catch (\Throwable $e) {
@@ -52,7 +52,7 @@ class MLServiceClient
                 'json'            => $sourcingData,
                 'headers'         => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
                 'timeout'         => $this->timeout,
-                'connect_timeout' => 1,
+                'connect_timeout' => 5,
             ]);
             return json_decode($response->getBody(), true) ?? [];
         } catch (\Throwable $e) {

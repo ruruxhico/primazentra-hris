@@ -456,7 +456,8 @@ document.addEventListener('click', async function (e) {
   function fmtDate(ts) {
     if (!ts || typeof ts.toDate !== 'function') return '—';
     var d = ts.toDate();
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+         + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
   function buildRow(id, data) {

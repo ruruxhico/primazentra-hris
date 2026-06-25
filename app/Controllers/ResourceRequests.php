@@ -97,88 +97,174 @@ class ResourceRequests extends BaseController
             return redirect()->to('requests')->with('error', 'Request not found.');
         }
 
+        // One collection-group query to find every project that has ≥1 emergency report
+        // (mobile writes to the subcollection only; the project-level flag is unreliable)
+        $projectsWithEmergency = [];
+        try {
+            $emergencyDocs = $this->firestore->getDb()
+                ->collectionGroup('emergency_reports')->documents();
+            foreach ($emergencyDocs as $doc) {
+                if (!$doc->exists()) continue;
+                // Full path: projects/{projectId}/emergency_reports/{docId}
+                // $doc->name() returns the full resource path
+                $parts   = explode('/', $doc->name());
+                $projIdx = array_search('project', $parts);
+                if ($projIdx !== false && isset($parts[$projIdx + 1])) {
+                    $projectsWithEmergency[$parts[$projIdx + 1]] = true;
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'ResourceRequests::show emergencyCheck - ' . $e->getMessage());
+        }
+
         $projects = [];
         try {
             $raw = $this->projectModel->getAllProjects();
             foreach ($raw as $p) {
-                $geopoint = $p['location']['geopoint'] ?? [];
+                $geoRaw = $p['location']['geopoint'] ?? null;
+                if ($geoRaw instanceof \Google\Cloud\Core\GeoPoint) {
+                    $lat = $geoRaw->latitude();
+                    $lng = $geoRaw->longitude();
+                } elseif (is_array($geoRaw)) {
+                    $lat = isset($geoRaw['lat']) ? (float)$geoRaw['lat'] : null;
+                    $lng = isset($geoRaw['lng']) ? (float)$geoRaw['lng'] : null;
+                } else {
+                    $lat = null;
+                    $lng = null;
+                }
                 $projects[] = [
-                    'id'    => $p['id'],
-                    'label' => strtoupper(trim($p['project_name'] ?? $p['id'])),
-                    'lat'   => isset($geopoint['lat']) ? (float)$geopoint['lat'] : null,
-                    'lng'   => isset($geopoint['lng']) ? (float)$geopoint['lng'] : null,
+                    'id'            => $p['id'],
+                    'label'         => strtoupper(trim($p['project_name'] ?? $p['id'])),
+                    'lat'           => $lat,
+                    'lng'           => $lng,
+                    'status'        => (string)($p['status'] ?? ''),
+                    'has_emergency' => isset($projectsWithEmergency[$p['id']]),
+                    // kept for ML feature building
+                    'progress'      => (float)($p['overall_progress'] ?? 0),
+                    'start_date'    => $p['start_date'] ?? null,
+                    'end_date'      => $p['end_date']   ?? null,
+                    'resources'     => $p['resources']  ?? [],
                 ];
             }
         } catch (\Throwable $e) {
             log_message('warning', 'ResourceRequests::show projects - ' . $e->getMessage());
         }
 
+        $recommendedSites   = [];
         $recommendedBest    = null;
         $recommendedNearest = null;
+        $mcdaExcludedSites  = [];
+        $mcdaMlAvailable    = false;
+
+        $requestedModelId = $req['requested_model_id'] ?? '';
+        $reqCategory      = strtolower($req['resource_category'] ?? '');
+
+        // SE-released units per project (status='Released' on mobile — display only)
+        $releasedUnitsByProject  = [];
+        // Allocatable units per project (not transfer-locked / not pending transfer)
+        $availableUnitsByProject = [];
+
+        if ($requestedModelId && in_array($reqCategory, ['equipment', 'tools'])) {
+            try {
+                $allItems = $this->firestore->getDb()
+                    ->collection('resource')->document($requestedModelId)
+                    ->collection('items')->documents();
+                foreach ($allItems as $item) {
+                    if (!$item->exists()) continue;
+                    $d    = $item->data();
+                    $asgn = $d['assigned_project_id'] ?? null;
+                    $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $asgn->id()
+                        : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                    if (!$pid) continue;
+                    // SE-released count (for display)
+                    if (($d['status'] ?? '') === 'Released') {
+                        $releasedUnitsByProject[$pid] = ($releasedUnitsByProject[$pid] ?? 0) + 1;
+                    }
+                    // Allocatable: not locked in an active transfer
+                    if (!($d['transfer_locked'] ?? false)) {
+                        $availableUnitsByProject[$pid] = ($availableUnitsByProject[$pid] ?? 0) + 1;
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'ResourceRequests::show unitCount equipment/tools - ' . $e->getMessage());
+            }
+        } elseif ($reqCategory === 'manpower') {
+            try {
+                $allMp = $this->firestore->getDb()->collection('manpower')->documents();
+                foreach ($allMp as $item) {
+                    if (!$item->exists()) continue;
+                    $d    = $item->data();
+                    $asgn = $d['assigned_project_id'] ?? null;
+                    $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $asgn->id()
+                        : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                    if (!$pid) continue;
+                    $st = strtolower($d['status'] ?? '');
+                    // SE-released (manpower uses Transfer Pending as the lock signal)
+                    if ($st === 'released') {
+                        $releasedUnitsByProject[$pid] = ($releasedUnitsByProject[$pid] ?? 0) + 1;
+                    }
+                    // Allocatable: deployed or available (not pending transfer, not on-leave, not archived)
+                    if (in_array($st, ['available', 'deployed'])) {
+                        $availableUnitsByProject[$pid] = ($availableUnitsByProject[$pid] ?? 0) + 1;
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'ResourceRequests::show unitCount manpower - ' . $e->getMessage());
+            }
+        }
 
         if (in_array(strtolower($req['status'] ?? ''), ['pending', 'pending secondary approval'])) {
             try {
-                $mlService = new MLServiceClient();
-                $destPid   = $req['destination_project_id'] ?? '';
-                $siteLat   = 14.5995;
-                $siteLng   = 120.9842;
+                $destPid = $req['destination_project_id'] ?? '';
+                $siteLat = 14.5995;
+                $siteLng = 120.9842;
 
-                if ($destPid) {
-                    foreach ($projects as $proj) {
-                        if ($proj['id'] === $destPid) {
-                            $siteLat = (float)($proj['lat'] ?? $siteLat);
-                            $siteLng = (float)($proj['lng'] ?? $siteLng);
-                            break;
-                        }
-                    }
-                }
-
-                $releasedPayload = [];
+                $candidates = [];
                 foreach ($projects as $proj) {
-                    if ($proj['id'] !== $destPid) {
-                        $releasedPayload[] = [
-                            'project_id'     => $proj['id'],
-                            'project_name'   => $proj['label'],
-                            'lat'            => (float)($proj['lat'] ?? 14.5995),
-                            'lng'            => (float)($proj['lng'] ?? 120.9842),
-                            'tool_category'  => $req['resource_category'] ?? 'Equipment',
-                            'units_released' => 1,
+                    if ($proj['lat'] === null || $proj['lng'] === null) continue;
+                    if ($proj['id'] === $destPid) {
+                        $siteLat = (float)$proj['lat'];
+                        $siteLng = (float)$proj['lng'];
+                    } elseif ($proj['status'] === 'On-going' && !$proj['has_emergency']) {
+                        $candidates[] = [
+                            'project_id'      => $proj['id'],
+                            'project_name'    => $proj['label'],
+                            'lat'             => (float)$proj['lat'],
+                            'lng'             => (float)$proj['lng'],
+                            'units_released'  => $releasedUnitsByProject[$proj['id']]  ?? 0,
+                            'units_available' => $availableUnitsByProject[$proj['id']] ?? 0,
+                            'progress'        => $proj['progress']   ?? 0.0,
+                            'start_date'      => $proj['start_date'] ?? null,
+                            'end_date'        => $proj['end_date']   ?? null,
+                            'resources'       => $proj['resources']  ?? [],
                         ];
                     }
                 }
 
-                if (!empty($releasedPayload)) {
-                    $mlCfg = new \Config\MLService();
-                    $result = $mlService->predictToolAvailability([
-                        'tool_category'  => $req['resource_category'] ?? 'Equipment',
-                        'site_lat'       => $siteLat,
-                        'site_lng'       => $siteLng,
-                        'radius_km'      => 500,
-                        'weights'        => [
-                            'distance_weight'     => $mlCfg->mcdaDistanceWeight,
-                            'availability_weight' => $mlCfg->mcdaAvailabilityWeight,
-                        ],
-                        'released_tools' => $releasedPayload,
-                    ]);
-
-                    $siteList = $result['optimized_tools'] ?? $result['predictions'] ?? (isset($result[0]) ? $result : []);
-                    if (!empty($siteList) && !isset($result['error'])) {
-                        $highestScore   = -1;
-                        $lowestDistance = 999999;
-                        foreach ($siteList as $site) {
-                            $score    = (float)($site['score'] ?? $site['overall_score'] ?? 0);
-                            $distance = (float)($site['distance_km'] ?? $site['distance'] ?? 999);
-                            $pid      = $site['project_id'] ?? '';
-                            if ($score > $highestScore) {
-                                $highestScore   = $score;
-                                $recommendedBest = ['project_id' => $pid, 'project_name' => $site['project_name'] ?? 'Unknown', 'score' => round($score, 2), 'distance_km' => round($distance, 1)];
-                            }
-                            if ($distance < $lowestDistance) {
-                                $lowestDistance     = $distance;
-                                $recommendedNearest = ['project_id' => $pid, 'project_name' => $site['project_name'] ?? 'Unknown', 'distance_km' => round($distance, 1)];
-                            }
-                        }
+                if (!empty($candidates)) {
+                    $mcdaResult = $this->computeMcda($candidates, $siteLat, $siteLng, $requestedModelId, $reqCategory);
+                    foreach ($mcdaResult['ranked'] as $s) {
+                        $recommendedSites[] = [
+                            'project_id'         => $s['project_id'],
+                            'project_name'       => $s['project_name'],
+                            'distance_km'        => $s['distance_km'],
+                            'eta_min'            => $s['travel_time_min'],
+                            'traffic_label'      => $s['traffic_label'],
+                            'traffic_score'      => $s['traffic_score'],
+                            'units_available'    => $s['units_available'],
+                            'units_released'     => $s['units_released'],
+                            'next_available_min' => $s['next_available_min'],
+                            'ml_delay_days'      => $s['ml_delay_days'],
+                            'ml_blocker'         => $s['ml_blocker'],
+                            'wsm_score'          => $s['wsm_score'],
+                        ];
                     }
+                    $recommendedBest        = $recommendedSites[0] ?? null;
+                    $recommendedNearest     = $recommendedBest;
+                    $mcdaExcludedSites      = $mcdaResult['excluded']      ?? [];
+                    $mcdaMlAvailable        = $mcdaResult['ml_available']  ?? false;
                 }
             } catch (\Throwable $e) {
                 log_message('warning', 'ResourceRequests::show MCDA - ' . $e->getMessage());
@@ -190,15 +276,448 @@ class ResourceRequests extends BaseController
                            && strtolower($req['status'] ?? '') === 'in-transit';
 
         return view('requests/show', [
-            'pageTitle'           => 'Request Details',
-            'activePage'          => 'resources',
-            'request'             => $req,
-            'projects'            => $projects,
-            'role'                => $currentRole,
-            'recommended_best'    => $recommendedBest,
-            'recommended_nearest' => $recommendedNearest,
-            'canAcceptDelivery'   => $canAcceptDelivery,
+            'pageTitle'             => 'Request Details',
+            'activePage'            => 'resources',
+            'request'               => $req,
+            'projects'              => $projects,
+            'role'                  => $currentRole,
+            'recommended_sites'     => $recommendedSites,
+            'recommended_best'      => $recommendedBest,
+            'recommended_nearest'   => $recommendedNearest,
+            'mcda_excluded_sites'   => $mcdaExcludedSites   ?? [],
+            'mcda_ml_available'     => $mcdaMlAvailable     ?? false,
+            'released_by_project'   => $releasedUnitsByProject,
+            'canAcceptDelivery'     => $canAcceptDelivery,
         ]);
+    }
+
+    // ── MCDA Source Recommendation ────────────────────────────────────────
+
+    public function recommendSource()
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthenticated']);
+        }
+
+        $body     = $this->request->getJSON(true) ?: $this->request->getPost();
+        $category = trim($body['category'] ?? '');
+        $destPid  = trim($body['destination_project_id'] ?? '');
+        $modelId  = trim($body['model_id'] ?? '');
+
+        if (!$category || !$destPid) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Missing category or destination_project_id']);
+        }
+
+        try {
+            // One collection-group query for emergency status (subcollection is authoritative)
+            $withEmergency = [];
+            try {
+                $eDocs = $this->firestore->getDb()
+                    ->collectionGroup('emergency_reports')->documents();
+                foreach ($eDocs as $doc) {
+                    if (!$doc->exists()) continue;
+                    $parts   = explode('/', $doc->name());
+                    $projIdx = array_search('project', $parts);
+                    if ($projIdx !== false && isset($parts[$projIdx + 1])) {
+                        $withEmergency[$parts[$projIdx + 1]] = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'ResourceRequests::recommendSource emergencyCheck - ' . $e->getMessage());
+            }
+
+            $catLower          = strtolower($category);
+            $releasedByProject  = [];   // SE-released (display)
+            $availableByProject = [];   // not transfer-locked (MCDA criterion)
+
+            if ($modelId !== '' && in_array($catLower, ['equipment', 'tools'])) {
+                try {
+                    $allItems = $this->firestore->getDb()
+                        ->collection('resource')->document($modelId)
+                        ->collection('items')->documents();
+                    foreach ($allItems as $item) {
+                        if (!$item->exists()) continue;
+                        $d    = $item->data();
+                        $asgn = $d['assigned_project_id'] ?? null;
+                        $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $asgn->id()
+                            : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                        if (!$pid) continue;
+                        if (($d['status'] ?? '') === 'Released') {
+                            $releasedByProject[$pid] = ($releasedByProject[$pid] ?? 0) + 1;
+                        }
+                        if (!($d['transfer_locked'] ?? false)) {
+                            $availableByProject[$pid] = ($availableByProject[$pid] ?? 0) + 1;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', 'ResourceRequests::recommendSource unitCount equipment/tools - ' . $e->getMessage());
+                }
+            } elseif ($catLower === 'manpower') {
+                try {
+                    $allMp = $this->firestore->getDb()->collection('manpower')->documents();
+                    foreach ($allMp as $item) {
+                        if (!$item->exists()) continue;
+                        $d    = $item->data();
+                        $asgn = $d['assigned_project_id'] ?? null;
+                        $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $asgn->id()
+                            : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                        if (!$pid) continue;
+                        $st = strtolower($d['status'] ?? '');
+                        if ($st === 'released') {
+                            $releasedByProject[$pid] = ($releasedByProject[$pid] ?? 0) + 1;
+                        }
+                        if (in_array($st, ['available', 'deployed'])) {
+                            $availableByProject[$pid] = ($availableByProject[$pid] ?? 0) + 1;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', 'ResourceRequests::recommendSource unitCount manpower - ' . $e->getMessage());
+                }
+            }
+
+            $allProjects = $this->projectModel->getAllProjects();
+            $destLat = 14.5995; $destLng = 120.9842;
+            $candidates = [];
+
+            foreach ($allProjects as $p) {
+                $geoRaw = $p['location']['geopoint'] ?? null;
+                if ($geoRaw instanceof \Google\Cloud\Core\GeoPoint) {
+                    $lat = $geoRaw->latitude(); $lng = $geoRaw->longitude();
+                } elseif (is_array($geoRaw) && (isset($geoRaw['lat']) || isset($geoRaw['latitude']))) {
+                    $lat = (float)($geoRaw['lat'] ?? $geoRaw['latitude']);
+                    $lng = (float)($geoRaw['lng'] ?? $geoRaw['longitude']);
+                } else { $lat = null; $lng = null; }
+
+                if ($p['id'] === $destPid) {
+                    if ($lat !== null) { $destLat = $lat; $destLng = $lng; }
+                } elseif (($p['status'] ?? '') === 'On-going' && !isset($withEmergency[$p['id']]) && $lat !== null) {
+                    $candidates[] = [
+                        'project_id'      => $p['id'],
+                        'project_name'    => strtoupper(trim($p['project_name'] ?? $p['id'])),
+                        'lat'             => $lat,
+                        'lng'             => $lng,
+                        'units_released'  => $releasedByProject[$p['id']]  ?? 0,
+                        'units_available' => $availableByProject[$p['id']] ?? 0,
+                        'progress'        => (float)($p['overall_progress'] ?? 0),
+                        'start_date'      => $p['start_date'] ?? null,
+                        'end_date'        => $p['end_date']   ?? null,
+                        'resources'       => $p['resources']  ?? [],
+                    ];
+                }
+            }
+
+            if (empty($candidates)) {
+                return $this->response->setJSON(['recommendations' => [], 'best' => null]);
+            }
+
+            $mcdaResult = $this->computeMcda($candidates, $destLat, $destLng, $modelId, $catLower);
+
+            $recommendations = array_map(fn($s) => [
+                'project_id'         => $s['project_id'],
+                'project_name'       => $s['project_name'],
+                'distance_km'        => $s['distance_km'],
+                'travel_time_min'    => $s['travel_time_min'],
+                'traffic_label'      => $s['traffic_label'],
+                'traffic_score'      => $s['traffic_score'],
+                'units_available'    => $s['units_available'],
+                'units_released'     => $s['units_released'],
+                'next_available_min' => $s['next_available_min'],
+                'ml_delay_days'      => $s['ml_delay_days'],
+                'ml_blocker'         => $s['ml_blocker'],
+                'wsm_score'          => $s['wsm_score'],
+            ], $mcdaResult['ranked']);
+
+            return $this->response->setJSON([
+                'recommendations'   => $recommendations,
+                'best'              => $recommendations[0] ?? null,
+                'excluded_count'    => count($mcdaResult['excluded']),
+                'ml_available'      => $mcdaResult['ml_available'],
+            ]);
+        } catch (\Throwable $e) {
+            log_message('warning', 'ResourceRequests::recommendSource - ' . $e->getMessage());
+            return $this->response->setJSON(['recommendations' => [], 'best' => null]);
+        }
+    }
+
+    // ── MCDA: 5-criterion WSM + ML risk pre-filter ───────────────────────
+    // Step 0  : ML delay/blocker prediction — exclude at-risk projects
+    // Step 1  : Next availability from Firestore item timestamps
+    // Step 2  : Google Maps Distance Matrix API (live traffic) / Haversine fallback
+    // Step 3  : Traffic labels
+    // Step 4  : Weighted Sum Model (distance 0.25, travel_time 0.20, traffic 0.25,
+    //           availability 0.20, next_available 0.10)
+    // Returns : ['ranked'=>[...], 'excluded'=>[...], 'ml_available'=>bool]
+
+    private function computeMcda(
+        array  $candidates,
+        float  $destLat,
+        float  $destLng,
+        string $modelId,
+        string $catLower
+    ): array {
+        $nowTs   = time();
+        $nowDt   = new \DateTime('now', new \DateTimeZone('Asia/Manila'));
+
+        // ── Step 0: ML delay/blocker filter ─────────────────────────────
+        $mlService   = new \App\Libraries\MLServiceClient();
+        $mlAvailable = true;
+        $excluded    = [];
+        $passed      = [];
+
+        foreach ($candidates as $c) {
+            $endDate   = $this->tsToDate($c['end_date']   ?? null);
+            $startDate = $this->tsToDate($c['start_date'] ?? null);
+
+            $daysElapsed   = $startDate ? max(0, (int)$startDate->diff($nowDt)->days) : 0;
+            $daysRemaining = $endDate   ? max(0, (int)$nowDt->diff($endDate)->days)   : 30;
+            $totalDays     = max(1, $daysElapsed + $daysRemaining);
+            $plannedPct    = min(100.0, round(($daysElapsed / $totalDays) * 100, 2));
+
+            $projRes  = (array)($c['resources'] ?? []);
+            $eqTotal  = 0; $eqActive = 0;
+            foreach ($projRes as $_r) {
+                if (strtolower((string)($_r['category'] ?? '')) === 'manpower') continue;
+                $eqTotal++;
+                if (empty($_r['transit'])) $eqActive++;
+            }
+            $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
+
+            $features = [
+                'project_id'               => $c['project_id'],
+                'progress_percent'         => (float)($c['progress'] ?? 0),
+                'planned_progress_percent' => $plannedPct,
+                'days_elapsed'             => $daysElapsed,
+                'days_remaining'           => $daysRemaining,
+                'workers_present'          => 0,
+                'workers_planned'          => 1,
+                'equipment_utilization'    => $eqUtil,
+                'weather_severity'         => 0,
+                'site_access_issues'       => 0,
+                'avg_progress_3d'          => (float)($c['progress'] ?? 0),
+                'progress_trend_3d'        => 0.0,
+                'consecutive_low_days'     => 0,
+                'budget_utilization'       => 0.0,
+                'cost_variance_ratio'      => 0.0,
+                'active_blocker_count'     => 0,
+                'days_since_last_blocker'  => 999,
+            ];
+
+            $mlDelayDays = 0;
+            $mlBlocker   = null;
+
+            if ($mlAvailable) {
+                try {
+                    $delayRes = $mlService->predictDelay($features);
+                    if (isset($delayRes['error'])) {
+                        $mlAvailable = false;
+                    } else {
+                        $mlDelayDays = (int)round((float)(
+                            $delayRes['predicted_delay_days'] ?? $delayRes['delay_days'] ?? $delayRes['prediction'] ?? 0
+                        ));
+                    }
+                } catch (\Throwable $e) { $mlAvailable = false; }
+
+                if ($mlAvailable) {
+                    try {
+                        $blockerRes = $mlService->predictBlockers($features);
+                        if (!isset($blockerRes['error'])) {
+                            $raw = $blockerRes['blocker_type'] ?? $blockerRes['predicted_blocker'] ?? $blockerRes['prediction'] ?? '';
+                            $noBlocker = in_array(strtolower((string)$raw), ['no blocker', 'unknown', 'none', ''], true);
+                            $mlBlocker = $noBlocker ? null : (string)$raw;
+                        }
+                    } catch (\Throwable $e) { /* blocker prediction optional */ }
+                }
+            }
+
+            $c['ml_delay_days'] = $mlDelayDays;
+            $c['ml_blocker']    = $mlBlocker;
+
+            // Exclude if ML predicts delay OR a meaningful blocker
+            // Fallback heuristic when ML is down: progress significantly behind schedule
+            $isAtRisk = $mlAvailable
+                ? ($mlDelayDays > 0 || $mlBlocker !== null)
+                : ((float)($c['progress'] ?? 0) < 30.0 && $daysRemaining < 30);
+
+            if ($isAtRisk) {
+                $excluded[] = $c;
+            } else {
+                $passed[] = $c;
+            }
+        }
+
+        // If ML filter removes everything, fall back to using all candidates
+        if (empty($passed) && !empty($excluded)) {
+            $passed   = $excluded;
+            $excluded = [];
+        }
+
+        $candidates = $passed;
+        $now        = $nowTs;
+
+        // ── Step 1: Next availability per candidate (Firestore items) ────
+        foreach ($candidates as &$c) {
+            $nextTs = null;
+            try {
+                if ($modelId !== '' && in_array($catLower, ['equipment', 'tools'])) {
+                    $items = $this->firestore->getDb()
+                        ->collection('resource')->document($modelId)->collection('items')
+                        ->documents();
+                    foreach ($items as $item) {
+                        if (!$item->exists()) continue;
+                        $d   = $item->data();
+                        $asgn = $d['assigned_project_id'] ?? null;
+                        $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $asgn->id()
+                            : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                        if ($pid !== $c['project_id']) continue;
+                        $na = $d['next_availability'] ?? null;
+                        if ($na instanceof \Google\Cloud\Core\Timestamp) {
+                            $ts = $na->get()->getTimestamp();
+                            if ($nextTs === null || $ts < $nextTs) $nextTs = $ts;
+                        }
+                    }
+                } elseif ($catLower === 'manpower') {
+                    $items = $this->firestore->getDb()->collection('manpower')->documents();
+                    foreach ($items as $item) {
+                        if (!$item->exists()) continue;
+                        $d   = $item->data();
+                        $asgn = $d['assigned_project_id'] ?? null;
+                        $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $asgn->id()
+                            : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
+                        if ($pid !== $c['project_id']) continue;
+                        $na = $d['next_availability'] ?? null;
+                        if ($na instanceof \Google\Cloud\Core\Timestamp) {
+                            $ts = $na->get()->getTimestamp();
+                            if ($nextTs === null || $ts < $nextTs) $nextTs = $ts;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'MCDA nextAvailability - ' . $e->getMessage());
+            }
+            $c['next_available_min'] = ($nextTs !== null && $nextTs > $now)
+                ? (int)round(($nextTs - $now) / 60)
+                : 0;
+        }
+        unset($c);
+
+        // ── Step 2: Google Maps Distance Matrix API (batch, live traffic) ─
+        $mapsKey = (new \Config\GoogleMaps())->serverKey;
+        if ($mapsKey !== '') {
+            try {
+                $origins = implode('|', array_map(fn($c) => $c['lat'] . ',' . $c['lng'], $candidates));
+                $url     = 'https://maps.googleapis.com/maps/api/distancematrix/json?' . http_build_query([
+                    'origins'        => $origins,
+                    'destinations'   => $destLat . ',' . $destLng,
+                    'departure_time' => 'now',
+                    'traffic_model'  => 'best_guess',
+                    'key'            => $mapsKey,
+                ]);
+                $gmData = json_decode(file_get_contents($url), true) ?? [];
+                $rows   = $gmData['rows'] ?? [];
+
+                foreach ($candidates as $i => &$c) {
+                    $el = $rows[$i]['elements'][0] ?? [];
+                    if (($el['status'] ?? '') === 'OK') {
+                        $durSec        = (int)($el['duration']['value'] ?? 0);
+                        $durTrafficSec = (int)($el['duration_in_traffic']['value'] ?? $durSec);
+                        $c['distance_km']     = round((int)($el['distance']['value'] ?? 0) / 1000, 1);
+                        $c['travel_time_min'] = max(1, (int)round($durSec / 60));
+                        $c['traffic_score']   = $durTrafficSec > 0
+                            ? min(1.0, round($durSec / $durTrafficSec, 3))
+                            : 1.0;
+                    } else {
+                        $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
+                        $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
+                        $c['traffic_score']   = 1.0;
+                    }
+                }
+                unset($c);
+            } catch (\Throwable $e) {
+                log_message('warning', 'MCDA GoogleMaps - ' . $e->getMessage());
+                foreach ($candidates as &$c) {
+                    $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
+                    $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
+                    $c['traffic_score']   = 1.0;
+                }
+                unset($c);
+            }
+        } else {
+            foreach ($candidates as &$c) {
+                $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
+                $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
+                $c['traffic_score']   = 1.0;
+            }
+            unset($c);
+        }
+
+        foreach ($candidates as &$c) {
+            if ($c['traffic_score'] >= 0.85)     $c['traffic_label'] = 'Light';
+            elseif ($c['traffic_score'] >= 0.65) $c['traffic_label'] = 'Moderate';
+            else                                  $c['traffic_label'] = 'Heavy';
+        }
+        unset($c);
+
+        // ── Step 3: WSM — normalize each criterion then apply weights ────
+        // availability uses units_available (not transfer-locked) as the count
+        // of units that can actually be allocated from each source project.
+        $w = ['distance' => 0.25, 'travel_time' => 0.20, 'traffic' => 0.25,
+              'availability' => 0.20, 'next_available' => 0.10];
+
+        $dMin = min(array_column($candidates, 'distance_km'));
+        $dMax = max(array_column($candidates, 'distance_km'));
+        $tMin = min(array_column($candidates, 'travel_time_min'));
+        $tMax = max(array_column($candidates, 'travel_time_min'));
+        $aMin = min(array_column($candidates, 'units_available'));
+        $aMax = max(array_column($candidates, 'units_available'));
+        $nMin = min(array_column($candidates, 'next_available_min'));
+        $nMax = max(array_column($candidates, 'next_available_min'));
+
+        $norm = fn($v, $lo, $hi) => ($hi > $lo) ? ($v - $lo) / ($hi - $lo) : 0.5;
+
+        foreach ($candidates as &$c) {
+            $c['wsm_score'] = round(
+                $w['distance']       * (1 - $norm($c['distance_km'],        $dMin, $dMax)) +
+                $w['travel_time']    * (1 - $norm($c['travel_time_min'],    $tMin, $tMax)) +
+                $w['traffic']        * $c['traffic_score']                                  +
+                $w['availability']   * $norm($c['units_available'],         $aMin, $aMax)  +
+                $w['next_available'] * (1 - $norm($c['next_available_min'], $nMin, $nMax)),
+                4
+            );
+        }
+        unset($c);
+
+        usort($candidates, fn($a, $b) => $b['wsm_score'] <=> $a['wsm_score']);
+
+        return [
+            'ranked'       => $candidates,
+            'excluded'     => $excluded,
+            'ml_available' => $mlAvailable,
+        ];
+    }
+
+    private function tsToDate(mixed $ts): ?\DateTime
+    {
+        if ($ts instanceof \Google\Cloud\Core\Timestamp) {
+            return \DateTime::createFromInterface($ts->get());
+        }
+        if (is_string($ts) && $ts !== '') {
+            try { return new \DateTime($ts); } catch (\Throwable $e) { return null; }
+        }
+        return null;
+    }
+
+    private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $R   = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a   = sin($dLat / 2) ** 2
+             + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $R * 2 * asin(sqrt($a));
     }
 
     // ── Create (drag-and-drop or API) ─────────────────────────────────────
