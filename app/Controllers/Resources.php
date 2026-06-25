@@ -687,6 +687,9 @@ class Resources extends BaseController
                 return redirect()->back()->with('error', 'Resource not found');
             }
 
+            // Enrich items with assigned project names for the Location column
+            $items = $this->enrichItemsWithProjectNames($items);
+
             // Ensure derived fields (like name from manpower_details) are present
             $resource = $this->normalizeResourceForView($resource);
 
@@ -1176,6 +1179,47 @@ class Resources extends BaseController
             $items[] = $itemData;
         }
 
+        return $items;
+    }
+
+    private function enrichItemsWithProjectNames(array $items): array
+    {
+        static $validStatuses = ['In-Storage', 'In-Use', 'Repair', 'Transfer Pending'];
+
+        $db = $this->firestore->getDb();
+        $cache = [];
+        foreach ($items as &$item) {
+            // Normalize statuses written by the mobile app to the web's known values
+            $rawStatus = $item['status'] ?? '';
+            if (!in_array($rawStatus, $validStatuses, true)) {
+                $apid = $item['assigned_project_id'] ?? null;
+                $hasPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? true
+                    : (trim((string)($apid ?? '')) !== '');
+                $item['status'] = $hasPid ? 'In-Use' : 'In-Storage';
+            }
+
+            $apid = $item['assigned_project_id'] ?? null;
+            $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                ? $apid->id()
+                : trim((string)($apid ?? ''));
+            if ($pid === '') {
+                $item['assigned_to'] = '';
+                continue;
+            }
+            if (!array_key_exists($pid, $cache)) {
+                try {
+                    $snap     = $db->collection('project')->document($pid)->snapshot();
+                    $cache[$pid] = $snap->exists()
+                        ? trim((string)($snap->data()['project_name'] ?? '')) ?: $pid
+                        : '';
+                } catch (\Throwable) {
+                    $cache[$pid] = '';
+                }
+            }
+            $item['assigned_to'] = $cache[$pid];
+        }
+        unset($item);
         return $items;
     }
 

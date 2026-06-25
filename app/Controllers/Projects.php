@@ -140,7 +140,7 @@ class Projects extends BaseController
 
             // â€” Paginate â€”
             $perPage     = config('Pager')->perPage;
-            $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
+            $currentPage = max(1, (int) ($this->request->getGet('page_projects') ?? 1));
             $total       = count($projects);
 
             $pager = service('pager');
@@ -472,7 +472,7 @@ class Projects extends BaseController
                     session()->get('userName')
                 );
 
-                $this->releaseProjectResources($id);
+                $this->releaseProjectResources($id, $data);
                 $this->deleteProjectTasks($id);
                 $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
@@ -508,7 +508,7 @@ class Projects extends BaseController
                     session()->get('userName')
                 );
 
-                $this->releaseProjectResources($id);
+                $this->releaseProjectResources($id, $data);
                 $this->deleteProjectTasks($id);
                 $this->deleteProjectMilestones($id);
                 $this->firestore->getDb()->collection('project')->document($id)->delete();
@@ -1245,7 +1245,7 @@ class Projects extends BaseController
         }
     }
 
-    private function releaseProjectResources(string $projectId): void
+    private function releaseProjectResources(string $projectId, array $projectData = []): void
     {
         $db          = $this->firestore->getDb();
         $projectRef  = $db->collection('project')->document($projectId);
@@ -1262,9 +1262,46 @@ class Projects extends BaseController
             ['path' => 'transfer_locked',                'value' => $deleteField],
         ];
 
-        // ── Manpower assigned to this project ────────────────────────────────
-        // Transfer Pending here means the manpower is arriving (dest role) → Available + clear
-        // Other statuses → Available
+        // ── Fast path: use the project's own resources array ────────────────
+        // O(n) targeted updates — avoids expensive full collection scan
+        $releasedPaths = [];
+        $projectResources = (array)($projectData['resources'] ?? []);
+        foreach ($projectResources as $res) {
+            $refId  = trim((string)($res['ref_id']  ?? ''));
+            $unitId = trim((string)($res['unit_id'] ?? ''));
+            if ($refId === '') continue;
+            try {
+                if ($unitId !== '') {
+                    // Equipment/Tool item
+                    $itemRef  = $db->collection('resource')->document($refId)->collection('items')->document($unitId);
+                    $itemSnap = $itemRef->snapshot();
+                    if (!$itemSnap->exists()) continue;
+                    $releasedPaths[$itemRef->name()] = true;
+                    if (($itemSnap->data()['status'] ?? '') === 'Transfer Pending') continue;
+                    $itemRef->update([
+                        ['path' => 'assigned_project_id', 'value' => $deleteField],
+                        ['path' => 'status',              'value' => 'Available'],
+                    ]);
+                } else {
+                    // Manpower
+                    $mpRef  = $db->collection('manpower')->document($refId);
+                    $mpSnap = $mpRef->snapshot();
+                    if (!$mpSnap->exists()) continue;
+                    $updates = [
+                        ['path' => 'assigned_project_id', 'value' => $deleteField],
+                        ['path' => 'status',              'value' => 'Available'],
+                    ];
+                    if (($mpSnap->data()['status'] ?? '') === 'Transfer Pending') {
+                        $updates = array_merge($updates, $transferClearFields);
+                    }
+                    $mpRef->update($updates);
+                }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Projects::releaseProjectResources targeted [' . $refId . '/' . $unitId . '] - ' . $e->getMessage());
+            }
+        }
+
+        // ── Manpower assigned to this project (query, catches any not in resources array) ──
         try {
             $mpDocs = $db->collection('manpower')
                 ->where('assigned_project_id', '=', $projectId)
@@ -1284,10 +1321,7 @@ class Projects extends BaseController
             log_message('warning', 'Projects::releaseProjectResources manpower - ' . $e->getMessage());
         }
 
-        // ── Equipment / Tools assigned to this project (SOURCE SIDE) ─────────
-        // Transfer Pending = item is outgoing → SKIP (it keeps traveling to its destination)
-        // Other → Available
-        $releasedPaths = [];
+        // ── Equipment assigned to this project via collectionGroup queries ───
         try {
             $itemDocs = $db->collectionGroup('items')
                 ->where('assigned_project_id', '=', $projectRef)
@@ -1323,27 +1357,29 @@ class Projects extends BaseController
             log_message('warning', 'Projects::releaseProjectResources equipment (str) - ' . $e->getMessage());
         }
 
-        // Fallback: full scan (catches any storage-format edge cases)
-        try {
-            foreach ($db->collection('resource')->documents() as $resDoc) {
-                if (!$resDoc->exists()) continue;
-                foreach ($resDoc->reference()->collection('items')->documents() as $itemDoc) {
-                    if (!$itemDoc->exists() || isset($releasedPaths[$itemDoc->name()])) continue;
-                    $apid = $itemDoc->data()['assigned_project_id'] ?? null;
-                    $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
-                        ? $apid->id()
-                        : (string)($apid ?? '');
-                    if ($pid !== $projectId) continue;
-                    $releasedPaths[$itemDoc->name()] = true;
-                    if (($itemDoc->data()['status'] ?? '') === 'Transfer Pending') continue;
-                    $itemDoc->reference()->update([
-                        ['path' => 'assigned_project_id', 'value' => $deleteField],
-                        ['path' => 'status',              'value' => 'Available'],
-                    ]);
+        // Full scan fallback — only when project has no resources array (avoids timeout)
+        if (empty($projectResources)) {
+            try {
+                foreach ($db->collection('resource')->documents() as $resDoc) {
+                    if (!$resDoc->exists()) continue;
+                    foreach ($resDoc->reference()->collection('items')->documents() as $itemDoc) {
+                        if (!$itemDoc->exists() || isset($releasedPaths[$itemDoc->name()])) continue;
+                        $apid = $itemDoc->data()['assigned_project_id'] ?? null;
+                        $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                            ? $apid->id()
+                            : (string)($apid ?? '');
+                        if ($pid !== $projectId) continue;
+                        $releasedPaths[$itemDoc->name()] = true;
+                        if (($itemDoc->data()['status'] ?? '') === 'Transfer Pending') continue;
+                        $itemDoc->reference()->update([
+                            ['path' => 'assigned_project_id', 'value' => $deleteField],
+                            ['path' => 'status',              'value' => 'Available'],
+                        ]);
+                    }
                 }
+            } catch (\Throwable $e) {
+                log_message('warning', 'Projects::releaseProjectResources equipment (scan) - ' . $e->getMessage());
             }
-        } catch (\Throwable $e) {
-            log_message('warning', 'Projects::releaseProjectResources equipment (scan) - ' . $e->getMessage());
         }
 
         // ── Equipment / Tools incoming to this project (DESTINATION SIDE) ─────
