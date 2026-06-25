@@ -5,6 +5,7 @@ namespace App\Controllers;
 use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
 use App\Libraries\MilestoneProgressService;
+use App\Libraries\ProjectDelayPredictor;
 use App\Libraries\StorageService;
 use App\Libraries\TrashService;
 use App\Models\Model_Users;
@@ -585,6 +586,15 @@ class Projects extends BaseController
                 }
             }
 
+            // ML insights — blocker type + delay days for this project (shown in progress report modal)
+            $mlInsights = ['blocker' => null, 'delay_days' => 0];
+            try {
+                $predictor  = new ProjectDelayPredictor($this->firestore);
+                $mlInsights = $predictor->getInsights($id);
+            } catch (\Throwable $e) {
+                log_message('warning', 'Projects::show getInsights - ' . $e->getMessage());
+            }
+
             return view('projects/projects_show', [
                 'pageTitle'        => 'Project Detail',
                 'activePage'       => 'projects',
@@ -601,6 +611,7 @@ class Projects extends BaseController
                 'reportDate'       => $reportDate,
                 'userName'         => session()->get('userName') ?? 'User',
                 'role'             => session()->get('role') ?? 'Staff',
+                'mlInsights'       => $mlInsights,
             ]);
         } catch (\Exception $e) {
             log_message('error', 'Projects::show - ' . $e->getMessage());
@@ -745,6 +756,12 @@ class Projects extends BaseController
             }
 
             $milestones    = $this->getMilestonesOrdered($id);
+            foreach ($milestones as &$ms) {
+                $raw = $ms['target_date'] ?? $ms['targetDate'] ?? null;
+                $ms['target_date'] = $this->psTsToDate($raw) ?? (is_string($raw) ? substr($raw, 0, 10) : '');
+                unset($ms['targetDate']);
+            }
+            unset($ms);
             $startDate     = (string)($project['start_date_value'] ?? '');
             $endDate       = (string)($project['end_date_value']   ?? '');
             $weeklyTargets = [];
@@ -1584,9 +1601,9 @@ class Projects extends BaseController
                 'milestone_name'       => $name,
                 'order'                => $order++,
                 'weight_percent'       => (float) ($phase['weight'] ?? 0),
-                'target_quantity'      => 1,
+                'target_quantity'      => max(1, (int) ($phase['qty'] ?? 1)),
                 'completed_quantity'   => 0,
-                'unit'                 => 'pcs',
+                'unit'                 => trim((string) ($phase['unit'] ?? 'pcs')) ?: 'pcs',
                 'target_date'          => $targetDate !== '' ? $targetDate : null,
                 'actual_completion_date' => null,
                 'status'               => 'Pending',

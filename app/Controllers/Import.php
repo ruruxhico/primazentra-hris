@@ -157,14 +157,20 @@ class Import extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Could not read file: ' . $e->getMessage()]);
         }
 
-        // Find header row (first row containing a required marker like '*')
+        // Find header row: first row where at least 2 cells contain '*'.
+        // This skips the single-cell instruction row ("* Required fields…") at the top
+        // of the XLSX template which also contains a '*' but is not the header row.
         $headerRowIdx = null;
         foreach ($rows as $i => $row) {
+            $starCount = 0;
             foreach ($row as $cell) {
                 if (str_contains((string) ($cell ?? ''), '*')) {
-                    $headerRowIdx = $i;
-                    break 2;
+                    $starCount++;
                 }
+            }
+            if ($starCount >= 2) {
+                $headerRowIdx = $i;
+                break;
             }
         }
 

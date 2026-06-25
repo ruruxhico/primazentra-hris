@@ -68,6 +68,28 @@ class Dashboard extends BaseController
             $deployedResources  = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Deployed'));
             $availableTools     = $availableResources; // same data, no extra call
 
+            // ── Utilization stats (equipment + tools) ────────────────
+            // Uses asset_details on the model doc: deployed = total − available (no subcollection query needed)
+            $eqT = 0; $eqD = 0; $tlT = 0; $tlD = 0;
+            foreach ($allResources as $r) {
+                $cat  = strtolower((string)($r['category'] ?? ''));
+                $ad   = is_array($r['asset_details'] ?? null) ? $r['asset_details'] : [];
+                $tot  = (int)($r['total_quantity'] ?? $ad['total_quantity'] ?? 0);
+                $avl  = (int)($r['available_quantity'] ?? $ad['available_quantity'] ?? 0);
+                $dep  = max(0, $tot - $avl);
+                if ($cat === 'equipment') { $eqT += $tot; $eqD += $dep; }
+                elseif ($cat === 'tools') { $tlT += $tot; $tlD += $dep; }
+            }
+            $utilizationStats = [
+                'equipment' => ['total' => $eqT, 'deployed' => $eqD, 'pct' => $eqT > 0 ? round($eqD / $eqT * 100) : 0],
+                'tools'     => ['total' => $tlT, 'deployed' => $tlD, 'pct' => $tlT > 0 ? round($tlD / $tlT * 100) : 0],
+                'combined'  => [
+                    'total'    => $eqT + $tlT,
+                    'deployed' => $eqD + $tlD,
+                    'pct'      => ($eqT + $tlT) > 0 ? round(($eqD + $tlD) / ($eqT + $tlT) * 100) : 0,
+                ],
+            ];
+
             // ── Manpower ─────────────────────────────────────────────
             $allManpower = [];
             try {
@@ -190,6 +212,18 @@ class Dashboard extends BaseController
                 foreach ($activeProjects as $p) {
                     if (!$mlAvailable) break;
                     try {
+                        // Compute real equipment_utilization from project.resources[]
+                        // Mirrors ProjectDelayPredictor::buildFeatures() — deployed (non-transit)
+                        // non-manpower entries ÷ total non-manpower entries at this project.
+                        $projRes   = (array)($p['resources'] ?? []);
+                        $eqTotal   = 0; $eqActive = 0;
+                        foreach ($projRes as $_r) {
+                            if (strtolower((string)($_r['category'] ?? '')) === 'manpower') continue;
+                            $eqTotal++;
+                            if (empty($_r['transit'])) $eqActive++;
+                        }
+                        $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
+
                         $features = [
                             'project_id'              => (string)($p['id'] ?? ''),
                             'progress_percent'        => (float)($p['_progress'] ?? 0),
@@ -198,7 +232,7 @@ class Dashboard extends BaseController
                             'days_remaining'          => (int)($p['days_remaining'] ?? 0),
                             'workers_present'         => (int)($p['workers_present'] ?? 0),
                             'workers_planned'         => (int)($p['workers_planned'] ?? 1),
-                            'equipment_utilization'   => (float)($p['equipment_utilization'] ?? 1.0),
+                            'equipment_utilization'   => $eqUtil,
                             'weather_severity'        => (int)($p['weather_severity'] ?? 0),
                             'site_access_issues'      => (int)($p['site_access_issues'] ?? 0),
                             'avg_progress_3d'         => (float)($p['avg_progress_3d'] ?? 0),
@@ -440,6 +474,7 @@ class Dashboard extends BaseController
                 'deployedResources'   => $deployedResources,
                 'allResources'        => $allResources,
                 'availableManpower'   => $availableManpower,
+                'utilizationStats'    => $utilizationStats,
                 'googleMapsBrowserKey' => (new \Config\GoogleMaps())->browserKey,
             ];
 

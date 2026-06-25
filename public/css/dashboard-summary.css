@@ -225,3 +225,41 @@
     .pz-sc-cols, .pz-sc-row { flex-direction: column; }
     .pz-sc-divider { display: none; }
 }
+
+/* ── Resource group inline pager ── */
+.db-res-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 5px 0 4px;
+    border-top: 1px solid #f0e6cd;
+    margin-top: 2px;
+}
+.db-res-pager-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid #d5c68a;
+    background: #fdf9f0;
+    color: #8a6420;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: background .15s;
+}
+.db-res-pager-btn:hover:not(:disabled) { background: #fdf0c4; }
+.db-res-pager-btn:disabled { opacity: .35; cursor: default; }
+.db-res-pager-btn .material-symbols-outlined { font-size: .95rem; }
+.db-res-pager-label {
+    min-width: 3rem;
+    text-align: center;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #8a6420;
+    letter-spacing: .04em;
+    user-select: none;
+}

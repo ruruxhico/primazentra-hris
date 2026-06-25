@@ -499,6 +499,20 @@ class Resources extends BaseController
                 // delete from resource or manpower collection depending where it exists
                 $res = $this->model->getResourceById($id);
                 if ($res) {
+                    // Block deletion if any items are currently In-Use
+                    $inUseCount = 0;
+                    foreach ($this->firestore->getDb()->collection('resource')->document($id)->collection('items')->documents() as $itemDoc) {
+                        if ($itemDoc->exists() && strtolower((string)($itemDoc->data()['status'] ?? '')) === 'in-use') {
+                            $inUseCount++;
+                        }
+                    }
+                    if ($inUseCount > 0) {
+                        return $this->response->setStatusCode(409)->setJSON([
+                            'success' => false,
+                            'message' => "Cannot delete: {$inUseCount} unit(s) are currently In-Use.",
+                        ]);
+                    }
+
                     // Snapshot raw Firestore data
                     $rawSnap = $this->firestore->getDb()->collection('resource')->document($id)->snapshot();
                     $rawData = $rawSnap->exists() ? $rawSnap->data() : $res;

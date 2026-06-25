@@ -429,6 +429,13 @@ class Staff extends BaseController
             $data = $snap->exists() ? $snap->data() : [];
             $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $id);
 
+            // Protect Administrator accounts — only Administrators may archive other Admins
+            $targetRole  = (string)($data['role'] ?? '');
+            $sessionRole = (string)(session()->get('role') ?? '');
+            if ($targetRole === 'Administrator' && $sessionRole !== 'Administrator') {
+                return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Only Administrators can archive Administrator accounts.']);
+            }
+
             (new ArchiveService($this->firestore))->moveToArchive('staff', $id, $name, $data, [], session()->get('userName'));
             $this->firestore->getDb()->collection('users')->document($id)->delete();
 
@@ -468,6 +475,14 @@ class Staff extends BaseController
                 $snap = $this->firestore->getDb()->collection('users')->document($idFromPost)->snapshot();
                 $data = $snap->exists() ? $snap->data() : [];
                 $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $idFromPost);
+
+                // Protect Administrator accounts — only Administrators may delete other Admins
+                $targetRole  = (string)($data['role'] ?? '');
+                $sessionRole = (string)(session()->get('role') ?? '');
+                if ($targetRole === 'Administrator' && $sessionRole !== 'Administrator') {
+                    return $this->response->setStatusCode(403)->setJSON(['success' => false, 'message' => 'Only Administrators can delete Administrator accounts.']);
+                }
+
                 $trashId = (new TrashService($this->firestore))->moveToTrash('staff', $idFromPost, $name, $data, [], session()->get('userName'));
 
                 // Only delete the Firestore doc (Auth deletion deferred to permanent delete)
@@ -494,6 +509,13 @@ class Staff extends BaseController
                 $snap = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
                 $data = $snap->exists() ? $snap->data() : [];
                 $name = trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')) ?: ($data['email'] ?? $id);
+
+                $targetRole  = (string)($data['role'] ?? '');
+                $sessionRole = (string)(session()->get('role') ?? '');
+                if ($targetRole === 'Administrator' && $sessionRole !== 'Administrator') {
+                    return redirect()->to('staff')->with('error', 'Only Administrators can delete Administrator accounts.');
+                }
+
                 (new TrashService($this->firestore))->moveToTrash('staff', $id, $name, $data, [], session()->get('userName'));
 
                 $this->firestore->getDb()->collection('users')->document($id)->delete();

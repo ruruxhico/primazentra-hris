@@ -134,7 +134,7 @@
                         <?php foreach ($projectManagers ?? [] as $mgr): ?>
                             <?php $label = trim(($mgr['first_name'] ?? '') . ' ' . ($mgr['last_name'] ?? '')); ?>
                             <option value="<?= esc($mgr['id'] ?? '') ?>"
-                                <?= (($project['personnel']['project_manager_id'] ?? '') === ($mgr['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= (($project['pm_id_normalized'] ?? '') === ($mgr['id'] ?? '')) ? 'selected' : '' ?>>
                                 <?= esc($label ?: ($mgr['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
@@ -148,7 +148,7 @@
                         <?php foreach ($siteEngineers ?? [] as $eng): ?>
                             <?php $label = trim(($eng['first_name'] ?? '') . ' ' . ($eng['last_name'] ?? '')); ?>
                             <option value="<?= esc($eng['id'] ?? '') ?>"
-                                <?= (($project['personnel']['site_engineer_id'] ?? '') === ($eng['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= (($project['se_id_normalized'] ?? '') === ($eng['id'] ?? '')) ? 'selected' : '' ?>>
                                 <?= esc($label ?: ($eng['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
@@ -1016,6 +1016,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.querySelectorAll('.date-picker').forEach(initDatePickerWrapper);
     window.initPhaseDatePicker = initDatePickerWrapper;
+
+    // Date range validation: start_date must not be later than end_date
+    document.getElementById('projectForm').addEventListener('submit', function (e) {
+        var s = document.getElementById('start_date').value;
+        var d = document.getElementById('end_date').value;
+        if (s && d && s > d) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            alert('End Date must be on or after Start Date.');
+            return false;
+        }
+    });
 });
 </script>
 

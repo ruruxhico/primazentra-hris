@@ -32,6 +32,7 @@ class Export extends BaseController
             'tools'          => $this->getResourceData('Tools', $subtype),
             'manpower'       => $this->getManpowerData(),
             'staff'          => $this->getStaffData(),
+            'utilization'    => $this->getUtilizationData(),
             'resource_units' => $this->getResourceItemsByModel(
                 (string)($this->request->getGet('resource_id') ?? ''),
                 (string)($this->request->getGet('resource_name') ?? 'Resource')
@@ -268,6 +269,94 @@ class Export extends BaseController
         return [$headers, $rows, $resourceName . ' — Units'];
     }
 
+    private function getUtilizationData(): array
+    {
+        $headers = [
+            'Category', 'Model Code', 'Model Name',
+            'Total Units', 'In-Use', 'In-Storage', 'Transfer Pending',
+            'Available', 'Released', 'Other',
+            'Utilization %', 'Times Transferred',
+        ];
+        $rows = [];
+        $db   = $this->firestore->getDb();
+
+        $grandTotal = $grandInUse = $grandInStorage = $grandPending = 0;
+        $grandAvail = $grandReleased = $grandOther = $grandTransferred = 0;
+
+        foreach ($db->collection('resource')->documents() as $doc) {
+            if (!$doc->exists()) continue;
+            $r   = $doc->data();
+            $cat = $r['category'] ?? '';
+            if (!in_array($cat, ['Equipment', 'Tools'])) continue;
+
+            $modelId   = $doc->id();
+            $modelCode = $r['model_code'] ?? '';
+            $modelName = $r['name']       ?? '';
+
+            $counts = [
+                'in-use'    => 0, 'in-storage' => 0, 'transfer pending' => 0,
+                'available' => 0, 'released'   => 0, 'other'            => 0,
+            ];
+            $transferredCount = 0;
+            $total = 0;
+
+            foreach ($db->collection('resource')->document($modelId)->collection('items')->documents() as $itemDoc) {
+                if (!$itemDoc->exists()) continue;
+                $d = $itemDoc->data();
+                $total++;
+                $s = strtolower(trim((string)($d['status'] ?? '')));
+
+                if ($s === 'in-use')                              $counts['in-use']++;
+                elseif ($s === 'in-storage')                      $counts['in-storage']++;
+                elseif (str_contains($s, 'transfer'))             $counts['transfer pending']++;
+                elseif ($s === 'available')                       $counts['available']++;
+                elseif ($s === 'released')                        $counts['released']++;
+                else                                              $counts['other']++;
+
+                if (strtolower((string)($d['transfer_state'] ?? '')) === 'completed'
+                    || !empty($d['transfer_completed_at'])) {
+                    $transferredCount++;
+                }
+            }
+
+            $utilPct = $total > 0 ? round($counts['in-use'] / $total * 100, 1) : 0.0;
+
+            $rows[] = [
+                $cat, $modelCode, $modelName,
+                $total,
+                $counts['in-use'], $counts['in-storage'], $counts['transfer pending'],
+                $counts['available'], $counts['released'], $counts['other'],
+                $utilPct . '%',
+                $transferredCount,
+            ];
+
+            $grandTotal       += $total;
+            $grandInUse       += $counts['in-use'];
+            $grandInStorage   += $counts['in-storage'];
+            $grandPending     += $counts['transfer pending'];
+            $grandAvail       += $counts['available'];
+            $grandReleased    += $counts['released'];
+            $grandOther       += $counts['other'];
+            $grandTransferred += $transferredCount;
+        }
+
+        // Sort by utilization % descending
+        usort($rows, fn($a, $b) => (float)$b[10] <=> (float)$a[10]);
+
+        // Grand-total summary row
+        if (!empty($rows)) {
+            $grandPct = $grandTotal > 0 ? round($grandInUse / $grandTotal * 100, 1) : 0.0;
+            $rows[] = [
+                'TOTAL', '', '',
+                $grandTotal, $grandInUse, $grandInStorage, $grandPending,
+                $grandAvail, $grandReleased, $grandOther,
+                $grandPct . '%', $grandTransferred,
+            ];
+        }
+
+        return [$headers, $rows, 'Tool & Equipment Utilization'];
+    }
+
     private function getManpowerData(): array
     {
         $headers = [
@@ -416,10 +505,10 @@ class Export extends BaseController
         $html = $this->buildPrintHtml($headers, $rows, $title, forPdf: true);
 
         $options = new Options();
-        $options->set('isRemoteEnabled', false);
-        $options->set('defaultFont', 'Helvetica');
+        $options->setIsRemoteEnabled(false);
+        $options->setDefaultFont('Helvetica');
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
+        $dompdf->loadHtml($html, 'UTF-8');
 
         // Dynamic single-page sizing so all rows fit without splitting.
         // Width = A4 landscape (297 mm). Height = estimated from row/column count.
@@ -437,6 +526,12 @@ class Export extends BaseController
         $dompdf->render();
 
         $filename = strtolower(str_replace(' ', '_', $title)) . '_' . date('Ymd') . '.pdf';
+
+        // Flush all output buffers so no buffered content corrupts the binary PDF stream
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         $dompdf->stream($filename, ['Attachment' => true]);
         exit;
     }

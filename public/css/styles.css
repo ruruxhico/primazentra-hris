@@ -696,16 +696,17 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .main-content {
-    width: 100%;
+    width: calc(100% - 225px);
     margin-left: 225px;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     background-color: #fafafa;
-    transition: margin-left 0.25s ease;
+    transition: margin-left 0.25s ease, width 0.25s ease;
 }
 
 body.sidebar-toggled .main-content {
+    width: calc(100% - 72px);
     margin-left: 72px;
 }
 
@@ -962,8 +963,8 @@ body.sidebar-toggled .main-content {
 
 @media (max-width: 992px) {
     .sidebar { width: 200px; }
-    .main-content { margin-left: 200px; }
-    body.sidebar-toggled .main-content { margin-left: 72px; }
+    .main-content { width: calc(100% - 200px); margin-left: 200px; }
+    body.sidebar-toggled .main-content { width: calc(100% - 72px); margin-left: 72px; }
 }
 
 @media (max-width: 768px) {
@@ -977,9 +978,11 @@ body.sidebar-toggled .main-content {
         overflow: hidden;
     }
     .main-content {
+        width: 100% !important;
         margin-left: 0 !important;
     }
     body.sidebar-toggled .main-content {
+        width: 100% !important;
         margin-left: 0 !important;
     }
     .sidebar-mobile-toggle { display: inline-block; }
@@ -1197,6 +1200,7 @@ body.sidebar-toggled .logout-section { display: none; }
 
 
 .main-content {
+    width: calc(100% - 225px);
     margin-left: 225px;
     flex: 1;
     background-color: #fafafa;
@@ -4318,10 +4322,12 @@ td .action-btn { vertical-align: middle; }
 
 /* ── Right map sidebar panel ────────────────────────────── */
 .main-content {
-    transition: margin-left 0.25s ease, margin-right 0.25s ease;
+    transition: margin-left 0.25s ease, margin-right 0.25s ease, width 0.25s ease;
 }
-body.map-panel-open     .main-content { margin-right: 380px; }
-body.map-panel-collapsed .main-content { margin-right: 52px; }
+body.map-panel-open     .main-content { width: calc(100% - 225px - 380px); margin-right: 380px; }
+body.map-panel-collapsed .main-content { width: calc(100% - 225px - 52px); margin-right: 52px; }
+body.sidebar-toggled.map-panel-open     .main-content { width: calc(100% - 72px - 380px); }
+body.sidebar-toggled.map-panel-collapsed .main-content { width: calc(100% - 72px - 52px); }
 
 #mapSidePanel {
     position: fixed;
@@ -4919,8 +4925,8 @@ body.map-panel-collapsed .main-content { margin-right: 52px; }
 .pz-chip .material-symbols-outlined { font-size: 1rem; }
 
 /* ── Table ───────────────────────────────────────────────── */
-.pz-table-wrap { margin: 0 2rem .75rem; overflow-x: auto; border-radius: 10px; border: 1px solid #e0d4b0; box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.02); background: #fff; }
-.pz-table { width: 100%; border-collapse: collapse; background: #fff; min-width: 600px; }
+.pz-table-wrap { margin: 0 2rem .75rem; border-radius: 10px; border: 1px solid #e0d4b0; box-shadow: 0 2px 10px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.02); background: #fff; }
+.pz-table { width: 100%; border-collapse: collapse; background: #fff; table-layout: fixed; }
 .pz-table thead tr { background: #5c3d11; }
 .pz-table th { padding: .65rem 1rem; text-align: center; font-size: 1rem; font-weight: 700; color: #f5e7b2; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .pz-table th.center, .pz-table td.center { text-align: center; }
@@ -5056,9 +5062,18 @@ body.map-panel-collapsed .main-content { margin-right: 52px; }
     /* Table: compact on small screens */
     .pz-table th { font-size: .82rem; padding: .35rem .4rem; }
     .pz-table td { font-size: .9rem;  padding: .35rem .4rem; }
+    .rr-col-sm { display: none; }
 
     /* Dashboard date */
     .db-today-date { font-size: 1.5rem; }
+}
+
+/* Requests table — hide secondary columns progressively */
+@media (max-width: 1100px) {
+    .rr-col-md { display: none; }
+}
+@media (max-width: 900px) {
+    .rr-col-sm { display: none; }
 }
 
 /* ============================================
@@ -6169,6 +6184,31 @@ body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !importan
 .rpt-daily-milestone { margin-bottom:.65rem; }
 .rpt-daily-ms-name { font-size:.9rem; color:#2c1f07; font-weight:500; }
 .rpt-daily-ms-meta { font-size:.82rem; color:#777; margin-top:.1rem; }
+/* ── ML Prediction panel (inside daily report detail) ─────── */
+.rpt-ml-panel { margin-top:1rem; padding:.65rem .8rem; background:#f0f4ff; border:1px solid #c7d4f5; border-radius:8px; }
+.rpt-ml-panel-title { font-size:.78rem; font-weight:700; color:#3b4a8c; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.45rem; display:flex; align-items:center; gap:.3rem; }
+.rpt-ml-delay-warn { font-size:.86rem; color:#92400e; display:flex; align-items:center; gap:.3rem; }
+.rpt-ml-on-track   { font-size:.86rem; color:#166534; display:flex; align-items:center; gap:.3rem; }
+.rpt-ml-blocker    { font-size:.82rem; color:#4b5563; margin-top:.35rem; }
+/* ── Resource Utilization widget (dashboard summary) ─────── */
+.pz-util-card { margin-top:.9rem; }
+.pz-util-head { display:flex; align-items:center; justify-content:space-between; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#5a4020; margin-bottom:.85rem; }
+.pz-util-export { display:inline-flex; align-items:center; gap:.2rem; font-size:.72rem; font-weight:700; color:#8a6420; text-decoration:none; background:#fef3d0; border:1px solid #d4c185; border-radius:5px; padding:.25rem .55rem; }
+.pz-util-export:hover { background:#fce9a8; }
+.pz-util-export .material-symbols-outlined { font-size:.85rem; }
+.pz-util-bars { display:flex; flex-direction:column; gap:.65rem; }
+.pz-util-row { display:grid; grid-template-columns:80px 1fr 38px 80px; align-items:center; gap:.5rem; }
+.pz-util-label { font-size:.8rem; font-weight:600; color:#3a2a0a; }
+.pz-util-track { height:10px; background:#f0e8d0; border-radius:99px; overflow:hidden; }
+.pz-util-fill { height:100%; border-radius:99px; transition:width .4s ease; }
+.pz-util-low  { background:#3b82f6; }
+.pz-util-mid  { background:#f59e0b; }
+.pz-util-high { background:#16a34a; }
+.pz-util-pct  { font-size:.82rem; font-weight:700; color:#2c1a00; text-align:right; }
+.pz-util-sub  { font-size:.72rem; color:#888; }
+.pz-util-combined { border-top:1px solid #f0e8d0; padding-top:.65rem; margin-top:.1rem; }
+.pz-util-note { font-size:.72rem; color:#aaa; margin:.7rem 0 0; }
+.pz-util-note a { color:#8a6420; }
 /* ── Summary buttons ───────────────────────────────────────── */
 .rpt-summary-btn {
     width:100%; display:flex; align-items:center; justify-content:center; gap:.5rem;

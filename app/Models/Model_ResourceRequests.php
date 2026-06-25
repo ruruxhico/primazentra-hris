@@ -91,7 +91,7 @@ class Model_ResourceRequests extends Model_BaseFirestore
     private function fmtTs($ts): string
     {
         if (!$ts) return '';
-        if ($ts instanceof Timestamp) return $ts->get()->format('m/d/Y H:i');
+        if ($ts instanceof Timestamp) return $ts->get()->format('M j, Y g:i A');
         return '';
     }
 }

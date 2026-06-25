@@ -62,7 +62,7 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             </select>
         </div>
 
-        <div style="margin-bottom:1.1rem;">
+        <div style="margin-bottom:.85rem;">
             <label id="reqQtyLabel" style="display:block;font-size:.8rem;font-weight:600;color:#5a4020;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em;">How many are needed?</label>
             <input type="number" id="reqQty" min="1" value="1"
                    style="width:100%;padding:.52rem .7rem;border:1px solid #d5c68a;border-radius:7px;font-size:.93rem;background:#fdf9f0;color:#2c1a00;box-sizing:border-box;">
@@ -93,14 +93,9 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
 
     <?php
     $displayBlockers = !empty($mlBlockers) ? $mlBlockers : [];
-    $usingMl         = !empty($mlBlockers);
     $activeList      = !empty($displayBlockers) ? $displayBlockers : $blockers;
     $isManual        = empty($displayBlockers);
-    // Split into 3 equal columns (populated below after computing $blockerRows)
-    $total = count($activeList);
-    $third = (int)ceil($total / 3);
 
-    // Pre-compute display rows to avoid inline logic in each column loop
     $blockerRows = [];
     foreach ($activeList as $bl) {
         if ($isManual) {
@@ -109,9 +104,8 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             $blockerRows[] = [
                 'name'    => strtoupper($bl['project_name'] ?? 'Project'),
                 'status'  => ucwords((string)($bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress'))),
-                'statusc' => '#555',
                 'delay'   => $dd . 'd delay',
-                'delayc'  => $dd > 0 ? '#c0392b' : '#888',
+                'delayc'  => $dd > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
             ];
         } else {
             $isOk  = in_array(strtolower($bl['predicted'] ?? ''), ['no blocker','unknown','none','']);
@@ -119,86 +113,96 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             $blockerRows[] = [
                 'name'    => strtoupper($bl['project_name'] ?? 'Project'),
                 'status'  => ucwords((string)($bl['predicted'] ?? 'Risk Detected')),
-                'statusc' => $isOk ? '#1e6b45' : '#c0392b',
                 'delay'   => $delay . 'd delay',
-                'delayc'  => $delay > 0 ? '#c0392b' : '#888',
+                'delayc'  => $delay > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
             ];
         }
     }
-    $bCol1 = array_slice($blockerRows, 0, $third);
-    $bCol2 = array_slice($blockerRows, $third, $third);
-    $bCol3 = array_slice($blockerRows, $third * 2);
-    ?>
 
-    <?php
-    $bHalf  = (int) ceil(count($blockerRows) / 2);
-    $bLeft  = array_slice($blockerRows, 0, $bHalf);
-    $bRight = array_slice($blockerRows, $bHalf);
     $usingMcdaTools = !empty($availableToolsMcda);
     $toolsDisplay   = $usingMcdaTools ? $availableToolsMcda : $availableTools;
-
-    $blockerPageSize = 6;
-    $tablePageSize   = 6;
-    $blockerPages    = max(1, (int) ceil(count($blockerRows) / $blockerPageSize));
-    $toolPages       = max(1, (int) ceil(count($toolsDisplay) / $tablePageSize));
-    $deployPages     = max(1, (int) ceil(count($availableManpower) / $tablePageSize));
-
-    $blockerPageRows = array_slice($blockerRows, 0, $blockerPageSize);
-    $bLeft           = array_slice($blockerPageRows, 0, 3);
-    $bRight          = array_slice($blockerPageRows, 3, 3);
-    $toolsPageRows   = array_slice($toolsDisplay, 0, $tablePageSize);
-    $deployPageRows  = array_slice($availableManpower, 0, $tablePageSize);
-
-    $summaryPagerData = json_encode([
-        'blockers' => $blockerRows,
-        'tools'    => array_values($toolsDisplay),
-        'deploy'   => array_values($availableManpower),
-        'usingMcdaTools' => $usingMcdaTools,
-    ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
     ?>
 
     <!-- ── PREDICTED BLOCKERS ── -->
+    <?php
+        $bPageSize = 3;              // rows per column per page
+        $bTotal    = count($blockerRows);
+        $bPages    = $bTotal > 0 ? (int)ceil($bTotal / ($bPageSize * 2)) : 1;
+        // pre-chunk rows into pages of 6 (left 3 + right 3)
+        $bChunks   = array_chunk($blockerRows, $bPageSize * 2);
+    ?>
     <div class="pz-sc">
         <div class="pz-sc-head">Predicted Blockers</div>
         <?php if (empty($blockerRows)): ?>
             <p class="pz-sc-empty">No predicted blockers — all projects on track.</p>
         <?php else: ?>
-        <div class="pz-sc-cols" id="pzBlockerCols">
-            <div class="pz-sc-half">
-                <table class="pz-sc-tbl">
-                    <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
-                    <tbody id="pzBlockerLeftBody">
-                    <?php foreach ($bLeft as $row): ?>
-                    <tr>
-                        <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
-                        <td><?= esc($row['status']) ?></td>
-                        <td class="pz-sc-r <?= $row['delayc'] === '#c0392b' ? 'pz-delay-warn' : 'pz-delay-ok' ?>"><?= esc($row['delay']) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <div class="pz-sc-divider" id="pzBlockerDivider"<?= empty($bRight) ? ' style="display:none"' : '' ?>></div>
-            <div class="pz-sc-half" id="pzBlockerRightHalf"<?= empty($bRight) ? ' style="display:none"' : '' ?>>
-                <table class="pz-sc-tbl">
-                    <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
-                    <tbody id="pzBlockerRightBody">
-                    <?php foreach ($bRight as $row): ?>
-                    <tr>
-                        <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
-                        <td><?= esc($row['status']) ?></td>
-                        <td class="pz-sc-r <?= $row['delayc'] === '#c0392b' ? 'pz-delay-warn' : 'pz-delay-ok' ?>"><?= esc($row['delay']) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
+
+        <?php foreach ($bChunks as $pi => $chunk): ?>
+        <div class="pz-blocker-page" data-bpage="<?= $pi ?>" <?= $pi > 0 ? 'style="display:none"' : '' ?>>
+            <div class="pz-sc-cols">
+                <!-- Left half -->
+                <div class="pz-sc-half">
+                    <table class="pz-sc-tbl">
+                        <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                        <tbody>
+                        <?php foreach (array_slice($chunk, 0, $bPageSize) as $row): ?>
+                        <tr>
+                            <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
+                            <td><?= esc($row['status']) ?></td>
+                            <td class="pz-sc-r <?= $row['delayc'] ?>"><?= esc($row['delay']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <?php if (count($chunk) > $bPageSize): ?>
+                <div class="pz-sc-divider"></div>
+                <!-- Right half -->
+                <div class="pz-sc-half">
+                    <table class="pz-sc-tbl">
+                        <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                        <tbody>
+                        <?php foreach (array_slice($chunk, $bPageSize) as $row): ?>
+                        <tr>
+                            <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
+                            <td><?= esc($row['status']) ?></td>
+                            <td class="pz-sc-r <?= $row['delayc'] ?>"><?= esc($row['delay']) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
+        <?php endforeach; ?>
+
+        <?php if ($bPages > 1): ?>
         <div class="pz-sc-nav">
-            <button type="button" class="pz-sc-nav-btn" id="pzBlockerPrev" disabled>&lt;</button>
-            <span class="pz-sc-nav-label" id="pzBlockerPageLabel">1 / <?= $blockerPages ?></span>
-            <button type="button" class="pz-sc-nav-btn" id="pzBlockerNext" <?= $blockerPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
+            <button class="pz-sc-nav-btn" id="bPrev" onclick="bNav(-1)" disabled>
+                <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <span class="pz-sc-nav-label" id="bLabel">1 / <?= $bPages ?></span>
+            <button class="pz-sc-nav-btn" id="bNext" onclick="bNav(1)" <?= $bPages <= 1 ? 'disabled' : '' ?>>
+                <span class="material-symbols-outlined">chevron_right</span>
+            </button>
         </div>
+        <script>
+        (function(){
+            var cur=0, total=<?= $bPages ?>;
+            window.bNav = function(d){
+                document.querySelectorAll('.pz-blocker-page[data-bpage="'+cur+'"]').forEach(function(el){ el.style.display='none'; });
+                cur = Math.max(0, Math.min(total-1, cur+d));
+                document.querySelectorAll('.pz-blocker-page[data-bpage="'+cur+'"]').forEach(function(el){ el.style.display=''; });
+                document.getElementById('bLabel').textContent = (cur+1)+' / '+total;
+                document.getElementById('bPrev').disabled = cur===0;
+                document.getElementById('bNext').disabled = cur===total-1;
+            };
+        })();
+        </script>
+        <?php endif; ?>
+
         <?php endif; ?>
     </div>
 
@@ -219,8 +223,8 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                     <th style="width:3rem;text-align:center">Qty</th>
                     <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
                 </tr></thead>
-                <tbody id="pzToolsBody">
-                <?php foreach ($toolsPageRows as $t): ?>
+                <tbody>
+                <?php foreach ($toolsDisplay as $t): ?>
                 <tr>
                     <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
                     <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
@@ -231,11 +235,6 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            <div class="pz-sc-nav">
-                <button type="button" class="pz-sc-nav-btn" id="pzToolsPrev" disabled>&lt;</button>
-                <span class="pz-sc-nav-label" id="pzToolsPageLabel">1 / <?= $toolPages ?></span>
-                <button type="button" class="pz-sc-nav-btn" id="pzToolsNext" <?= $toolPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
-            </div>
             <?php endif; ?>
         </div>
 
@@ -247,8 +246,8 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <?php else: ?>
             <table class="pz-sc-tbl">
                 <thead><tr><th>Name</th><th>Role</th></tr></thead>
-                <tbody id="pzDeployBody">
-                <?php foreach ($deployPageRows as $mp): ?>
+                <tbody>
+                <?php foreach ($availableManpower as $mp): ?>
                 <tr>
                     <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
                     <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
@@ -256,102 +255,60 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                 <?php endforeach; ?>
                 </tbody>
             </table>
-            <div class="pz-sc-nav">
-                <button type="button" class="pz-sc-nav-btn" id="pzDeployPrev" disabled>&lt;</button>
-                <span class="pz-sc-nav-label" id="pzDeployPageLabel">1 / <?= $deployPages ?></span>
-                <button type="button" class="pz-sc-nav-btn" id="pzDeployNext" <?= $deployPages <= 1 ? 'disabled' : '' ?>>&gt;</button>
-            </div>
             <?php endif; ?>
         </div>
 
     </div><!-- /pz-sc-row -->
 
+    <!-- ── RESOURCE UTILIZATION ── -->
+    <?php
+    $util    = $utilizationStats ?? ['equipment' => ['total'=>0,'deployed'=>0,'pct'=>0], 'tools' => ['total'=>0,'deployed'=>0,'pct'=>0], 'combined' => ['total'=>0,'deployed'=>0,'pct'=>0]];
+    $eqPct   = (int)($util['equipment']['pct'] ?? 0);
+    $tlPct   = (int)($util['tools']['pct']     ?? 0);
+    $combPct = (int)($util['combined']['pct']  ?? 0);
+    ?>
+    <div class="pz-sc pz-util-card">
+        <div class="pz-util-head">
+            <span>Resource Utilization</span>
+            <a href="<?= base_url('export?module=utilization&format=xlsx') ?>"
+               class="pz-util-export" title="Download full utilization report">
+                <span class="material-symbols-outlined">download</span> Report
+            </a>
+        </div>
+        <div class="pz-util-bars">
+            <div class="pz-util-row">
+                <span class="pz-util-label">Equipment</span>
+                <div class="pz-util-track">
+                    <div class="pz-util-fill <?= $eqPct >= 80 ? 'pz-util-high' : ($eqPct >= 40 ? 'pz-util-mid' : 'pz-util-low') ?>"
+                         style="width:<?= $eqPct ?>%"></div>
+                </div>
+                <span class="pz-util-pct"><?= $eqPct ?>%</span>
+                <span class="pz-util-sub"><?= $util['equipment']['deployed'] ?> / <?= $util['equipment']['total'] ?> deployed</span>
+            </div>
+            <div class="pz-util-row">
+                <span class="pz-util-label">Tools</span>
+                <div class="pz-util-track">
+                    <div class="pz-util-fill <?= $tlPct >= 80 ? 'pz-util-high' : ($tlPct >= 40 ? 'pz-util-mid' : 'pz-util-low') ?>"
+                         style="width:<?= $tlPct ?>%"></div>
+                </div>
+                <span class="pz-util-pct"><?= $tlPct ?>%</span>
+                <span class="pz-util-sub"><?= $util['tools']['deployed'] ?> / <?= $util['tools']['total'] ?> deployed</span>
+            </div>
+            <div class="pz-util-row pz-util-combined">
+                <span class="pz-util-label">Combined</span>
+                <div class="pz-util-track">
+                    <div class="pz-util-fill <?= $combPct >= 80 ? 'pz-util-high' : ($combPct >= 40 ? 'pz-util-mid' : 'pz-util-low') ?>"
+                         style="width:<?= $combPct ?>%"></div>
+                </div>
+                <span class="pz-util-pct"><?= $combPct ?>%</span>
+                <span class="pz-util-sub"><?= $util['combined']['deployed'] ?> / <?= $util['combined']['total'] ?> deployed</span>
+            </div>
+        </div>
+        <p class="pz-util-note">Deployed = units not in storage. <a href="<?= base_url('export?module=utilization&format=xlsx') ?>">Download full breakdown →</a></p>
+    </div>
+
 </section><!-- #summary -->
 
-<script>
-(function () {
-    var D = <?= $summaryPagerData ?>;
-    var PAGE = 6;
-    var bPage = 1, tPage = 1, dPage = 1;
-    var bTotal = Math.ceil((D.blockers || []).length / PAGE) || 1;
-    var tTotal = Math.ceil((D.tools   || []).length / PAGE) || 1;
-    var dTotal = Math.ceil((D.deploy  || []).length / PAGE) || 1;
-
-    function esc(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
-
-    function blockerRow(r) {
-        var dc = (r.delayc === '#c0392b') ? 'pz-delay-warn' : 'pz-delay-ok';
-        return '<tr><td class="pz-sc-name" title="'+esc(r.name)+'">'+esc(r.name)+'</td>'
-             + '<td>'+esc(r.status)+'</td>'
-             + '<td class="pz-sc-r '+dc+'">'+esc(r.delay)+'</td></tr>';
-    }
-
-    function renderBlockers(p) {
-        var rows  = D.blockers.slice((p-1)*PAGE, p*PAGE);
-        var left  = rows.slice(0, 3);
-        var right = rows.slice(3, 6);
-        var lb = document.getElementById('pzBlockerLeftBody');
-        var rb = document.getElementById('pzBlockerRightBody');
-        var div = document.getElementById('pzBlockerDivider');
-        var rh  = document.getElementById('pzBlockerRightHalf');
-        if (lb) lb.innerHTML = left.map(blockerRow).join('');
-        if (rb) rb.innerHTML = right.map(blockerRow).join('');
-        var hasRight = right.length > 0;
-        if (div) div.style.display = hasRight ? '' : 'none';
-        if (rh)  rh.style.display  = hasRight ? '' : 'none';
-        document.getElementById('pzBlockerPageLabel').textContent = p + ' / ' + bTotal;
-        document.getElementById('pzBlockerPrev').disabled = (p <= 1);
-        document.getElementById('pzBlockerNext').disabled = (p >= bTotal);
-    }
-
-    function toolRow(t) {
-        var qty = t.qty ?? (t.asset_details && t.asset_details.available_quantity) ?? t.available_units_display ?? '0';
-        var row = '<tr><td class="pz-sc-name" title="'+esc((t.name||'').toUpperCase())+'">'+esc((t.name||'N/A').toUpperCase())+'</td>'
-                + '<td style="text-align:center">'+esc(String(qty))+'</td>';
-        if (D.usingMcdaTools) row += '<td style="color:#777;font-size:.75rem">'+esc(t.next_deployment||'—')+'</td>';
-        return row + '</tr>';
-    }
-
-    function renderTools(p) {
-        var rows = D.tools.slice((p-1)*PAGE, p*PAGE);
-        var tb = document.getElementById('pzToolsBody');
-        if (!tb) return;
-        tb.innerHTML = rows.map(toolRow).join('');
-        document.getElementById('pzToolsPageLabel').textContent = p + ' / ' + tTotal;
-        document.getElementById('pzToolsPrev').disabled = (p <= 1);
-        document.getElementById('pzToolsNext').disabled = (p >= tTotal);
-    }
-
-    function deployRow(m) {
-        var role = ((m.manpower_details && m.manpower_details.role) || m.role || 'Field Worker').toUpperCase();
-        return '<tr><td class="pz-sc-name" title="'+esc((m.name||'').toUpperCase())+'">'+esc((m.name||'N/A').toUpperCase())+'</td>'
-             + '<td>'+esc(role)+'</td></tr>';
-    }
-
-    function renderDeploy(p) {
-        var rows = D.deploy.slice((p-1)*PAGE, p*PAGE);
-        var tb = document.getElementById('pzDeployBody');
-        if (!tb) return;
-        tb.innerHTML = rows.map(deployRow).join('');
-        document.getElementById('pzDeployPageLabel').textContent = p + ' / ' + dTotal;
-        document.getElementById('pzDeployPrev').disabled = (p <= 1);
-        document.getElementById('pzDeployNext').disabled = (p >= dTotal);
-    }
-
-    function wire(prevId, nextId, getP, setP, render) {
-        var prev = document.getElementById(prevId);
-        var next = document.getElementById(nextId);
-        if (prev) prev.addEventListener('click', function () { var p = getP(); if (p > 1) { setP(p - 1); render(p - 1); } });
-        if (next) next.addEventListener('click', function () { var p = getP(); if (p < (nextId === 'pzBlockerNext' ? bTotal : nextId === 'pzToolsNext' ? tTotal : dTotal)) { setP(p + 1); render(p + 1); } });
-    }
-
-    wire('pzBlockerPrev','pzBlockerNext', function(){return bPage;}, function(v){bPage=v;}, renderBlockers);
-    wire('pzToolsPrev',  'pzToolsNext',   function(){return tPage;}, function(v){tPage=v;}, renderTools);
-    wire('pzDeployPrev', 'pzDeployNext',  function(){return dPage;}, function(v){dPage=v;}, renderDeploy);
-})();
-</script>
 
 
 <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1468,6 +1425,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (pendingTransfer) {
             var t = pendingTransfer;
             t.fromZone.insertBefore(t.pill, t.fromZone.children[t.oldIndex] || null);
+            initResGroupPager(t.fromZone.closest('.db-res-group'));
         }
         pendingTransfer = null;
         closeModal();
@@ -1487,6 +1445,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 2. Revert pill back to source zone
         t.fromZone.insertBefore(t.pill, t.fromZone.children[t.oldIndex] || null);
+        initResGroupPager(t.fromZone.closest('.db-res-group'));
 
         // 3. Optimistically mark as pending (gray, locked from drag)
         t.pill.classList.add('db-pill--pending');
@@ -1553,6 +1512,72 @@ document.addEventListener('DOMContentLoaded', function () {
     // Pending pill resolution is now handled by the Firestore onSnapshot listener
     // in the firebase-scripts section below — no polling needed.
 
+    // ── Resource group pager (10 pills per page) ─────────────────────
+    var DB_RES_PAGE = 10;
+
+    function initResGroupPager(groupEl) {
+        if (!groupEl) return;
+        var zone = groupEl.querySelector('.db-res-drop-zone');
+        if (!zone) return;
+
+        var old = groupEl.querySelector('.db-res-pager');
+        if (old) old.remove();
+
+        var pills = Array.from(zone.querySelectorAll(':scope > .db-pill'));
+        pills.forEach(function(p) { p.style.display = ''; });
+
+        if (pills.length <= DB_RES_PAGE) return;
+
+        var pages = Math.ceil(pills.length / DB_RES_PAGE);
+        var cur   = 0;
+
+        function renderPage() {
+            var all = Array.from(zone.querySelectorAll(':scope > .db-pill'));
+            var pg  = Math.ceil(all.length / DB_RES_PAGE);
+            all.forEach(function(p, i) {
+                p.style.display = (i >= cur * DB_RES_PAGE && i < (cur + 1) * DB_RES_PAGE) ? '' : 'none';
+            });
+            lbl.textContent  = (cur + 1) + ' / ' + pg;
+            prevBtn.disabled = cur === 0;
+            nextBtn.disabled = cur >= pg - 1;
+        }
+
+        var nav     = document.createElement('div');
+        nav.className = 'db-res-pager';
+
+        var prevBtn = document.createElement('button');
+        prevBtn.type = 'button'; prevBtn.className = 'db-res-pager-btn';
+        prevBtn.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+
+        var lbl = document.createElement('span');
+        lbl.className = 'db-res-pager-label';
+
+        var nextBtn = document.createElement('button');
+        nextBtn.type = 'button'; nextBtn.className = 'db-res-pager-btn';
+        nextBtn.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+
+        prevBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (cur > 0) { cur--; renderPage(); }
+        });
+        nextBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pg = Math.ceil(zone.querySelectorAll(':scope > .db-pill').length / DB_RES_PAGE);
+            if (cur < pg - 1) { cur++; renderPage(); }
+        });
+
+        nav.appendChild(prevBtn);
+        nav.appendChild(lbl);
+        nav.appendChild(nextBtn);
+
+        var body = groupEl.querySelector('.db-res-group-body');
+        if (body) body.appendChild(nav);
+
+        renderPage();
+    }
+
+    document.querySelectorAll('.db-res-group').forEach(initResGroupPager);
+
     ['equipment', 'tools', 'manpower'].forEach(function (cat) {
         var zones = document.querySelectorAll('.db-res-drop-zone[data-cat="' + cat + '"]');
 
@@ -1578,6 +1603,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.documentElement.style.scrollBehavior = 'auto';
                     document.querySelectorAll('.db-res-group[data-cat="' + cat + '"]').forEach(function (g) {
                         g.classList.add('open');
+                        // Temporarily show all pills so Sortable can place drops correctly
+                        g.querySelectorAll('.db-res-drop-zone > .db-pill').forEach(function(p) {
+                            p.style.display = '';
+                        });
                     });
                     zones.forEach(function (z) {
                         z.classList.add(z === zone ? 'dnd-active' : 'dnd-drop-zone');
@@ -1585,12 +1614,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     rAfId = requestAnimationFrame(edgeScrollLoop);
                 },
 
-                onEnd: function () {
+                onEnd: function (evt) {
                     dragging = false;
                     if (rAfId) { cancelAnimationFrame(rAfId); rAfId = null; }
                     document.documentElement.style.scrollBehavior = '';
                     zones.forEach(function (z) {
                         z.classList.remove('dnd-active', 'dnd-drop-zone');
+                    });
+                    // Re-apply pagers after drag (pills may have moved between zones)
+                    [evt.from, evt.to].forEach(function(z) {
+                        if (z) initResGroupPager(z.closest('.db-res-group'));
                     });
                 },
 
@@ -1932,6 +1965,15 @@ function toggleMapPanel() {
         return json_encode(array_values($out));
     })() ?>;
 
+    var ALL_PROJECTS = <?= json_encode(array_values(array_map(function($p) {
+        return [
+            'id'   => $p['id'] ?? '',
+            'name' => strtoupper(trim($p['project_name'] ?? '')),
+            'lat'  => (float)($p['_lat'] ?? 0),
+            'lng'  => (float)($p['_lng'] ?? 0),
+        ];
+    }, $activeProjects ?? []))) ?>;
+
     var overlay    = document.getElementById('reqModalOverlay');
     var categoryEl = document.getElementById('reqCategory');
     var modelGroup = document.getElementById('reqModelGroup');
@@ -1943,6 +1985,8 @@ function toggleMapPanel() {
     var projName   = document.getElementById('reqModalProjName');
 
     var _pid = '', _pname = '';
+    var _csrfName = document.querySelector('meta[name="csrf-name"]').content;
+    var _csrfHash = document.querySelector('meta[name="csrf-hash"]').content;
 
     window.openRequestModal = function (pid, pname) {
         _pid   = pid;
@@ -1953,15 +1997,12 @@ function toggleMapPanel() {
         modelGroup.style.display = 'none';
         qtyEl.value = '1';
         errBox.style.display = 'none';
+        submitBtn.disabled = false;
         overlay.style.display = 'flex';
     };
 
-    cancelBtn.addEventListener('click', function () {
-        overlay.style.display = 'none';
-    });
-    overlay.addEventListener('click', function (e) {
-        if (e.target === overlay) overlay.style.display = 'none';
-    });
+    cancelBtn.addEventListener('click', function () { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.style.display = 'none'; });
 
     categoryEl.addEventListener('change', function () {
         var cat = this.value.toLowerCase();
@@ -1988,8 +2029,7 @@ function toggleMapPanel() {
         var qty = parseInt(qtyEl.value, 10) || 1;
         if (!cat) { showErr('Please select a resource category.'); return; }
 
-        var modelId   = '';
-        var modelName = '';
+        var modelId = '', modelName = '';
         if (cat.toLowerCase() === 'equipment' || cat.toLowerCase() === 'tools') {
             modelId = modelEl.value;
             if (!modelId) { showErr('Please select a model.'); return; }
@@ -2004,17 +2044,17 @@ function toggleMapPanel() {
             headers: {
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                '<?= csrf_token() ?>': '<?= csrf_hash() ?>',
+                [_csrfName]: _csrfHash,
             },
             body: JSON.stringify({
-                request_kind:            'manual',
-                resource_category:       cat,
-                resource_name:           modelName,
-                requested_model_id:      modelId  || null,
-                requested_model_name:    modelName || null,
-                destination_project_id:  _pid,
+                request_kind:             'manual',
+                resource_category:        cat,
+                resource_name:            modelName,
+                requested_model_id:       modelId   || null,
+                requested_model_name:     modelName || null,
+                destination_project_id:   _pid,
                 destination_project_name: _pname,
-                requested_quantity:      qty,
+                requested_quantity:       qty,
             }),
         })
         .then(function (r) { return r.json(); })
@@ -2033,10 +2073,7 @@ function toggleMapPanel() {
         });
     });
 
-    function showErr(msg) {
-        errBox.textContent = msg;
-        errBox.style.display = 'block';
-    }
+    function showErr(msg) { errBox.textContent = msg; errBox.style.display = 'block'; }
 }());
 </script>
 <?php $this->endSection() ?>

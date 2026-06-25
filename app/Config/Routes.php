@@ -86,6 +86,7 @@ $routes->get('requests',                          'ResourceRequests::index');
 $routes->get('requests/pending-json',             'ResourceRequests::pendingJson');
 $routes->get('requests/(:segment)',               'ResourceRequests::show/$1');
 $routes->post('requests/store',                   'ResourceRequests::store');
+$routes->post('requests/recommend-source',        'ResourceRequests::recommendSource');
 $routes->post('requests/approve/(:segment)',       'ResourceRequests::approve/$1');
 $routes->post('requests/approve-secondary/(:segment)', 'ResourceRequests::approveSecondary/$1');
 $routes->post('requests/reject/(:segment)',          'ResourceRequests::reject/$1');

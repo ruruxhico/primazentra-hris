@@ -241,6 +241,7 @@
     var _base = '<?= rtrim(base_url(), '/') ?>';
     var CAN_CREATE_EMERGENCY = <?= pz_can('create_emergency_report') ? 'true' : 'false' ?>;
     var CAN_EDIT_PROGRESS    = <?= pz_can('edit_progress_report')    ? 'true' : 'false' ?>;
+    var ML_INSIGHTS = <?= json_encode($mlInsights ?? ['blocker' => null, 'delay_days' => 0]) ?>;
 
     window.openReportModal = function (type, pid, pname) {
         _type = type; _pid = pid; _pname = pname;
@@ -456,6 +457,25 @@
             }
 
             if (d.filed_by) html += '<div class="rpt-detail-meta" style="margin-top:.6rem">Filed by: ' + h(d.filed_by) + '</div>';
+
+            // ML Prediction panel — project-level, computed when page loaded
+            html += '<div class="rpt-ml-panel">';
+            html += '<div class="rpt-ml-panel-title"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle">psychology</span> ML Prediction</div>';
+            var mlDelay   = (ML_INSIGHTS && ML_INSIGHTS.delay_days)  ? parseInt(ML_INSIGHTS.delay_days, 10) : 0;
+            var mlBlocker = (ML_INSIGHTS && ML_INSIGHTS.blocker)      ? ML_INSIGHTS.blocker : null;
+            if (mlDelay > 0) {
+                html += '<div class="rpt-ml-delay-warn">' +
+                        '<span class="material-symbols-outlined" style="font-size:.95rem;vertical-align:middle">warning</span> ' +
+                        'Estimated delay: <strong>' + mlDelay + ' day' + (mlDelay !== 1 ? 's' : '') + '</strong></div>';
+            } else {
+                html += '<div class="rpt-ml-on-track">' +
+                        '<span class="material-symbols-outlined" style="font-size:.95rem;vertical-align:middle">check_circle</span> ' +
+                        'On track — no delay predicted</div>';
+            }
+            if (mlBlocker) {
+                html += '<div class="rpt-ml-blocker">Blocker type: <strong>' + h(mlBlocker) + '</strong></div>';
+            }
+            html += '</div>';
         }
         document.getElementById('rptDetailEl').innerHTML = html;
     }
