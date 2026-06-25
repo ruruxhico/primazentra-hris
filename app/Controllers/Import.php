@@ -42,23 +42,39 @@ class Import extends BaseController
         $this->firestore = FirestoreService::getInstance();
     }
 
-    // GET /import/template?module=projects
+    // GET /import/template?module=projects&format=xlsx|csv
     public function template()
     {
         $module = strtolower(trim((string) ($this->request->getGet('module') ?? '')));
+        $format = strtolower(trim((string) ($this->request->getGet('format') ?? 'xlsx')));
 
         if (!isset(self::TEMPLATES[$module])) {
             return redirect()->back()->with('error', 'Unknown module for template');
         }
 
-        $tpl = self::TEMPLATES[$module];
+        $tpl      = self::TEMPLATES[$module];
+        $filename = $module . '_import_template_' . date('Ymd');
+
+        if ($format === 'csv') {
+            header('Content-Type: text/csv; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
+            header('Cache-Control: max-age=0');
+            $out = fopen('php://output', 'w');
+            fputs($out, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel compatibility
+            fputcsv($out, $tpl['headers']);
+            fclose($out);
+            exit;
+        }
+
+        // XLSX
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle(ucfirst($module) . ' Import');
 
-        // Instructions row 1
         $colCount = count($tpl['headers']);
-        $lastCol = chr(ord('A') + $colCount - 1);
+        $lastCol  = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colCount);
+
+        // Instructions row 1
         $sheet->setCellValue('A1', '* Required fields. Do not modify column headers. Delete this row before importing.');
         $sheet->mergeCells("A1:{$lastCol}1");
         $sheet->getStyle('A1')->applyFromArray([
@@ -67,10 +83,9 @@ class Import extends BaseController
         ]);
 
         // Notes row 2
-        $col = 'A';
+        $col = 1;
         foreach ($tpl['notes'] as $note) {
-            $sheet->setCellValue($col . '2', $note);
-            $col++;
+            $sheet->setCellValueByColumnAndRow($col++, 2, $note);
         }
         $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
             'font' => ['italic' => true, 'color' => ['argb' => 'FF888888']],
@@ -78,28 +93,38 @@ class Import extends BaseController
         ]);
 
         // Header row 3
-        $col = 'A';
+        $col = 1;
         foreach ($tpl['headers'] as $h) {
-            $sheet->setCellValue($col . '3', $h);
-            $col++;
+            $sheet->setCellValueByColumnAndRow($col++, 3, $h);
         }
         $sheet->getStyle("A3:{$lastCol}3")->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1A3C5E']],
+            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1A3C5E']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ]);
 
-        // Sample row 4
+        // Sample row 4 — mark date columns as text so Excel won't reformat them
         $sheet->setCellValue('A4', '-- sample, delete this row --');
+        if ($module === 'projects') {
+            // Force date columns (L=12, M=13) to text format so MM/DD/YYYY stays intact
+            foreach ([12, 13] as $dateCol) {
+                $sheet->getStyleByColumnAndRow($dateCol, 4)
+                    ->getNumberFormat()
+                    ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
+                $sheet->getCellByColumnAndRow($dateCol, 4)->setValueExplicit(
+                    'e.g. 01/15/2025',
+                    \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                );
+            }
+        }
 
-        for ($c = 'A'; $c <= $lastCol; $c++) {
-            $sheet->getColumnDimension($c)->setAutoSize(true);
+        for ($c = 1; $c <= $colCount; $c++) {
+            $sheet->getColumnDimensionByColumn($c)->setAutoSize(true);
         }
 
         $writer = new XlsxWriter($spreadsheet);
-        $filename = $module . '_import_template_' . date('Ymd') . '.xlsx';
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Disposition: attachment; filename="' . $filename . '.xlsx"');
         header('Cache-Control: max-age=0');
         $writer->save('php://output');
         exit;
@@ -175,10 +200,9 @@ class Import extends BaseController
 
     // ── Importers ────────────────────────────────────────────────────────────
 
-    // Columns (0-indexed per template):
-    // 0:Project Name* | 1:Site Address | 2:Latitude | 3:Longitude | 4:Region | 5:Client
-    // 6:Project Type* | 7:Budget | 8:Project Manager | 9:Site Engineer | 10:Status
-    // 11:Start Date (MM/DD/YYYY) | 12:End Date (MM/DD/YYYY)
+    // Columns (0-indexed): 0:Project Name* | 1:Site Address | 2:Lat | 3:Lng | 4:Region
+    // 5:Client | 6:Project Type* | 7:Budget | 8:Project Manager | 9:Site Engineer
+    // 10:Status | 11:Start Date | 12:End Date
     private function importProjects(array $rows): array
     {
         $db = $this->firestore->getDb();
@@ -197,7 +221,7 @@ class Import extends BaseController
 
         foreach ($rows as $row) {
             $name = trim((string) ($row[0] ?? ''));
-            $type = trim((string) ($row[6] ?? ''));
+            $type = strtoupper(trim((string) ($row[6] ?? '')));
             if ($name === '' || $type === '') { $skipped++; continue; }
 
             $address = trim((string) ($row[1] ?? ''));
@@ -205,21 +229,27 @@ class Import extends BaseController
             $lng     = is_numeric($row[3] ?? '') ? (float) $row[3] : null;
             $region  = trim((string) ($row[4] ?? ''));
             $client  = trim((string) ($row[5] ?? ''));
-            $status  = trim((string) ($row[10] ?? '')) ?: 'Planned';
+            $budget  = is_numeric($row[7] ?? '') ? (float) $row[7] : 0;
             $pmName  = strtolower(trim((string) ($row[8] ?? '')));
             $seName  = strtolower(trim((string) ($row[9] ?? '')));
+            $status  = trim((string) ($row[10] ?? '')) ?: 'Planned';
 
             $pmId = !empty($pmName) ? ($usersMap[$pmName] ?? null) : null;
             $seId = !empty($seName) ? ($usersMap[$seName] ?? null) : null;
+
+            // Build a real Firestore GeoPoint (matches web-created projects)
+            $geopoint = ($lat !== null && $lng !== null)
+                ? new \Google\Cloud\Core\GeoPoint($lat, $lng)
+                : null;
 
             $db->collection('project')->newDocument()->set([
                 'project_name'       => $name,
                 'project_type'       => $type,
                 'client_name'        => $client,
                 'status'             => $status,
-                'budget'             => is_numeric($row[7] ?? '') ? (float) $row[7] : 0,
-                'start_date'         => $this->parseDateMDY((string) ($row[11] ?? '')),
-                'end_date'           => $this->parseDateMDY((string) ($row[12] ?? '')),
+                'budget'             => $budget,
+                'start_date'         => $this->parseDateCell($row[11] ?? ''),
+                'end_date'           => $this->parseDateCell($row[12] ?? ''),
                 'overall_progress'   => 0,
                 'completion_percent' => 0,
                 'project_manager_id' => $pmId,
@@ -227,7 +257,7 @@ class Import extends BaseController
                 'personnel'          => ['project_manager_id' => $pmId, 'site_engineer_id' => $seId],
                 'location'           => [
                     'address'  => $address,
-                    'geopoint' => ['lat' => $lat, 'lng' => $lng],
+                    'geopoint' => $geopoint,
                 ],
                 'region'     => $region,
                 'created_at' => $now,
@@ -310,17 +340,32 @@ class Import extends BaseController
         return $rows;
     }
 
-    private function parseDateMDY(string $val): string
+    private function parseDateCell(mixed $val): string
     {
-        $val = trim($val);
-        if ($val === '') return '';
-        // Accept MM/DD/YYYY → convert to YYYY-MM-DD
-        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $val, $m)) {
+        if ($val === null || $val === '') return '';
+
+        // Excel serial number (PhpSpreadsheet returns floats for unformatted date cells)
+        if (is_float($val) || (is_numeric($val) && !str_contains((string)$val, '/'))) {
+            $numeric = (float)$val;
+            if ($numeric > 1000) { // sanity: real date serials are > 1000
+                try {
+                    $date = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($numeric);
+                    return $date->format('Y-m-d');
+                } catch (\Throwable) {}
+            }
+        }
+
+        $str = trim((string)$val);
+        if ($str === '') return '';
+
+        // MM/DD/YYYY
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $str, $m)) {
             return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[1], (int)$m[2]);
         }
         // Already YYYY-MM-DD
-        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $val)) return substr($val, 0, 10);
-        return $val;
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $str)) return substr($str, 0, 10);
+
+        return $str;
     }
 
     private function importResources(array $rows, string $category): array

@@ -270,7 +270,7 @@
     <div class="pager-jump">
         Go to page
         <input type="number" class="pager-jump-input" min="1" max="<?= $projTotalPages ?>"
-               data-total-pages="<?= $projTotalPages ?>" data-page-param="page" placeholder="—">
+               data-total-pages="<?= $projTotalPages ?>" data-page-param="page_projects" placeholder="—">
         <span>of <?= $projTotalPages ?></span>
     </div>
     <?php endif; ?>
@@ -494,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function () {
             body.append('id', id);
             fetch(ARCHIVE_URL, {
                 method: 'POST', credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
                 body: body.toString()
             })
             .then(r => r.json())
@@ -519,23 +519,25 @@ document.addEventListener('DOMContentLoaded', function () {
             pendingBulkArchiveItems = []; pendingDeleteId = null;
             confirmDialog.classList.remove('open');
             const projectsTable = document.getElementById('projectsTable');
-            let done = 0;
+            let done = 0, succeeded = 0;
             items.forEach(item => {
                 const body = new URLSearchParams();
                 if (csrfName && csrfHash) body.append(csrfName, csrfHash);
                 body.append('id', item.id);
                 fetch(ARCHIVE_URL, {
                     method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
                     body: body.toString()
                 })
                 .then(r => r.json())
-                .then(data => { if (data && data.success) animateRowOut(item.row); })
+                .then(data => { if (data && data.success) { succeeded++; animateRowOut(item.row); } else { showToast(data.message || 'Archive failed', 'error'); } })
+                .catch(() => showToast('Error archiving project', 'error'))
                 .finally(() => {
                     done++;
                     if (done === items.length) {
-                        showToast(items.length + ' item(s) archived', 'success');
+                        if (succeeded > 0) showToast(succeeded + ' item(s) archived', 'success');
                         setTimeout(() => renumberTable(projectsTable, 1), 290);
+                        updateBulkBar();
                     }
                 });
             });
@@ -549,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function () {
             pendingDeleteId = null;
             confirmDialog.classList.remove('open');
 
-            let done = 0;
+            let done = 0, succeeded = 0;
             const projectsTable = document.getElementById('projectsTable');
             items.forEach(item => {
                 const body = new URLSearchParams();
@@ -557,16 +559,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 body.append('id', item.id);
                 fetch(DELETE_URL, {
                     method: 'POST', credentials: 'same-origin',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
                     body: body.toString()
                 })
                 .then(r => r.json())
-                .then(data => { if (data && data.success) animateRowOut(item.row); })
+                .then(data => { if (data && data.success) { succeeded++; animateRowOut(item.row); } else { showToast(data.message || 'Delete failed', 'error'); } })
+                .catch(() => showToast('Error deleting project', 'error'))
                 .finally(() => {
                     done++;
                     if (done === items.length) {
-                        showToast(items.length + ' item(s) deleted', 'success');
+                        if (succeeded > 0) showToast(succeeded + ' item(s) deleted', 'success');
                         setTimeout(() => renumberTable(projectsTable, 1), 290);
+                        updateBulkBar();
                     }
                 });
             });
@@ -581,7 +585,7 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(DELETE_URL, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'X-Requested-With': 'XMLHttpRequest' },
             body: body.toString()
         })
         .then(r => r.json())
@@ -655,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <div id="importModal" class="pz-modal-overlay" style="display:none" hidden>
   <div class="pz-modal-box">
     <h3 class="pz-modal-title">Import Projects</h3>
-    <p class="pz-modal-subtitle">Upload an .xlsx or .csv file. <a id="importTplLink" href="#">Download template</a></p>
+    <p class="pz-modal-subtitle">Upload an .xlsx or .csv file. Download template: <a id="importTplXlsx" href="#">XLSX</a> &nbsp;|&nbsp; <a id="importTplCsv" href="#">CSV</a></p>
     <div id="importDropZone" class="pz-modal-drop-zone">
       <div style="font-size:28px;margin-bottom:6px;">📂</div>
       Click or drag &amp; drop your .xlsx or .csv file here
@@ -696,7 +700,10 @@ document.addEventListener('DOMContentLoaded', function () {
   window.openImportModal = function (module) {
     currentImportModule = module;
     const m = document.getElementById('importModal');
-    document.getElementById('importTplLink').href = baseUrl + 'import/template?module=' + module;
+    const xlsxEl = document.getElementById('importTplXlsx');
+    const csvEl  = document.getElementById('importTplCsv');
+    if (xlsxEl) xlsxEl.href = baseUrl + 'import/template?module=' + module + '&format=xlsx';
+    if (csvEl)  csvEl.href  = baseUrl + 'import/template?module=' + module + '&format=csv';
     document.getElementById('importFileName').textContent = '';
     document.getElementById('importResult').textContent = '';
     document.getElementById('importFileInput').value = '';
@@ -787,7 +794,7 @@ document.addEventListener('DOMContentLoaded', function () {
   window._pzPageListeners = true;
 
   var _base  = window.pzBaseUrl || '';
-  var _page  = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
+  var _page  = parseInt(new URLSearchParams(window.location.search).get('page_projects') || '1', 10);
   var CAN_EDIT_PROJECT = <?= pz_can('edit_project') ? 'true' : 'false' ?>;
 
   function flashRow(row) {

@@ -201,7 +201,19 @@
                         <?php $stt = strtolower(str_replace(['-',' '],'', $item['status'] ?? '')); $stbc = $stt === 'instorage' ? 'pz-badge-available' : ($stt === 'inuse' ? 'pz-badge-deployed' : ($stt === 'transferpending' ? 'pz-badge-pending' : 'pz-badge-maintenance')); ?>
                         <span class="pz-badge <?= $stbc ?>"><?= esc((string)($item['status'] ?? 'N/A')) ?></span>
                     </td>
-                    <td class="pz-row-muted"><?= esc(trim((string)($item['location']['type'] ?? '') . (($item['location']['address'] ?? '') !== '' ? ' — ' . ($item['location']['address'] ?? '') : ''))) ?: '—' ?></td>
+                    <td class="pz-row-muted">
+                        <?php
+                            $assignedTo  = (string)($item['assigned_to'] ?? '');
+                            $locStatus   = strtolower(str_replace(['-',' '], '', $item['status'] ?? ''));
+                            if ($assignedTo !== '' && in_array($locStatus, ['inuse','transferpending'], true)):
+                        ?>
+                            <?= esc($assignedTo) ?>
+                        <?php else:
+                            $locStr = trim((string)($item['location']['type'] ?? '') . (($item['location']['address'] ?? '') !== '' ? ' — ' . ($item['location']['address'] ?? '') : ''));
+                        ?>
+                            <?= esc($locStr) ?: '—' ?>
+                        <?php endif; ?>
+                    </td>
                     <td>
                         <?php if ($isLocked): ?>
                             <span class="pz-badge pz-badge-pending"
