@@ -751,6 +751,7 @@ if (window.location.hostname === 'localhost') {
         clearTimeout(_toastTimer);
         _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 4500);
     }
+    window.showFormToast = showFormToast;
 
     // ── Build a milestone card element ─────────────────────────
     function buildPhaseItem(pi, data) {
@@ -925,7 +926,15 @@ if (window.location.hostname === 'localhost') {
 <!-- ── Date picker JS (unchanged) ────────────────────────── -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    function createCalendar(container, inputHidden, inputDisplay) {
+    // opts: { getMin, getMax, onSelect }
+    // getMin/getMax: functions returning 'YYYY-MM-DD' constraint, or ''
+    // onSelect: function(value) called after a date is committed
+    function createCalendar(container, inputHidden, inputDisplay, opts) {
+        opts = opts || {};
+        var getMin  = opts.getMin  || function () { return ''; };
+        var getMax  = opts.getMax  || function () { return ''; };
+        var onSelect = opts.onSelect || function () {};
+
         var now = new Date(), viewYear = now.getFullYear(), viewMonth = now.getMonth();
         var mode = 'days', yearsStart = Math.floor(viewYear / 12) * 12;
         var header = document.createElement('div'); header.className = 'cal-header';
@@ -936,20 +945,30 @@ document.addEventListener('DOMContentLoaded', function () {
         var grid = document.createElement('div'); grid.className = 'cal-grid';
         container.appendChild(header); container.appendChild(grid);
 
+        function pad(n) { return String(n).padStart(2, '0'); }
+
         function renderDays() {
             title.textContent = new Date(viewYear, viewMonth).toLocaleString(undefined, { month: 'long', year: 'numeric' });
             title.setAttribute('data-mode', 'days'); grid.className = 'cal-grid'; grid.innerHTML = '';
             ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function (d) { var e = document.createElement('div'); e.className = 'cal-day'; e.style.fontWeight = '600'; e.textContent = d; e.style.cursor = 'default'; grid.appendChild(e); });
             var first = new Date(viewYear, viewMonth, 1), start = first.getDay(), days = new Date(viewYear, viewMonth + 1, 0).getDate();
+            var minVal = getMin(); var maxVal = getMax();
             for (var i = 0; i < start; i++) { var e = document.createElement('div'); e.className = 'cal-day disabled'; grid.appendChild(e); }
             for (var d = 1; d <= days; d++) {
                 (function (day) {
-                    var e = document.createElement('div'); e.className = 'cal-day'; e.textContent = day;
-                    e.addEventListener('click', function () {
-                        inputHidden.value = viewYear + '-' + String(viewMonth + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
-                        inputDisplay.value = String(day).padStart(2, '0') + '/' + String(viewMonth + 1).padStart(2, '0') + '/' + viewYear;
-                        container.classList.remove('open'); container.setAttribute('aria-hidden', 'true');
-                    });
+                    var cellDate = viewYear + '-' + pad(viewMonth + 1) + '-' + pad(day);
+                    var isDisabled = (minVal && cellDate < minVal) || (maxVal && cellDate > maxVal);
+                    var e = document.createElement('div');
+                    e.className = 'cal-day' + (isDisabled ? ' disabled' : '');
+                    e.textContent = day;
+                    if (!isDisabled) {
+                        e.addEventListener('click', function () {
+                            inputHidden.value = cellDate;
+                            inputDisplay.value = pad(day) + '/' + pad(viewMonth + 1) + '/' + viewYear;
+                            container.classList.remove('open'); container.setAttribute('aria-hidden', 'true');
+                            onSelect(cellDate);
+                        });
+                    }
                     grid.appendChild(e);
                 }(d));
             }
@@ -999,32 +1018,67 @@ document.addEventListener('DOMContentLoaded', function () {
             render();
         });
         if (inputHidden.value) {
-            try { var dt = new Date(inputHidden.value); if (!isNaN(dt)) { viewYear = dt.getFullYear(); viewMonth = dt.getMonth(); inputDisplay.value = String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0') + '/' + dt.getFullYear(); } } catch (e) {}
+            try { var dt = new Date(inputHidden.value); if (!isNaN(dt)) { viewYear = dt.getFullYear(); viewMonth = dt.getMonth(); inputDisplay.value = pad(dt.getDate()) + '/' + pad(dt.getMonth() + 1) + '/' + dt.getFullYear(); } } catch (e) {}
         }
+        // Re-render when the popup opens so constraints reflect the current partner value
+        container._rerender = render;
         render();
     }
 
     function initDatePickerWrapper(wrapper) {
-        var hidden = wrapper.querySelector('input[type="hidden"]');
+        var hidden  = wrapper.querySelector('input[type="hidden"]');
         var display = wrapper.querySelector('.date-display');
-        var toggle = wrapper.querySelector('.date-toggle');
-        var popup = wrapper.querySelector('.calendar-popup');
-        createCalendar(popup, hidden, display);
-        toggle.addEventListener('click', function () { var open = popup.classList.toggle('open'); popup.setAttribute('aria-hidden', !open); });
-        document.addEventListener('click', function (e) { if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); } });
+        var toggle  = wrapper.querySelector('.date-toggle');
+        var popup   = wrapper.querySelector('.calendar-popup');
+        var target  = wrapper.getAttribute('data-target'); // 'start' or 'end'
+
+        var startHidden  = document.getElementById('start_date');
+        var startDisplay = document.getElementById('start_date_display');
+        var endHidden    = document.getElementById('end_date');
+        var endDisplay   = document.getElementById('end_date_display');
+
+        var opts = {};
+        if (target === 'start') {
+            opts.getMax  = function () { return endHidden ? endHidden.value : ''; };
+            opts.onSelect = function (val) {
+                // If end date is now earlier than the newly-picked start, clear it
+                if (endHidden && endHidden.value && val > endHidden.value) {
+                    endHidden.value  = '';
+                    endDisplay.value = '';
+                    if (window.showFormToast) window.showFormToast('End date cleared — it must be on or after the start date.');
+                }
+            };
+        } else if (target === 'end') {
+            opts.getMin  = function () { return startHidden ? startHidden.value : ''; };
+            opts.onSelect = function () {};
+        }
+
+        createCalendar(popup, hidden, display, opts);
+
+        toggle.addEventListener('click', function () {
+            var open = popup.classList.toggle('open');
+            popup.setAttribute('aria-hidden', !open);
+            // Re-render so disabled days reflect the current partner value
+            if (open && popup._rerender) popup._rerender();
+        });
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); }
+        });
     }
 
     document.querySelectorAll('.date-picker').forEach(initDatePickerWrapper);
     window.initPhaseDatePicker = initDatePickerWrapper;
 
-    // Date range validation: start_date must not be later than end_date
+    // Submit-time guard (catches any edge case the calendar constraints miss)
     document.getElementById('projectForm').addEventListener('submit', function (e) {
         var s = document.getElementById('start_date').value;
         var d = document.getElementById('end_date').value;
         if (s && d && s > d) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            alert('End Date must be on or after Start Date.');
+            if (window.showFormToast) {
+                window.showFormToast('End date must be on or after the start date.');
+            }
             return false;
         }
     });

@@ -213,6 +213,12 @@ class Projects extends BaseController
                 return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
             }
 
+            $chkStart = $this->normalizeDateValue($this->request->getPost('start_date'));
+            $chkEnd   = $this->normalizeDateValue($this->request->getPost('end_date'));
+            if ($chkStart !== '' && $chkEnd !== '' && $chkStart > $chkEnd) {
+                return redirect()->back()->withInput()->with('error', 'End date must be on or after the start date.');
+            }
+
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
@@ -293,6 +299,13 @@ class Projects extends BaseController
                 if (! $this->validate('projects')) {
                     return redirect()->back()->withInput()->with('error', implode('; ', $this->validator->getErrors()));
                 }
+
+                $chkStart = $this->normalizeDateValue($this->request->getPost('start_date'));
+                $chkEnd   = $this->normalizeDateValue($this->request->getPost('end_date'));
+                if ($chkStart !== '' && $chkEnd !== '' && $chkStart > $chkEnd) {
+                    return redirect()->back()->withInput()->with('error', 'End date must be on or after the start date.');
+                }
+
                 $existing = $this->getProjectById($id);
 
                 if (!$existing) {
