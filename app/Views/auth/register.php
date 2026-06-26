@@ -25,7 +25,7 @@
                 </div>
             <?php endif; ?>
 
-            <form action="<?= base_url('auth/processRegister') ?>" method="post" class="auth-form" novalidate id="registerForm">
+            <form action="<?= base_url('auth/processRegister') ?>" method="post" class="auth-form" novalidate id="registerForm" data-autosave>
                 <div class="auth-section-label">
                     <span class="auth-section-icon material-symbols-outlined" aria-hidden="true">person</span>
                     <span>Personal Information</span>
@@ -35,19 +35,19 @@
                     <div class="auth-field">
                         <label for="firstName">FIRST NAME *</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left">
-                            <input type="text" id="firstName" name="firstName" placeholder="FIRST NAME" required autocomplete="given-name" autocapitalize="characters" class="name-uppercase">
+                            <input type="text" id="firstName" name="firstName" placeholder="FIRST NAME" required autocomplete="given-name" autocapitalize="characters" class="name-uppercase" value="<?= esc(old('firstName')) ?>">
                         </div>
                     </div>
                     <div class="auth-field">
                         <label for="middleName">MIDDLE NAME</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left">
-                            <input type="text" id="middleName" name="middleName" placeholder="MIDDLE NAME" autocomplete="additional-name" autocapitalize="characters" class="name-uppercase">
+                            <input type="text" id="middleName" name="middleName" placeholder="MIDDLE NAME" autocomplete="additional-name" autocapitalize="characters" class="name-uppercase" value="<?= esc(old('middleName')) ?>">
                         </div>
                     </div>
                     <div class="auth-field">
                         <label for="lastName">LAST NAME *</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left">
-                            <input type="text" id="lastName" name="lastName" placeholder="LAST NAME" required autocomplete="family-name" autocapitalize="characters" class="name-uppercase">
+                            <input type="text" id="lastName" name="lastName" placeholder="LAST NAME" required autocomplete="family-name" autocapitalize="characters" class="name-uppercase" value="<?= esc(old('lastName')) ?>">
                         </div>
                     </div>
                 </div>
@@ -63,7 +63,7 @@
                     <div class="auth-field">
                         <label for="email">EMAIL *</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left">
-                            <input type="email" id="email" name="email" placeholder="EMAIL" required>
+                            <input type="email" id="email" name="email" placeholder="EMAIL" required autocapitalize="off" autocorrect="off" value="<?= esc(old('email')) ?>">
                         </div>
                         <div class="field-error hidden" id="registerEmailError"></div>
                     </div>
@@ -73,7 +73,7 @@
                     <div class="auth-field">
                         <label for="password">PASSWORD *</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
-                            <input type="password" id="password" name="password" placeholder="PASSWORD" required>
+                            <input type="password" id="password" name="password" placeholder="PASSWORD" required autocapitalize="off">
                             <button type="button" class="auth-icon-button" data-password-toggle="#password" aria-label="Show password">
                                 <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                             </button>
@@ -83,7 +83,7 @@
                     <div class="auth-field">
                         <label for="confirmPassword">CONFIRM PASSWORD *</label>
                         <div class="auth-input-wrap auth-input-wrap--icon-left auth-input-wrap--icon-right">
-                            <input type="password" id="confirmPassword" name="confirm_password" placeholder="CONFIRM PASSWORD" required>
+                            <input type="password" id="confirmPassword" name="confirm_password" placeholder="CONFIRM PASSWORD" required autocapitalize="off">
                             <button type="button" class="auth-icon-button" data-password-toggle="#confirmPassword" aria-label="Show password">
                                 <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                             </button>
@@ -104,10 +104,11 @@
                                 inputmode="tel"
                                 autocomplete="tel"
                                 required
+                                value="<?= esc(old('contact_number_display')) ?>"
                             >
                         </div>
-                        <input type="hidden" name="country_code" id="countryCode" value="PH">
-                        <input type="hidden" name="contact_number" id="contactNumberFull" value="">
+                        <input type="hidden" name="country_code" id="countryCode" value="<?= esc(old('country_code', 'PH')) ?>">
+                        <input type="hidden" name="contact_number" id="contactNumberFull" value="<?= esc(old('contact_number')) ?>">
                         <small class="phone-hint" id="phoneHint">Include your active mobile number.</small>
                         <small class="phone-error" id="phoneError" hidden>Please enter a valid phone number for the selected country.</small>
                     </div>
@@ -160,7 +161,7 @@
             let phoneInstance = null;
             if (window.intlTelInput && phoneInput && hiddenContact && countryCodeInput) {
                 phoneInstance = window.intlTelInput(phoneInput, {
-                    initialCountry: 'ph',
+                    initialCountry: (countryCodeInput.value || 'PH').toLowerCase(),
                     preferredCountries: ['ph', 'us', 'sg', 'au', 'gb'],
                     separateDialCode: true,
                     autoPlaceholder: 'aggressive',
@@ -259,6 +260,13 @@
                     confirmError.classList.add('hidden');
                 }
             });
+
+            // After pzAutoSave restores the phone display value, re-sync the intl-tel-input state
+            window['pzAsRestore_registerForm'] = function () {
+                if (phoneInstance && phoneInput && phoneInput.value) {
+                    syncPhoneFields();
+                }
+            };
         });
     </script>
 <?= $this->endSection() ?>

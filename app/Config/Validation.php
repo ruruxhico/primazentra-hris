@@ -106,50 +106,77 @@ class Validation extends BaseConfig
             'label' => 'Project Name',
             'rules' => "required|regex_match[/^[a-zA-Z0-9\s'\-\.#,&]*$/]|max_length[150]",
             'errors' => [
-                'required' => 'Project Name is required.',
-                'regex_match' => "Project Name contains invalid characters.",
-                'max_length' => 'Project Name cannot exceed 150 characters.'
+                'required'    => 'Project Name is required.',
+                'regex_match' => 'Project Name contains invalid characters.',
+                'max_length'  => 'Project Name cannot exceed 150 characters.',
+            ]
+        ],
+
+        'client_name' => [
+            'label' => 'Client Name',
+            'rules' => 'required|max_length[100]',
+            'errors' => [
+                'required'   => 'Client Name is required.',
+                'max_length' => 'Client Name cannot exceed 100 characters.',
             ]
         ],
 
         'project_type' => [
-            'label' => 'Project Type',
+            'label' => 'Tower Type',
             'rules' => 'required',
             'errors' => [
-                'required' => 'Project Type is required.'
+                'required' => 'Tower Type is required.',
             ]
         ],
 
-        'start_date' => [
-            'label' => 'Start Date',
-            'rules' => 'permit_empty',
-            'errors' => []
-        ],
-
-        'end_date' => [
-            'label' => 'End Date',
-            'rules' => 'permit_empty',
-            'errors' => []
-        ],
-
-        'budget' => [
-            'label' => 'Budget',
-            'rules' => 'permit_empty|numeric',
+        'location_address' => [
+            'label' => 'Address',
+            'rules' => 'required|max_length[300]',
             'errors' => [
-                'numeric' => 'Budget must be a number.'
+                'required'   => 'Address is required.',
+                'max_length' => 'Address cannot exceed 300 characters.',
             ]
         ],
 
         'project_manager_id' => [
             'label' => 'Project Manager',
-            'rules' => 'permit_empty',
-            'errors' => []
+            'rules' => 'required',
+            'errors' => [
+                'required' => 'Project Manager is required.',
+            ]
         ],
 
         'site_engineer_id' => [
             'label' => 'Site Engineer',
-            'rules' => 'permit_empty',
-            'errors' => []
+            'rules' => 'required',
+            'errors' => [
+                'required' => 'Site Engineer is required.',
+            ]
+        ],
+
+        'start_date' => [
+            'label' => 'Start Date',
+            'rules' => 'required',
+            'errors' => [
+                'required' => 'Start Date is required.',
+            ]
+        ],
+
+        'end_date' => [
+            'label' => 'End Date',
+            'rules' => 'required',
+            'errors' => [
+                'required' => 'End Date is required.',
+            ]
+        ],
+
+        'budget' => [
+            'label' => 'Budget',
+            'rules' => 'required|numeric',
+            'errors' => [
+                'required' => 'Budget is required.',
+                'numeric'  => 'Budget must be a number.',
+            ]
         ],
     ];
 

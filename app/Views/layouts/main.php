@@ -48,6 +48,188 @@
     </style>
 </head>
 <body>
+<!-- ── PZ Form Auto-save — defined here (before page scripts) so hooks can reference it ── -->
+<script>
+(function () {
+    var _P = 'pz_as_';
+    function _k(form)  { return _P + (form.id || 'form') + location.pathname; }
+    function _xk(form) { return _k(form) + '_x'; }
+
+    function doSave(form) {
+        var csrf = window.whCsrfTokenName || '';
+        var data = {};
+        form.querySelectorAll('input,select,textarea').forEach(function (el) {
+            var n = el.name;
+            if (!n || el.type === 'file' || el.type === 'submit' || el.type === 'button' || el.type === 'password') return;
+            if (csrf && n === csrf) return;
+            if (el.type === 'checkbox') data[n] = el.checked;
+            else if (el.type === 'radio') { if (el.checked) data[n] = el.value; }
+            else data[n] = el.value;
+        });
+        try { sessionStorage.setItem(_k(form), JSON.stringify(data)); } catch (e) {}
+        if (typeof window['pzAsSave_' + form.id] === 'function') window['pzAsSave_' + form.id]();
+    }
+
+    function doRestore(form) {
+        var raw = null;
+        try { raw = sessionStorage.getItem(_k(form)); } catch (e) {}
+        if (raw) {
+            try {
+                var data = JSON.parse(raw);
+                var csrf = window.whCsrfTokenName || '';
+                form.querySelectorAll('input,select,textarea').forEach(function (el) {
+                    var n = el.name;
+                    if (!n || el.type === 'file' || el.type === 'submit' || el.type === 'button' || el.type === 'password') return;
+                    if (csrf && n === csrf) return;
+                    if (!(n in data)) return;
+                    if (el.type === 'checkbox') el.checked = !!data[n];
+                    else if (el.type === 'radio') { if (el.value === data[n]) el.checked = true; }
+                    else el.value = data[n];
+                });
+            } catch (e) {}
+        }
+        var xraw = null;
+        try { xraw = sessionStorage.getItem(_xk(form)); } catch (e) {}
+        if (typeof window['pzAsRestore_' + form.id] === 'function') {
+            window['pzAsRestore_' + form.id](xraw ? JSON.parse(xraw) : null);
+        }
+    }
+
+    function doClear(form) {
+        try { sessionStorage.removeItem(_k(form)); sessionStorage.removeItem(_xk(form)); } catch (e) {}
+    }
+
+    window.pzAutoSave = { save: doSave, restore: doRestore, clear: doClear };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form[data-autosave]').forEach(function (form) {
+            var t;
+            function debSave() { clearTimeout(t); t = setTimeout(function () { doSave(form); }, 400); }
+            form.addEventListener('input',  debSave);
+            form.addEventListener('change', debSave);
+            form.addEventListener('submit', function () { doClear(form); });
+            // setTimeout so other DOMContentLoaded listeners (date pickers, etc.) run first
+            setTimeout(function () { doRestore(form); }, 0);
+        });
+    });
+}());
+</script>
+<!-- ── PZ Custom Calendar — shared utility ── -->
+<script>
+(function () {
+    function createCalendar(container, inputHidden, inputDisplay, opts) {
+        opts = opts || {};
+        var getMin = opts.getMin || function () { return ''; };
+        var getMax = opts.getMax || function () { return ''; };
+        var onSelect = opts.onSelect || function () {};
+        var now = new Date(), viewYear = now.getFullYear(), viewMonth = now.getMonth();
+        var mode = 'days', yearsStart = Math.floor(viewYear / 12) * 12;
+        var header = document.createElement('div'); header.className = 'cal-header';
+        var prev = document.createElement('button'); prev.type = 'button'; prev.className = 'cal-nav-btn'; prev.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
+        var title = document.createElement('div'); title.className = 'cal-title';
+        var next = document.createElement('button'); next.type = 'button'; next.className = 'cal-nav-btn'; next.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
+        header.appendChild(prev); header.appendChild(title); header.appendChild(next);
+        var grid = document.createElement('div'); grid.className = 'cal-grid';
+        container.appendChild(header); container.appendChild(grid);
+        function pad(n) { return String(n).padStart(2, '0'); }
+        function renderDays() {
+            title.textContent = new Date(viewYear, viewMonth).toLocaleString(undefined, { month: 'long', year: 'numeric' });
+            title.setAttribute('data-mode', 'days'); grid.className = 'cal-grid'; grid.innerHTML = '';
+            ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(function (d) { var e = document.createElement('div'); e.className = 'cal-day'; e.style.fontWeight = '600'; e.textContent = d; e.style.cursor = 'default'; grid.appendChild(e); });
+            var first = new Date(viewYear, viewMonth, 1), start = first.getDay(), days = new Date(viewYear, viewMonth + 1, 0).getDate();
+            var minVal = getMin(); var maxVal = getMax();
+            for (var i = 0; i < start; i++) { var e = document.createElement('div'); e.className = 'cal-day disabled'; grid.appendChild(e); }
+            for (var d = 1; d <= days; d++) {
+                (function (day) {
+                    var cellDate = viewYear + '-' + pad(viewMonth + 1) + '-' + pad(day);
+                    var isDisabled = (minVal && cellDate < minVal) || (maxVal && cellDate > maxVal);
+                    var e = document.createElement('div');
+                    e.className = 'cal-day' + (isDisabled ? ' disabled' : '');
+                    e.textContent = day;
+                    if (!isDisabled) {
+                        e.addEventListener('click', function () {
+                            inputHidden.value = cellDate;
+                            inputDisplay.value = pad(day) + '/' + pad(viewMonth + 1) + '/' + viewYear;
+                            inputHidden.dispatchEvent(new Event('change'));
+                            container.classList.remove('open'); container.setAttribute('aria-hidden', 'true');
+                            onSelect(cellDate);
+                        });
+                    }
+                    grid.appendChild(e);
+                }(d));
+            }
+        }
+        function renderMonths() {
+            title.textContent = String(viewYear); title.setAttribute('data-mode', 'months');
+            grid.className = 'months-grid'; grid.innerHTML = '';
+            Array.from({ length: 12 }, function (_, i) { return new Date(0, i).toLocaleString(undefined, { month: 'short' }); }).forEach(function (mn, mi) {
+                var cell = document.createElement('div'); cell.className = 'month-cell'; cell.textContent = mn;
+                cell.addEventListener('click', function () { viewMonth = mi; mode = 'days'; render(); });
+                grid.appendChild(cell);
+            });
+        }
+        function renderYears() {
+            title.textContent = yearsStart + ' - ' + (yearsStart + 11); title.setAttribute('data-mode', 'years');
+            grid.className = 'year-grid'; grid.innerHTML = '';
+            for (var y = yearsStart; y < yearsStart + 12; y++) {
+                (function (yr) {
+                    var cell = document.createElement('div'); cell.className = 'year-cell'; cell.textContent = yr;
+                    if (yr === viewYear) cell.classList.add('active');
+                    cell.addEventListener('click', function () { viewYear = yr; mode = 'months'; render(); });
+                    grid.appendChild(cell);
+                }(y));
+            }
+        }
+        function render() { if (mode === 'days') return renderDays(); if (mode === 'months') return renderMonths(); renderYears(); }
+        prev.addEventListener('click', function () {
+            if (mode === 'days') { viewMonth--; if (viewMonth < 0) { viewMonth = 11; viewYear--; } }
+            else if (mode === 'months') { viewYear--; }
+            else { yearsStart -= 12; }
+            render();
+        });
+        next.addEventListener('click', function () {
+            if (mode === 'days') { viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } }
+            else if (mode === 'months') { viewYear++; }
+            else { yearsStart += 12; }
+            render();
+        });
+        title.addEventListener('click', function () {
+            if (mode === 'days') mode = 'months';
+            else if (mode === 'months') { mode = 'years'; yearsStart = Math.floor(viewYear / 12) * 12; }
+            else mode = 'days';
+            render();
+        });
+        if (inputHidden.value) {
+            try { var dt = new Date(inputHidden.value); if (!isNaN(dt)) { viewYear = dt.getFullYear(); viewMonth = dt.getMonth(); inputDisplay.value = pad(dt.getDate()) + '/' + pad(dt.getMonth() + 1) + '/' + dt.getFullYear(); } } catch (e) {}
+        }
+        container._rerender = render;
+        render();
+    }
+
+    window.pzCreateCalendar = createCalendar;
+
+    window.pzInitDatePicker = function (wrapper, opts) {
+        var hidden  = wrapper.querySelector('input[type="hidden"]');
+        var display = wrapper.querySelector('.date-display');
+        var toggle  = wrapper.querySelector('.date-toggle');
+        var popup   = wrapper.querySelector('.calendar-popup');
+        createCalendar(popup, hidden, display, opts || {});
+        toggle.addEventListener('click', function () {
+            var open = popup.classList.toggle('open');
+            popup.setAttribute('aria-hidden', !open);
+            if (open) {
+                if (popup._rerender) popup._rerender();
+                popup.classList.remove('above');
+                var rect = popup.getBoundingClientRect();
+                if (rect.bottom > window.innerHeight - 16) popup.classList.add('above');
+            }
+        });
+        document.addEventListener('click', function (e) {
+            if (!wrapper.contains(e.target)) { popup.classList.remove('open', 'above'); popup.setAttribute('aria-hidden', 'true'); }
+        });
+    };
+}());
+</script>
   <div id="wrapper">
 
     <?= $this->include('sidebar') ?>
@@ -817,6 +999,7 @@
         'pending secondary approval': 'pz-badge-pending-secondary',
         'in-transit':                 'pz-badge-in-transit',
         'rejected':                   'pz-badge-rejected',
+        'cancelled':                  'pz-badge-rejected',
         'completed':                  'pz-badge-completed',
       };
       return map[(status || '').toLowerCase()] || 'pz-badge-pending';

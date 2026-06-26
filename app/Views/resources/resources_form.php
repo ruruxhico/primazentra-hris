@@ -29,7 +29,7 @@
 </div>
 
 <div class="pz-form-container">
-    <form method="POST" action="<?= $formAction ?>" id="resourceForm">
+    <form method="POST" action="<?= $formAction ?>" id="resourceForm" data-autosave>
         <?= csrf_field() ?>
 
         <!-- Basic Information -->
@@ -39,26 +39,28 @@
                 <div class="pz-form-group">
                     <label for="name">Resource Name *</label>
                     <input type="text" id="name" name="name"
-                           value="<?= isset($resource['name']) ? esc($resource['name']) : '' ?>"
+                           value="<?= esc(old('name', $resource['name'] ?? '')) ?>"
                            placeholder="e.g., Hilti Jackhammer" required>
                 </div>
                 <div class="pz-form-group">
                     <label for="category">Category *</label>
                     <select id="category" name="category" required onchange="updateFormFields()">
                         <option value="">Select Category</option>
-                        <option value="Manpower"  <?= ($resource['category'] ?? ($_GET['category'] ?? '')) === 'Manpower'  ? 'selected' : '' ?>>Manpower</option>
-                        <option value="Equipment" <?= ($resource['category'] ?? ($_GET['category'] ?? '')) === 'Equipment' ? 'selected' : '' ?>>Equipment</option>
-                        <option value="Tools"     <?= ($resource['category'] ?? ($_GET['category'] ?? '')) === 'Tools'     ? 'selected' : '' ?>>Tools</option>
+                        <?php $resCatOld = old('category', $resource['category'] ?? ($_GET['category'] ?? '')); ?>
+                        <option value="Manpower"  <?= $resCatOld === 'Manpower'  ? 'selected' : '' ?>>Manpower</option>
+                        <option value="Equipment" <?= $resCatOld === 'Equipment' ? 'selected' : '' ?>>Equipment</option>
+                        <option value="Tools"     <?= $resCatOld === 'Tools'     ? 'selected' : '' ?>>Tools</option>
                     </select>
                 </div>
                 <div class="pz-form-group">
                     <label for="status">Status *</label>
                     <select id="status" name="status" required>
                         <option value="">Select Status</option>
-                        <option value="Available"         <?= ($resource['status'] ?? '') === 'Available'         ? 'selected' : '' ?>>Available</option>
-                        <option value="Deployed"          <?= ($resource['status'] ?? '') === 'Deployed'          ? 'selected' : '' ?>>Deployed</option>
-                        <option value="Under Maintenance" <?= ($resource['status'] ?? '') === 'Under Maintenance' ? 'selected' : '' ?>>Under Maintenance</option>
-                        <option value="Unavailable"       <?= ($resource['status'] ?? '') === 'Unavailable'       ? 'selected' : '' ?>>Unavailable</option>
+                        <?php $resStatusOld = old('status', $resource['status'] ?? ''); ?>
+                        <option value="Available"         <?= $resStatusOld === 'Available'         ? 'selected' : '' ?>>Available</option>
+                        <option value="Deployed"          <?= $resStatusOld === 'Deployed'          ? 'selected' : '' ?>>Deployed</option>
+                        <option value="Under Maintenance" <?= $resStatusOld === 'Under Maintenance' ? 'selected' : '' ?>>Under Maintenance</option>
+                        <option value="Unavailable"       <?= $resStatusOld === 'Unavailable'       ? 'selected' : '' ?>>Unavailable</option>
                     </select>
                 </div>
             </div>
@@ -78,15 +80,16 @@
                 <div class="pz-form-group">
                     <label for="location_address">Address *</label>
                     <input type="text" id="location_address" name="location_address"
-                           value="<?= isset($resource['location']['address']) ? esc($resource['location']['address']) : '' ?>"
+                           value="<?= esc(old('location_address', $resource['location']['address'] ?? '')) ?>"
                            placeholder="Full address" required>
                 </div>
                 <div class="pz-form-group">
                     <label for="location_type">Location Type *</label>
                     <select id="location_type" name="location_type" required>
                         <option value="">Select Type</option>
-                        <option value="Warehouse"    <?= ($resource['location']['type'] ?? '') === 'Warehouse'    ? 'selected' : '' ?>>Warehouse</option>
-                        <option value="Project Site" <?= ($resource['location']['type'] ?? '') === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
+                        <?php $resLocTypeOld = old('location_type', $resource['location']['type'] ?? ''); ?>
+                        <option value="Warehouse"    <?= $resLocTypeOld === 'Warehouse'    ? 'selected' : '' ?>>Warehouse</option>
+                        <option value="Project Site" <?= $resLocTypeOld === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
                     </select>
                 </div>
             </div>
@@ -324,6 +327,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     updateFormFields();
 });
+
+// Auto-save restore hook: re-run updateFormFields() after category is restored
+window['pzAsRestore_resourceForm'] = function () {
+    if (typeof updateFormFields === 'function') updateFormFields();
+};
 </script>
 
 <?= $this->endSection() ?>

@@ -219,6 +219,14 @@ class Projects extends BaseController
                 return redirect()->back()->withInput()->with('error', 'End date must be on or after the start date.');
             }
 
+            if (!$this->request->getPost('add_tasks_now')) {
+                return redirect()->back()->withInput()->with('error', 'Project Schedule is required. Enable the schedule section and add at least one milestone.');
+            }
+            $rawPhasesCheck = $this->request->getPost('phases') ?? [];
+            if (empty($rawPhasesCheck)) {
+                return redirect()->back()->withInput()->with('error', 'Project Schedule must have at least one milestone.');
+            }
+
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();

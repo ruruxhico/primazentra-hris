@@ -23,7 +23,7 @@
 </div>
 
 <div class="pz-form-container">
-    <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>" enctype="multipart/form-data">
+    <form method="POST" action="<?= base_url(isset($staffId) ? 'staff/update/' . $staffId : 'staff/create') ?>" enctype="multipart/form-data" id="staffForm" data-autosave>
         <?= csrf_field() ?>
 
         <!-- Profile Picture -->
@@ -54,15 +54,15 @@
             <div class="pz-form-row cols-3">
                 <div class="pz-form-group">
                     <label>First Name *</label>
-                    <input type="text" name="first_name" value="<?= esc((string)($staff['first_name'] ?? '')) ?>" required placeholder="First name">
+                    <input type="text" name="first_name" value="<?= esc(old('first_name', (string)($staff['first_name'] ?? ''))) ?>" required placeholder="First name">
                 </div>
                 <div class="pz-form-group">
                     <label>Middle Name</label>
-                    <input type="text" name="middle_name" value="<?= esc((string)($staff['middle_name'] ?? '')) ?>" placeholder="Middle name">
+                    <input type="text" name="middle_name" value="<?= esc(old('middle_name', (string)($staff['middle_name'] ?? ''))) ?>" placeholder="Middle name">
                 </div>
                 <div class="pz-form-group">
                     <label>Last Name *</label>
-                    <input type="text" name="last_name" value="<?= esc((string)($staff['last_name'] ?? '')) ?>" required placeholder="Last name">
+                    <input type="text" name="last_name" value="<?= esc(old('last_name', (string)($staff['last_name'] ?? ''))) ?>" required placeholder="Last name">
                 </div>
             </div>
         </div>
@@ -73,16 +73,17 @@
             <div class="pz-form-row cols-2">
                 <div class="pz-form-group">
                     <label>Email *</label>
-                    <input type="email" name="email" value="<?= esc((string)($staff['email'] ?? '')) ?>" required placeholder="email@example.com">
+                    <input type="email" name="email" value="<?= esc(old('email', (string)($staff['email'] ?? ''))) ?>" required placeholder="email@example.com">
                 </div>
                 <div class="pz-form-group">
                     <label>Role *</label>
                     <select name="role" required>
                         <option value="">Select Role</option>
-                        <option value="Administrator"     <?= ($staff['role'] ?? '') === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
-                        <option value="Operations Manager"<?= ($staff['role'] ?? '') === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
-                        <option value="Project Manager"   <?= ($staff['role'] ?? '') === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
-                        <option value="Site Engineer"     <?= ($staff['role'] ?? '') === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>
+                        <?php $staffRoleOld = old('role', $staff['role'] ?? ''); ?>
+                        <option value="Administrator"     <?= $staffRoleOld === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
+                        <option value="Operations Manager"<?= $staffRoleOld === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
+                        <option value="Project Manager"   <?= $staffRoleOld === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
+                        <option value="Site Engineer"     <?= $staffRoleOld === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>
                     </select>
                 </div>
             </div>

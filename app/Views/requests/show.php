@@ -27,6 +27,7 @@ $badgeMap = [
     'pending secondary approval' => 'pz-badge-pending-secondary',
     'in-transit'                 => 'pz-badge-in-transit',
     'rejected'                   => 'pz-badge-rejected',
+    'cancelled'                  => 'pz-badge-rejected',
     'completed'                  => 'pz-badge-completed',
 ];
 $badgeCls = $badgeMap[strtolower($status)] ?? 'pz-badge-pending';
@@ -40,6 +41,7 @@ $canAcceptDelivery   = ($canAcceptDelivery ?? false);
 $isPending           = strtolower($status) === 'pending';
 $isPendingSecondary  = strtolower($status) === 'pending secondary approval';
 $isInTransit         = strtolower($status) === 'in-transit';
+$canCancel           = $isOwnRequest && ($isPending || $isPendingSecondary);
 $sourceKnown         = !empty($req['source_project_id']);
 $primaryApproval     = is_array($req['primary_approval'] ?? null) ? $req['primary_approval'] : [];
 $primaryApproverRole = $primaryApproval['role'] ?? $req['approved_by_role'] ?? '';
@@ -275,9 +277,30 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
 </div>
 <?php endif; ?>
 
+<!-- Cancel section (original requester only, while pending) -->
+<?php if ($canCancel): ?>
+<div id="pzCancelSection" class="pz-card" style="border-left:4px solid #dc2626;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:.6rem;">
+            <span class="material-symbols-outlined" style="font-size:1.3rem;color:#dc2626;flex-shrink:0;">undo</span>
+            <div style="font-size:.92rem;color:#7f1d1d;">
+                <div style="font-weight:700;margin-bottom:.1rem;">Cancel This Request</div>
+                <div style="font-size:.82rem;">This will withdraw the request from the approval queue.</div>
+            </div>
+        </div>
+        <form method="POST" action="<?= base_url('requests/cancel/' . esc($req['id'])) ?>" id="cancelReqForm">
+            <?= csrf_field() ?>
+            <button type="button" class="pz-btn pz-btn-danger-outline" id="cancelReqBtn">
+                <span class="material-symbols-outlined">cancel</span> Cancel Request
+            </button>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Approval section -->
 <?php if ($canApprove && ($isPending || $isPendingSecondary)): ?>
-<div class="pz-card">
+<div id="pzApprovalSection" class="pz-card">
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;padding-bottom:.65rem;border-bottom:2px solid #f0e8d0;">
         <span class="material-symbols-outlined" style="font-size:1.1rem;color:#8a6420;">approval</span>
         <span style="font-size:.78rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#5a4020;">Approval</span>
@@ -344,10 +367,11 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 <div style="margin-bottom:.85rem;">
                     <div style="font-size:.72rem;font-weight:700;color:#8a6420;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Resource/s Requested</div>
                     <table class="pz-table" style="font-size:.84rem;margin-bottom:0;background:#fff;">
-                        <thead><tr><th>Resource</th><th>Quantity</th></tr></thead>
+                        <thead><tr><th>Resource</th><th>Model</th><th>Quantity</th></tr></thead>
                         <tbody>
                             <tr>
                                 <td style="font-weight:600;"><?= esc(strtoupper($category)) ?></td>
+                                <td><?= esc($resName ?: '—') ?></td>
                                 <td><?= esc($qty) ?></td>
                             </tr>
                         </tbody>
@@ -513,7 +537,7 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
 
                 <p style="margin:.5rem 0 0;font-size:.72rem;color:#9a7b3a;">
                     <span class="material-symbols-outlined" style="font-size:.78rem;vertical-align:middle;">touch_app</span>
-                    Click a row to select that site as the transfer source. <strong>WSM Score</strong> combines 5 criteria: distance (25%) · ETA (20%) · traffic (25%) · allocatable units (20%) · next availability (10%).
+                    Click a row to select that site as the transfer source. <strong>WSM Score</strong> combines 5 criteria: distance (25%) · ETA (25%) · traffic (15%) · allocatable units (20%) · next availability (15%).
                     Excluded sites are predicted by ML to have insufficient resource capacity.
                 </p>
 
@@ -577,7 +601,7 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
         <div class="confirm-content"><p id="reqConfirmMessage"></p></div>
         <div class="confirm-actions">
             <button id="reqConfirmOk"     class="confirm-btn confirm-btn-action">Reject</button>
-            <button id="reqConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+            <button id="reqConfirmCancel" class="confirm-btn confirm-btn-cancel">Back</button>
         </div>
     </div>
 </div>
@@ -589,8 +613,10 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
 var _rqCr = null;
 var rqCd  = document.getElementById('reqConfirmDialog');
 var rqCm  = document.getElementById('reqConfirmMessage');
-function openReqConfirm(message) {
+function openReqConfirm(message, okLabel, cancelLabel) {
     if (_rqCr) return Promise.resolve(false);
+    document.getElementById('reqConfirmOk').textContent     = okLabel     || 'Reject';
+    document.getElementById('reqConfirmCancel').textContent = cancelLabel || 'Back';
     return new Promise(function (resolve) {
         _rqCr = resolve;
         rqCm.innerText = message;
@@ -602,6 +628,11 @@ document.getElementById('reqConfirmOk')?.addEventListener('click', function () {
 });
 document.getElementById('reqConfirmCancel')?.addEventListener('click', function () {
     if (!_rqCr) return; var r = _rqCr; _rqCr = null; rqCd.classList.remove('open'); r(false);
+});
+
+document.getElementById('cancelReqBtn')?.addEventListener('click', async function () {
+    if (!await openReqConfirm('Cancel this request? It will be withdrawn from the approval queue.', 'Yes, Cancel Request', 'Back')) return;
+    document.getElementById('cancelReqForm').submit();
 });
 
 async function rejectRequest(id) {
@@ -661,32 +692,63 @@ document.addEventListener('DOMContentLoaded', function () {
 <?php $this->section('firebase-scripts') ?>
 <script>
 (function () {
-  var _reqId  = '<?= esc($req['id']) ?>';
-  var _ready  = false;
+  var _reqId = '<?= esc($req['id']) ?>';
+  var _ready = false;
 
-  // Status badge element — already in the DOM
   function updateBadge(status) {
     var badge = document.getElementById('pzReqStatusBadge');
     if (!badge || typeof window.pzBadgeClass !== 'function') return;
-    badge.className = 'pz-badge ' + window.pzBadgeClass(status);
+    badge.className  = 'pz-badge ' + window.pzBadgeClass(status);
     badge.textContent = status.toUpperCase();
+  }
+
+  function hideSections() {
+    ['pzCancelSection', 'pzApprovalSection'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
+
+  function showCancelledNotice(cancelledBy) {
+    var existing = document.getElementById('pzCancelledNotice');
+    if (existing) return;
+    var notice = document.createElement('div');
+    notice.id = 'pzCancelledNotice';
+    notice.className = 'pz-card';
+    notice.style.cssText = 'border-left:4px solid #dc2626;';
+    notice.innerHTML =
+      '<div style="display:flex;align-items:center;gap:.6rem;font-size:.92rem;color:#7f1d1d;">' +
+        '<span class="material-symbols-outlined" style="font-size:1.3rem;color:#dc2626;flex-shrink:0;">cancel</span>' +
+        '<div><div style="font-weight:700;margin-bottom:.1rem;">This request has been cancelled.</div>' +
+        (cancelledBy ? '<div style="font-size:.82rem;">Cancelled by: ' + cancelledBy + '</div>' : '') +
+        '</div></div>';
+    var approvalSection = document.getElementById('pzApprovalSection');
+    var cancelSection   = document.getElementById('pzCancelSection');
+    var anchor = approvalSection || cancelSection;
+    if (anchor) {
+      anchor.parentNode.insertBefore(notice, anchor);
+    }
   }
 
   function attachDocListener(db) {
     db.collection('resource_requests').doc(_reqId).onSnapshot(
       function (snap) {
-        if (!_ready) { _ready = true; return; } // skip initial fire
+        if (!_ready) { _ready = true; return; }
         if (!snap.exists) return;
-        var data = snap.data();
-        var newStatus = data.status || '';
+        var data      = snap.data();
+        var newStatus = (data.status || '').toLowerCase();
 
-        // Update badge immediately — no reload needed
-        updateBadge(newStatus);
+        updateBadge(data.status || '');
 
-        // For section changes (approval buttons, accept delivery appearing/disappearing),
-        // show the bar so the user can refresh when they're ready
+        if (newStatus === 'cancelled') {
+          hideSections();
+          showCancelledNotice(data.cancelled_by_name || '');
+          return;
+        }
+
+        // For all other status transitions, show the refresh bar
         window.pzShowLiveBar && window.pzShowLiveBar(
-          'Request status changed to ' + newStatus.toUpperCase() + ' — refresh for full update'
+          'Request status changed to ' + (data.status || '').toUpperCase() + ' — refresh for full update'
         );
       },
       function (err) { console.warn('[PZ] Request doc listener:', err.message); }

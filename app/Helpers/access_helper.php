@@ -50,8 +50,9 @@ if (!function_exists('pz_can')) {
             // ── Reports ───────────────────────────────────────────────────
             'submit_daily_report'     => in_array($r, [$admin, $se], true),
             'view_daily_reports'      => true,
-            'create_emergency_report' => in_array($r, [$admin, $pm], true),
-            'view_emergency_reports'  => true,
+            'create_emergency_report'  => in_array($r, [$admin, $pm], true),
+            'view_emergency_reports'   => true,
+            'resolve_emergency_report' => in_array($r, [$admin, $ops, $pm], true),
 
             // ── Staff ─────────────────────────────────────────────────────
             'create_staff'            => $r === $admin,

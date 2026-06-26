@@ -74,9 +74,16 @@
                         <option value="<?= esc($u) ?>" <?= ($m['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= esc($u) ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <input type="date" class="ps-ms-date"
-                           name="milestones[<?= $i ?>][target_date]"
-                           value="<?= esc($m['target_date'] ?? $m['targetDate'] ?? '') ?>">
+                    <?php
+                        $tdVal  = $m['target_date'] ?? $m['targetDate'] ?? '';
+                        $tdDisp = ($tdVal !== '' && ($tdTs = strtotime($tdVal)) !== false) ? date('d/m/Y', $tdTs) : '';
+                    ?>
+                    <div class="date-picker ps-ms-date-picker">
+                        <input type="text" class="date-display" placeholder="DD/MM/YYYY" value="<?= esc($tdDisp) ?>" readonly>
+                        <input type="hidden" class="ps-ms-date" name="milestones[<?= $i ?>][target_date]" value="<?= esc($tdVal) ?>">
+                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
+                        <div class="calendar-popup" aria-hidden="true"></div>
+                    </div>
                     <button type="button" class="ps-ms-del" onclick="removeRow(this)" title="Remove">
                         <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -162,7 +169,12 @@
             <option value="<?= esc($u) ?>"><?= esc($u) ?></option>
             <?php endforeach; ?>
         </select>
-        <input type="date" class="ps-ms-date">
+        <div class="date-picker ps-ms-date-picker">
+            <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
+            <input type="hidden" class="ps-ms-date">
+            <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
+            <div class="calendar-popup" aria-hidden="true"></div>
+        </div>
         <button type="button" class="ps-ms-del" onclick="removeRow(this)" title="Remove">
             <span class="material-symbols-outlined">delete</span>
         </button>
@@ -199,7 +211,10 @@
         reindex();
         recomputeTotal();
         var rows = list.querySelectorAll('.ps-ms-row');
-        rows[rows.length - 1].querySelector('.ps-ms-name').focus();
+        var newRow = rows[rows.length - 1];
+        newRow.querySelector('.ps-ms-name').focus();
+        var dp = newRow.querySelector('.ps-ms-date-picker');
+        if (dp && window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
     };
 
     window.removeRow = function (btn) {
@@ -207,7 +222,10 @@
         if (list.querySelectorAll('.ps-ms-row').length <= 1) {
             row.querySelector('.ps-ms-name').value = '';
             row.querySelector('.weight-input').value = 0;
-            row.querySelector('.ps-ms-date').value = '';
+            var msDate = row.querySelector('.ps-ms-date');
+            if (msDate) msDate.value = '';
+            var msDisp = row.querySelector('.ps-ms-date-picker .date-display');
+            if (msDisp) msDisp.value = '';
             recomputeTotal();
             return;
         }
@@ -277,6 +295,9 @@
 
     /* ── Init ── */
     recomputeTotal();
+    list.querySelectorAll('.ps-ms-date-picker').forEach(function (dp) {
+        if (window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
+    });
 }());
 </script>
 
