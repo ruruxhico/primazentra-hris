@@ -624,10 +624,25 @@ td{font-size:7px;padding:3px 5px;max-width:none;word-break:break-word}
 .pz-footer{font-size:7px;margin-top:6px}
 ' : '';
         $faviconUrl = asset_url('favicon.ico');
-        $logoPath   = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'PrimaSolution.png';
-        $logoTag  = file_exists($logoPath)
-            ? '<img src="data:image/png;base64,' . base64_encode(file_get_contents($logoPath)) . '" alt="Prima-Solution Development and Construction Corp." class="pz-logo-img">'
-            : '<span class="pz-logo-txt">PRIMA<span class="pz-logo-sub">-SOLUTION</span></span>';
+        $assetBase  = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR;
+        $logoPng    = $assetBase . 'PrimaSolution.png';
+        $logoJpg    = $assetBase . 'PrimaSolution.jpg';
+        $logoFallback = '<span class="pz-logo-txt">PRIMA<span class="pz-logo-sub">-SOLUTION</span></span>';
+        if ($forPdf) {
+            // Dompdf's CPDF::addPngFromFile() requires GD; JPEG is read natively without GD.
+            // Prefer the pre-generated JPEG for GD-free PDF rendering.
+            if (file_exists($logoJpg)) {
+                $logoTag = '<img src="data:image/jpeg;base64,' . base64_encode(file_get_contents($logoJpg)) . '" alt="Prima-Solution Development and Construction Corp." class="pz-logo-img">';
+            } elseif (extension_loaded('gd') && file_exists($logoPng)) {
+                $logoTag = '<img src="data:image/png;base64,' . base64_encode(file_get_contents($logoPng)) . '" alt="Prima-Solution Development and Construction Corp." class="pz-logo-img">';
+            } else {
+                $logoTag = $logoFallback;
+            }
+        } else {
+            $logoTag = file_exists($logoPng)
+                ? '<img src="data:image/png;base64,' . base64_encode(file_get_contents($logoPng)) . '" alt="Prima-Solution Development and Construction Corp." class="pz-logo-img">'
+                : $logoFallback;
+        }
 
         return <<<HTML
 <!DOCTYPE html>
