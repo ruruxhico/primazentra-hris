@@ -503,52 +503,67 @@ class Export extends BaseController
 
     private function exportPdf(array $headers, array $rows, string $title)
     {
-        // Raise limits for large datasets; PDF rendering is memory-intensive
-        $prevMemory = ini_set('memory_limit', '256M');
-        $prevTime   = ini_get('max_execution_time');
-        set_time_limit(120);
+        try {
+            // Raise limits — PDF rendering is memory-intensive
+            $prevMemory = ini_set('memory_limit', '256M');
+            $prevTime   = ini_get('max_execution_time');
+            set_time_limit(120);
 
-        $html = $this->buildPrintHtml($headers, $rows, $title, true);
+            $html = $this->buildPrintHtml($headers, $rows, $title, true);
 
-        $options = new Options();
-        $options->setIsRemoteEnabled(false);
-        $options->setDefaultFont('Helvetica');
-        $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html, 'UTF-8');
+            // Use CI4 writable dir for font cache — vendor dir may be read-only on hosted servers
+            $fontDir   = WRITEPATH . 'dompdf_fonts';
+            $fontCache = WRITEPATH . 'dompdf_fonts';
+            if (!is_dir($fontDir)) {
+                mkdir($fontDir, 0755, true);
+            }
 
-        // Dynamic single-page sizing so all rows fit without splitting.
-        // Width = A4 landscape (297 mm). Height = estimated from row/column count.
-        $ptPerMm     = 2.8346;
-        $pageWidthMm = 297;
-        $colCount    = count($headers);
-        $rowCount    = count($rows);
-        $mmPerRow    = $colCount > 10 ? 26 : ($colCount > 6 ? 20 : 14);
-        $totalHeightMm = 55 + ($rowCount * $mmPerRow) + 20;
-        $pageHeightMm  = max(210, $totalHeightMm);
-        $dompdf->setPaper([0, 0, $pageWidthMm * $ptPerMm, $pageHeightMm * $ptPerMm]);
-        $dompdf->render();
+            $options = new Options();
+            $options->setIsRemoteEnabled(false);
+            $options->setDefaultFont('Helvetica');
+            $options->setFontDir($fontDir);
+            $options->setFontCache($fontCache);
+            $options->setTempDir(sys_get_temp_dir());
 
-        $pdfContent = $dompdf->output();
+            $dompdf = new Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
 
-        // Restore limits
-        if ($prevMemory !== false) ini_set('memory_limit', $prevMemory);
-        set_time_limit((int)$prevTime);
+            $ptPerMm     = 2.8346;
+            $pageWidthMm = 297;
+            $colCount    = count($headers);
+            $rowCount    = count($rows);
+            $mmPerRow    = $colCount > 10 ? 26 : ($colCount > 6 ? 20 : 14);
+            $totalHeightMm = 55 + ($rowCount * $mmPerRow) + 20;
+            $pageHeightMm  = max(210, $totalHeightMm);
+            $dompdf->setPaper([0, 0, $pageWidthMm * $ptPerMm, $pageHeightMm * $ptPerMm]);
+            $dompdf->render();
 
-        $filename = strtolower(str_replace(' ', '_', $title)) . '_' . date('Ymd') . '.pdf';
+            $pdfContent = $dompdf->output();
 
-        // Return via CI4 response — avoids raw header() / OB conflicts
-        return $this->response
-            ->setHeader('Content-Type', 'application/pdf')
-            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
-            ->setHeader('Content-Length', (string) strlen($pdfContent))
-            ->setHeader('Cache-Control', 'private, no-cache, must-revalidate')
-            ->setBody($pdfContent);
+            if ($prevMemory !== false) ini_set('memory_limit', $prevMemory);
+            set_time_limit((int)$prevTime);
+
+            $filename = strtolower(str_replace([' ', '—', '/'], ['_', '-', '-'], $title)) . '_' . date('Ymd') . '.pdf';
+
+            return $this->response
+                ->setHeader('Content-Type', 'application/pdf')
+                ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->setHeader('Content-Length', (string) strlen($pdfContent))
+                ->setHeader('Cache-Control', 'private, no-cache, must-revalidate')
+                ->setBody($pdfContent);
+
+        } catch (\Throwable $e) {
+            log_message('error', 'Export::exportPdf - ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            return $this->response
+                ->setStatusCode(500)
+                ->setBody('PDF generation failed: ' . esc($e->getMessage()));
+        }
     }
 
     private function exportPrint(array $headers, array $rows, string $title)
     {
         return $this->response->setBody(
-            $this->buildPrintHtml($headers, $rows, $title, forPdf: false)
+            $this->buildPrintHtml($headers, $rows, $title, false)
         )->setContentType('text/html');
     }
 
