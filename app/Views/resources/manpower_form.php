@@ -25,7 +25,7 @@
 </div>
 
 <div class="pz-form-container">
-    <form method="POST" action="<?= $formAction ?>" id="manpowerForm">
+    <form method="POST" action="<?= $formAction ?>" id="manpowerForm" data-autosave>
         <?= csrf_field() ?>
         <input type="hidden" name="category" value="Manpower">
         <input type="hidden" name="manpower_id" value="<?= esc((string)($manpower['manpower_id'] ?? '')) ?>">

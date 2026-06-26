@@ -34,7 +34,7 @@
 </div>
 
 <div class="pz-form-container">
-    <form method="POST" action="<?= $formAction ?>" id="toolsForm">
+    <form method="POST" action="<?= $formAction ?>" id="toolsForm" data-autosave>
         <?= csrf_field() ?>
         <input type="hidden" name="category" value="Tools">
         <input type="hidden" name="status" value="<?= esc((string)($resource['status'] ?? 'Available')) ?>">
@@ -107,16 +107,16 @@
                                 <div class="unit-card-body">
                                     <div class="unit-fields-grid">
                                         <div class="unit-field">
-                                            <label>Serial Number</label>
-                                            <input type="text" name="items[<?= $index ?>][serial_number]" value="<?= esc((string)($item['serial_number'] ?? '')) ?>" placeholder="SN-12345" class="unit-serial-input">
+                                            <label>Serial Number *</label>
+                                            <input type="text" name="items[<?= $index ?>][serial_number]" value="<?= esc((string)($item['serial_number'] ?? '')) ?>" placeholder="SN-12345" class="unit-serial-input" required>
                                         </div>
                                         <div class="unit-field">
                                             <label>Brand</label>
                                             <input type="text" name="items[<?= $index ?>][brand]" value="<?= esc((string)($item['brand_name'] ?? $item['brand'] ?? '')) ?>" placeholder="e.g. Makita">
                                         </div>
                                         <div class="unit-field">
-                                            <label>Condition</label>
-                                            <select name="items[<?= $index ?>][condition]">
+                                            <label>Condition *</label>
+                                            <select name="items[<?= $index ?>][condition]" required>
                                                 <option value="">Select</option>
                                                 <?php foreach (['New', 'Functional', 'Worn', 'Broken'] as $opt): ?>
                                                     <option value="<?= esc($opt) ?>" <?= (($item['condition'] ?? '') === $opt) ? 'selected' : '' ?>><?= esc($opt) ?></option>
@@ -124,8 +124,8 @@
                                             </select>
                                         </div>
                                         <div class="unit-field">
-                                            <label>Status</label>
-                                            <select name="items[<?= $index ?>][status]">
+                                            <label>Status *</label>
+                                            <select name="items[<?= $index ?>][status]" required>
                                                 <option value="">Select</option>
                                                 <?php foreach (['In-Storage', 'In-Use', 'Repair'] as $opt): ?>
                                                     <option value="<?= esc($opt) ?>" <?= (($item['status'] ?? '') === $opt) ? 'selected' : '' ?>><?= esc($opt) ?></option>
@@ -133,17 +133,17 @@
                                             </select>
                                         </div>
                                         <div class="unit-field">
-                                            <label>Location Type</label>
-                                            <select name="items[<?= $index ?>][location_type]" class="equipment-location-type">
+                                            <label>Location Type *</label>
+                                            <select name="items[<?= $index ?>][location_type]" class="equipment-location-type" required>
                                                 <option value="">Select Type</option>
                                                 <option value="Warehouse" <?= $locationType === 'Warehouse' ? 'selected' : '' ?>>Warehouse</option>
                                                 <option value="Project Site" <?= $locationType === 'Project Site' ? 'selected' : '' ?>>Project Site</option>
                                             </select>
                                         </div>
                                         <div class="unit-field unit-field-address">
-                                            <label>Current Address</label>
+                                            <label>Current Address *</label>
                                             <div class="equipment-address-group equipment-address-project">
-                                                <select name="items[<?= $index ?>][address]" class="equipment-address-select">
+                                                <select name="items[<?= $index ?>][address]" class="equipment-address-select" required>
                                                     <option value="">Select project site</option>
                                                     <?php if (!empty($projectSites)): ?>
                                                         <?php foreach ($projectSites as $site): ?>
@@ -156,7 +156,7 @@
                                             </div>
                                             <div class="equipment-address-group equipment-address-warehouse">
                                                 <div class="unit-warehouse-input-wrap">
-                                                    <input type="text" name="items[<?= $index ?>][address]" class="equipment-warehouse-input" value="<?= esc($currentAddress) ?>" placeholder="Type warehouse location or pick on map" autocomplete="off">
+                                                    <input type="text" name="items[<?= $index ?>][address]" class="equipment-warehouse-input" value="<?= esc($currentAddress) ?>" placeholder="Type warehouse location or pick on map" autocomplete="off" required>
                                                     <button type="button" class="equipment-map-btn">Map</button>
                                                 </div>
                                             </div>
@@ -204,16 +204,16 @@
         <div class="unit-card-body">
             <div class="unit-fields-grid">
                 <div class="unit-field">
-                    <label>Serial Number</label>
-                    <input type="text" name="__INDEX__[serial_number]" placeholder="SN-12345" class="unit-serial-input">
+                    <label>Serial Number *</label>
+                    <input type="text" name="__INDEX__[serial_number]" placeholder="SN-12345" class="unit-serial-input" required>
                 </div>
                 <div class="unit-field">
                     <label>Brand</label>
                     <input type="text" name="__INDEX__[brand]" placeholder="e.g. Makita">
                 </div>
                 <div class="unit-field">
-                    <label>Condition</label>
-                    <select name="__INDEX__[condition]">
+                    <label>Condition *</label>
+                    <select name="__INDEX__[condition]" required>
                         <option value="">Select</option>
                         <option value="New" selected>New</option>
                         <option value="Functional">Functional</option>
@@ -222,8 +222,8 @@
                     </select>
                 </div>
                 <div class="unit-field">
-                    <label>Status</label>
-                    <select name="__INDEX__[status]">
+                    <label>Status *</label>
+                    <select name="__INDEX__[status]" required>
                         <option value="">Select</option>
                         <option value="In-Storage" selected>In-Storage</option>
                         <option value="In-Use">In-Use</option>
@@ -231,17 +231,17 @@
                     </select>
                 </div>
                 <div class="unit-field">
-                    <label>Location Type</label>
-                    <select name="__INDEX__[location_type]" class="equipment-location-type">
+                    <label>Location Type *</label>
+                    <select name="__INDEX__[location_type]" class="equipment-location-type" required>
                         <option value="">Select Type</option>
                         <option value="Warehouse" selected>Warehouse</option>
                         <option value="Project Site">Project Site</option>
                     </select>
                 </div>
                 <div class="unit-field unit-field-address">
-                    <label>Current Address</label>
+                    <label>Current Address *</label>
                     <div class="equipment-address-group equipment-address-project">
-                        <select name="__INDEX__[address]" class="equipment-address-select">
+                        <select name="__INDEX__[address]" class="equipment-address-select" required>
                             <option value="">Select project site</option>
                             <?php if (!empty($projectSites)): ?>
                                 <?php foreach ($projectSites as $site): ?>
@@ -254,7 +254,7 @@
                     </div>
                     <div class="equipment-address-group equipment-address-warehouse">
                         <div class="unit-warehouse-input-wrap">
-                            <input type="text" name="__INDEX__[address]" class="equipment-warehouse-input" placeholder="Type warehouse location or pick on map" autocomplete="off">
+                            <input type="text" name="__INDEX__[address]" class="equipment-warehouse-input" placeholder="Type warehouse location or pick on map" autocomplete="off" required>
                             <button type="button" class="equipment-map-btn">Map</button>
                         </div>
                     </div>
@@ -662,6 +662,11 @@ document.addEventListener('DOMContentLoaded', function () {
     container.querySelectorAll('.unit-card').forEach(bindCard);
     recalculateSerialIndices();
     setSectionVisible(checkbox ? checkbox.checked : false);
+
+    // After autosave restores the checkbox, re-apply section visibility
+    window.pzAsRestore_toolsForm = function () {
+        if (checkbox) setSectionVisible(checkbox.checked);
+    };
 
     // ── Warehouse default banner ────────────────────────────────
     var wdbEditBtn  = document.getElementById('wdbEditBtn');

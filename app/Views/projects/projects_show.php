@@ -239,8 +239,9 @@
     var _summaryType = '', _summaryData = null;
 
     var _base = '<?= rtrim(base_url(), '/') ?>';
-    var CAN_CREATE_EMERGENCY = <?= pz_can('create_emergency_report') ? 'true' : 'false' ?>;
-    var CAN_EDIT_PROGRESS    = <?= pz_can('edit_progress_report')    ? 'true' : 'false' ?>;
+    var CAN_CREATE_EMERGENCY  = <?= pz_can('create_emergency_report')  ? 'true' : 'false' ?>;
+    var CAN_RESOLVE_EMERGENCY = <?= pz_can('resolve_emergency_report') ? 'true' : 'false' ?>;
+    var CAN_EDIT_PROGRESS     = <?= pz_can('edit_progress_report')     ? 'true' : 'false' ?>;
     var ML_INSIGHTS = <?= json_encode($mlInsights ?? ['blocker' => null, 'delay_days' => 0]) ?>;
 
     window.openReportModal = function (type, pid, pname) {
@@ -384,26 +385,49 @@
             { year: 'numeric', month: 'long', day: 'numeric' });
         var html = '';
         if (_type === 'emergency') {
-            html += '<div class="rpt-detail-badge"><span class="material-symbols-outlined">warning</span>Emergency — ' + h(_pname) + '</div>';
-            html += '<div class="rpt-detail-date"><span class="material-symbols-outlined">calendar_today</span>Date: ' + fmtDate + '</div>';
+            // Status badge
+            if (d.resolved) {
+                html += '<div class="rpt-detail-badge" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">' +
+                        '<span class="material-symbols-outlined" style="font-size:16px">check_circle</span>Resolved — ' + h(_pname) + '</div>';
+            } else {
+                html += '<div class="rpt-detail-badge"><span class="material-symbols-outlined">warning</span>Emergency — ' + h(_pname) + '</div>';
+            }
+            // Show Filed timestamp if available, otherwise fall back to date only
+            if (d.created_at) {
+                html += '<div class="rpt-detail-date"><span class="material-symbols-outlined">schedule</span>Filed: ' + h(d.created_at) + '</div>';
+            } else {
+                html += '<div class="rpt-detail-date"><span class="material-symbols-outlined">calendar_today</span>Date: ' + fmtDate + '</div>';
+            }
+            // Resolved timestamp
+            if (d.resolved && d.resolved_at) {
+                html += '<div class="rpt-detail-date" style="color:#15803d;"><span class="material-symbols-outlined" style="color:#15803d;">task_alt</span>Resolved: ' + h(d.resolved_at) +
+                        (d.resolved_by_name ? ' by ' + h(d.resolved_by_name) : '') + '</div>';
+            }
+            // Causes
             var causes = d.causes || [];
             html += '<div class="rpt-detail-section"><strong>Cause(s)</strong>';
             if (causes.length) {
-                html += '<ul>';
+                html += '<ul class="rpt-cause-list">';
                 causes.forEach(function (c) {
                     var label = h(c);
                     if (c === 'Other' && d.other_cause) label += ': ' + h(d.other_cause);
-                    html += '<li>' + label + '</li>';
+                    html += '<li><span class="material-symbols-outlined rpt-cause-icon">report</span>' + label + '</li>';
                 });
                 html += '</ul>';
             } else {
                 html += '<p style="color:#888;font-style:italic">No cause recorded.</p>';
             }
             html += '</div>';
+            // Notes
             html += '<div class="rpt-detail-section"><strong>Notes</strong>';
             html += d.notes ? '<p>' + h(d.notes) + '</p>' : '<p style="color:#888;font-style:italic">No notes recorded.</p>';
             html += '</div>';
+            // Filed by + resolve action
             if (d.filed_by) html += '<div class="rpt-detail-meta">Filed by: ' + h(d.filed_by) + '</div>';
+            if (!d.resolved && CAN_RESOLVE_EMERGENCY) {
+                html += '<button type="button" class="rpt-resolve-btn" id="rptResolveBtn">' +
+                        '<span class="material-symbols-outlined">check_circle</span> Mark as Resolved</button>';
+            }
         } else {
             // Date header
             html += '<div class="rpt-daily-date">' + fmtDate + '</div>';
@@ -478,27 +502,68 @@
             html += '</div>';
         }
         document.getElementById('rptDetailEl').innerHTML = html;
+
+        // Wire up resolve button if present
+        var resolveBtn = document.getElementById('rptResolveBtn');
+        if (resolveBtn) {
+            resolveBtn.addEventListener('click', function () {
+                resolveBtn.disabled = true;
+                resolveBtn.textContent = 'Resolving…';
+                var resolveDocId = d.id;
+                fetch(_base + '/projects/' + _pid + '/emergency-reports/' + resolveDocId + '/resolve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: new URLSearchParams({ '<?= csrf_token() ?>': '<?= csrf_hash() ?>' })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    if (res.success) {
+                        var detailUrl = _base + '/projects/' + _pid + '/emergency-reports/' + resolveDocId;
+                        fetch(detailUrl, { credentials: 'same-origin' })
+                            .then(function (r) { return r.json(); })
+                            .then(function (fresh) { renderDetail(fresh, dateStr); fetchDates(); })
+                            .catch(function () { location.reload(); });
+                    } else {
+                        alert(res.error || 'Failed to resolve.');
+                        resolveBtn.disabled = false;
+                        resolveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Mark as Resolved';
+                    }
+                })
+                .catch(function () {
+                    alert('Network error. Please try again.');
+                    resolveBtn.disabled = false;
+                    resolveBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Mark as Resolved';
+                });
+            });
+        }
     }
 
     window.showNewReportForm = function () {
         var today = new Date().toISOString().slice(0, 10);
+        var todayDisp = today.slice(8,10) + '/' + today.slice(5,7) + '/' + today.slice(0,4);
         var html  = '<div class="rpt-form-title">' +
                     (_type === 'emergency' ? 'Emergency' : 'Progress Report') +
                     ' for ' + h(_pname) + '</div>';
         html += '<form id="rptNewForm">';
         html += '<div class="rpt-form-group"><label>Date *</label>' +
-                '<input type="date" name="date" value="' + today + '" required></div>';
+                '<div class="date-picker" id="rptDatePicker">' +
+                '<input type="text" class="date-display" placeholder="DD/MM/YYYY" value="' + todayDisp + '" readonly>' +
+                '<input type="hidden" name="date" value="' + today + '">' +
+                '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
+                '<div class="calendar-popup" aria-hidden="true"></div>' +
+                '</div></div>';
         if (_type === 'emergency') {
             var causes = ['Adverse Weather','Material Shortage','Equipment/Tool Breakdown',
                           'Labor Shortage','Onsite Accidents','Other'];
             html += '<div class="rpt-form-group"><label>Cause *</label><div class="rpt-causes">';
             causes.forEach(function (c) {
-                html += '<label class="rpt-cause-item">' + h(c) +
-                        '<input type="checkbox" name="causes[]" value="' + h(c) + '"></label>';
+                html += '<label class="rpt-cause-item">' +
+                        '<input type="checkbox" name="causes[]" value="' + h(c) + '">' +
+                        '<span>' + h(c) + '</span></label>';
             });
             html += '</div></div>';
             html += '<div class="rpt-form-group"><label>Notes</label>' +
-                    '<textarea name="notes" rows="4" placeholder="Describe the emergency specifics..."></textarea></div>';
+                    '<textarea name="notes" rows="4" placeholder="Describe the emergency specifics..." autocapitalize="off" autocorrect="off"></textarea></div>';
         } else {
             html += '<div class="rpt-form-group"><label>Progress %</label>' +
                     '<input type="number" name="progress_percent" min="0" max="100" step="1" placeholder="0–100"></div>';
@@ -507,6 +572,12 @@
         }
         html += '</form>';
         document.getElementById('rptFormEl').innerHTML = html;
+        var dpWrapper = document.getElementById('rptDatePicker');
+        if (dpWrapper && window.pzInitDatePicker) {
+            window.pzInitDatePicker(dpWrapper, {
+                getMax: function () { return new Date().toISOString().slice(0, 10); }
+            });
+        }
         setState('form');
     };
 
@@ -534,10 +605,39 @@
         fetch(url, { method: 'POST', body: fd, credentials: 'same-origin' })
             .then(function (r) { return r.json(); })
             .then(function (d) {
-                if (d.success) { fetchDates(); setState('cal'); }
-                else showToast(d.error || 'Failed to save report.', 'error');
+                if (d.success) {
+                    var label = _type === 'emergency' ? 'Emergency Filed!' : 'Report Submitted!';
+                    var sub   = _type === 'emergency' ? 'The emergency has been recorded.' : 'Your progress report has been saved.';
+                    var icon  = _type === 'emergency' ? 'warning' : 'check_circle';
+                    var color = _type === 'emergency' ? '#c0392b' : '#15803d';
+                    var fe = document.getElementById('rptFormEl');
+                    if (fe) fe.innerHTML =
+                        '<div style="text-align:center;padding:2.5rem 1rem;">' +
+                        '<span class="material-symbols-outlined" style="font-size:3rem;color:' + color + ';display:block;margin-bottom:.6rem">' + icon + '</span>' +
+                        '<div style="font-size:1.05rem;font-weight:700;color:' + color + ';margin-bottom:.3rem">' + label + '</div>' +
+                        '<div style="font-size:.85rem;color:#666;">' + sub + '</div>' +
+                        '</div>';
+                    fetchDates();
+                    setTimeout(function () { setState('cal'); }, 1800);
+                } else {
+                    var fe2 = document.getElementById('rptFormEl');
+                    var errBox = fe2 && fe2.querySelector('.rpt-form-error');
+                    if (!errBox) {
+                        errBox = document.createElement('div');
+                        errBox.className = 'rpt-form-error';
+                        errBox.style.cssText = 'color:#c0392b;font-size:.85rem;padding:.5rem .75rem;background:#fdecea;border-radius:6px;margin-bottom:.75rem;';
+                        if (fe2) fe2.insertBefore(errBox, fe2.firstChild);
+                    }
+                    errBox.textContent = d.error || 'Failed to save report.';
+                }
             })
-            .catch(function () { showToast('Failed to save report.', 'error'); });
+            .catch(function () {
+                var fe3 = document.getElementById('rptFormEl');
+                var errBox2 = document.createElement('div');
+                errBox2.style.cssText = 'color:#c0392b;font-size:.85rem;padding:.5rem .75rem;background:#fdecea;border-radius:6px;margin-bottom:.75rem;';
+                errBox2.textContent = 'Network error. Please try again.';
+                if (fe3) fe3.insertBefore(errBox2, fe3.firstChild);
+            });
     };
 
     // ── Summary (Weekly / Overall) ────────────────────────────────────────

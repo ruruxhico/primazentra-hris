@@ -88,10 +88,14 @@ class Model_ResourceRequests extends Model_BaseFirestore
         return true;
     }
 
-    private function fmtTs($ts): string
+    private function fmtTs(mixed $ts): string
     {
         if (!$ts) return '';
-        if ($ts instanceof Timestamp) return $ts->get()->format('M j, Y g:i A');
+        if ($ts instanceof Timestamp) {
+            return $ts->get()
+                ->setTimezone(new \DateTimeZone('Asia/Manila'))
+                ->format('M j, Y g:i A');
+        }
         return '';
     }
 }

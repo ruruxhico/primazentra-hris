@@ -105,8 +105,7 @@ class ResourceRequests extends BaseController
                 ->collectionGroup('emergency_reports')->documents();
             foreach ($emergencyDocs as $doc) {
                 if (!$doc->exists()) continue;
-                // Full path: projects/{projectId}/emergency_reports/{docId}
-                // $doc->name() returns the full resource path
+                if ($doc->data()['resolved'] ?? false) continue; // skip resolved emergencies
                 $parts   = explode('/', $doc->name());
                 $projIdx = array_search('project', $parts);
                 if ($projIdx !== false && isset($parts[$projIdx + 1])) {
@@ -316,6 +315,7 @@ class ResourceRequests extends BaseController
                     ->collectionGroup('emergency_reports')->documents();
                 foreach ($eDocs as $doc) {
                     if (!$doc->exists()) continue;
+                    if ($doc->data()['resolved'] ?? false) continue; // skip resolved emergencies
                     $parts   = explode('/', $doc->name());
                     $projIdx = array_search('project', $parts);
                     if ($projIdx !== false && isset($parts[$projIdx + 1])) {
@@ -556,6 +556,21 @@ class ResourceRequests extends BaseController
         $candidates = $passed;
         $now        = $nowTs;
 
+        // ── Filter: exclude sites with no allocatable units ───────────────
+        $withUnits = [];
+        foreach ($candidates as $c) {
+            if (($c['units_available'] ?? 0) > 0) {
+                $withUnits[] = $c;
+            } else {
+                $excluded[] = array_merge($c, ['exclude_reason' => 'No allocatable units']);
+            }
+        }
+        $candidates = $withUnits;
+
+        if (empty($candidates)) {
+            return ['ranked' => [], 'excluded' => $excluded, 'ml_available' => $mlAvailable];
+        }
+
         // ── Step 1: Next availability per candidate (Firestore items) ────
         foreach ($candidates as &$c) {
             $nextTs = null;
@@ -664,27 +679,29 @@ class ResourceRequests extends BaseController
         // ── Step 3: WSM — normalize each criterion then apply weights ────
         // availability uses units_available (not transfer-locked) as the count
         // of units that can actually be allocated from each source project.
-        $w = ['distance' => 0.25, 'travel_time' => 0.20, 'traffic' => 0.25,
-              'availability' => 0.20, 'next_available' => 0.10];
+        $w = ['distance' => 0.25, 'travel_time' => 0.25, 'traffic' => 0.15,
+              'availability' => 0.20, 'next_available' => 0.15];
 
-        $dMin = min(array_column($candidates, 'distance_km'));
-        $dMax = max(array_column($candidates, 'distance_km'));
-        $tMin = min(array_column($candidates, 'travel_time_min'));
-        $tMax = max(array_column($candidates, 'travel_time_min'));
-        $aMin = min(array_column($candidates, 'units_available'));
-        $aMax = max(array_column($candidates, 'units_available'));
-        $nMin = min(array_column($candidates, 'next_available_min'));
-        $nMax = max(array_column($candidates, 'next_available_min'));
+        $dMin   = min(array_column($candidates, 'distance_km'));
+        $dMax   = max(array_column($candidates, 'distance_km'));
+        $tMin   = min(array_column($candidates, 'travel_time_min'));
+        $tMax   = max(array_column($candidates, 'travel_time_min'));
+        $aMin   = min(array_column($candidates, 'units_available'));
+        $aMax   = max(array_column($candidates, 'units_available'));
+        $nMin   = min(array_column($candidates, 'next_available_min'));
+        $nMax   = max(array_column($candidates, 'next_available_min'));
+        $trkMin = min(array_column($candidates, 'traffic_score'));
+        $trkMax = max(array_column($candidates, 'traffic_score'));
 
         $norm = fn($v, $lo, $hi) => ($hi > $lo) ? ($v - $lo) / ($hi - $lo) : 0.5;
 
         foreach ($candidates as &$c) {
             $c['wsm_score'] = round(
-                $w['distance']       * (1 - $norm($c['distance_km'],        $dMin, $dMax)) +
-                $w['travel_time']    * (1 - $norm($c['travel_time_min'],    $tMin, $tMax)) +
-                $w['traffic']        * $c['traffic_score']                                  +
-                $w['availability']   * $norm($c['units_available'],         $aMin, $aMax)  +
-                $w['next_available'] * (1 - $norm($c['next_available_min'], $nMin, $nMax)),
+                $w['distance']       * (1 - $norm($c['distance_km'],        $dMin,   $dMax))   +
+                $w['travel_time']    * (1 - $norm($c['travel_time_min'],    $tMin,   $tMax))   +
+                $w['traffic']        * $norm($c['traffic_score'],           $trkMin, $trkMax)  +
+                $w['availability']   * $norm($c['units_available'],         $aMin,   $aMax)    +
+                $w['next_available'] * (1 - $norm($c['next_available_min'], $nMin,   $nMax)),
                 4
             );
         }
@@ -952,6 +969,41 @@ class ResourceRequests extends BaseController
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::reject - ' . $e->getMessage());
             return redirect()->to('requests/' . $id)->with('error', 'Failed to reject request.');
+        }
+    }
+
+    // ── Cancel (original requester only, while pending) ──────────────────
+
+    public function cancel($id)
+    {
+        if (!session()->get('isLoggedIn')) return redirect()->to('auth/login');
+
+        $req = $this->requestModel->getById($id);
+        if (!$req) return redirect()->to('requests')->with('error', 'Request not found.');
+
+        $uid          = session()->get('userId') ?? '';
+        $requesterUid = (string)($req['requested_by_uid'] ?? '');
+        if (!$uid || $uid !== $requesterUid) {
+            return redirect()->to('requests/' . $id)->with('error', 'You can only cancel your own requests.');
+        }
+
+        $status = strtolower($req['status'] ?? '');
+        if (!in_array($status, ['pending', 'pending secondary approval'], true)) {
+            return redirect()->to('requests/' . $id)->with('error', 'This request can no longer be cancelled.');
+        }
+
+        try {
+            $this->requestModel->update($id, [
+                'status'            => 'Cancelled',
+                'transfer_state'    => 'Cancelled',
+                'cancelled_by_uid'  => $uid,
+                'cancelled_by_name' => session()->get('userName') ?? '',
+                'cancelled_at'      => new Timestamp(new \DateTime()),
+            ]);
+            return redirect()->to('requests')->with('success', 'Request cancelled successfully.');
+        } catch (\Throwable $e) {
+            log_message('error', 'ResourceRequests::cancel - ' . $e->getMessage());
+            return redirect()->to('requests/' . $id)->with('error', 'Failed to cancel request.');
         }
     }
 

@@ -84,12 +84,16 @@ class Reports extends BaseController
                  ?? $this->timestampToDate($d['emergency_date'] ?? null)
                  ?? $this->timestampToDate($d['created_at']     ?? null);
             return $this->response->setJSON([
-                'id'          => $doc->id(),
-                'date'        => $date,
-                'causes'      => (array)($d['causes']      ?? $d['cause'] ?? []),
-                'other_cause' => (string)($d['other_cause'] ?? $d['otherCause'] ?? ''),
-                'notes'       => (string)($d['notes']       ?? $d['description'] ?? ''),
-                'filed_by'    => (string)($d['created_by_name'] ?? $d['filed_by'] ?? $d['createdByName'] ?? ''),
+                'id'               => $doc->id(),
+                'date'             => $date,
+                'causes'           => (array)($d['causes']      ?? $d['cause'] ?? []),
+                'other_cause'      => (string)($d['other_cause'] ?? $d['otherCause'] ?? ''),
+                'notes'            => (string)($d['notes']       ?? $d['description'] ?? ''),
+                'filed_by'         => (string)($d['created_by_name'] ?? $d['filed_by'] ?? $d['createdByName'] ?? ''),
+                'created_at'       => $this->timestampToFmt($d['created_at'] ?? null),
+                'resolved'         => (bool)($d['resolved'] ?? false),
+                'resolved_by_name' => (string)($d['resolved_by_name'] ?? ''),
+                'resolved_at'      => $this->timestampToFmt($d['resolved_at'] ?? null),
             ]);
         } catch (\Throwable $e) {
             log_message('error', 'Reports::emergencyShow - ' . $e->getMessage());
@@ -163,6 +167,52 @@ class Reports extends BaseController
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
             log_message('error', 'Reports::emergencyCreate - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
+        }
+    }
+
+    /** POST — mark an emergency report as resolved. */
+    public function emergencyResolve(string $projectId, string $docId)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthorized']);
+        }
+
+        if (!pz_can('resolve_emergency_report')) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Forbidden']);
+        }
+
+        try {
+            $db  = $this->firestore->getDb();
+            $now = new Timestamp(new \DateTime());
+
+            $db->collection('project')->document($projectId)
+                ->collection('emergency_reports')->document($docId)
+                ->update([
+                    ['path' => 'resolved',          'value' => true],
+                    ['path' => 'resolved_by_name',  'value' => (string)(session()->get('userName') ?? '')],
+                    ['path' => 'resolved_by_uid',   'value' => (string)(session()->get('userId')   ?? '')],
+                    ['path' => 'resolved_at',        'value' => $now],
+                    ['path' => 'updated_at',         'value' => $now],
+                ]);
+
+            // Clear has_active_emergency if no unresolved reports remain
+            $remaining = $db->collection('project')->document($projectId)
+                ->collection('emergency_reports')->documents();
+            $hasUnresolved = false;
+            foreach ($remaining as $doc) {
+                if (!$doc->exists()) continue;
+                if (!($doc->data()['resolved'] ?? false)) { $hasUnresolved = true; break; }
+            }
+            if (!$hasUnresolved) {
+                $db->collection('project')->document($projectId)->update([
+                    ['path' => 'has_active_emergency', 'value' => false],
+                ]);
+            }
+
+            return $this->response->setJSON(['success' => true]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Reports::emergencyResolve - ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
         }
     }
@@ -338,6 +388,19 @@ class Reports extends BaseController
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
+
+    /** Convert a Firestore Timestamp to a human-readable string in Manila time (e.g. "Jun 26, 2026 2:45 PM"). */
+    private function timestampToFmt(mixed $value): string
+    {
+        if (!$value instanceof Timestamp) return '';
+        try {
+            return $value->get()
+                ->setTimezone(new \DateTimeZone('Asia/Manila'))
+                ->format('M j, Y g:i A');
+        } catch (\Throwable) {
+            return '';
+        }
+    }
 
     /** Convert a Firestore Timestamp or string to YYYY-MM-DD (Manila time), or null on failure. */
     private function timestampToDate(mixed $value): ?string

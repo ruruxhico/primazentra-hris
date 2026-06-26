@@ -31,10 +31,37 @@
 </div>
 
 
-<div id="formToast"></div>
+<div id="formToast" role="alert" aria-live="assertive">
+    <div class="ft-hdr">
+        <span class="material-symbols-outlined ft-icon">error</span>
+        <span class="ft-title">Please complete all required fields</span>
+        <button type="button" class="ft-close" id="formToastClose" aria-label="Dismiss">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <ul class="ft-list" id="formToastList"></ul>
+</div>
+<?php
+    // On redirect-with-input from server validation, override view data with submitted values
+    $wasSubmitted = old('_form_submitted') === '1';
+    if ($wasSubmitted) {
+        $savedAddress = old('location_address') ?: $savedAddress;
+        $savedLat     = old('location_lat')     ?: $savedLat;
+        $savedLng     = old('location_lng')     ?: $savedLng;
+        $oldPhases = old('phases');
+        if (is_array($oldPhases)) $phases = $oldPhases;
+    }
+    $hasSavedPhases = !empty($phases);
+    // Start / End date values for display and hidden inputs
+    $sdVal = old('start_date', $project['start_date_value'] ?? '');
+    $edVal = old('end_date',   $project['end_date_value']   ?? '');
+    $sdDisplay = ($sdVal !== '' && ($sdTs = strtotime($sdVal)) !== false) ? date('d/m/Y', $sdTs) : '';
+    $edDisplay = ($edVal !== '' && ($edTs = strtotime($edVal)) !== false) ? date('d/m/Y', $edTs) : '';
+?>
 <div class="pz-form-container">
-    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data">
+    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data" data-autosave>
         <?= csrf_field() ?>
+        <input type="hidden" name="_form_submitted" value="1">
 
         <div class="pz-form-section">
             <p class="pz-form-section-title">Project Information</p>
@@ -43,10 +70,10 @@
                 <div class="pz-form-group">
                     <label for="project_name">Project Name *</label>
                     <input type="text" id="project_name" name="project_name"
-                           value="<?= esc($project['project_name'] ?? '') ?>" required>
+                           value="<?= esc(old('project_name', $project['project_name'] ?? '')) ?>" required>
                 </div>
                 <div class="pz-form-group">
-                    <label for="client_name">Client Name</label>
+                    <label for="client_name">Client Name *</label>
                 <?php
                 $predefinedClients = ['ATC', 'COMMTREND', 'EDGEPOINT', 'FTAP', 'ITP', 'LDIC', 'SMSGT', 'SMART'];
                 $allClientSuggestions = array_unique(array_merge(
@@ -56,9 +83,10 @@
                 sort($allClientSuggestions);
                 ?>
                 <input type="text" id="client_name" name="client_name"
-                       value="<?= esc($project['client_name'] ?? '') ?>"
+                       value="<?= esc(old('client_name', $project['client_name'] ?? '')) ?>"
                        list="clientSuggestions" autocomplete="off"
-                       placeholder="e.g. SMART">
+                       placeholder="e.g. SMART"
+                       required>
                 <datalist id="clientSuggestions">
                     <?php foreach ($allClientSuggestions as $c): ?>
                     <option value="<?= esc($c) ?>">
@@ -74,7 +102,7 @@
                         <option value="">Select Type</option>
                         <?php foreach (['BUILD-TO-SUIT','RETROFITTING','COLOCATION', 'CONVERSION'] as $type): ?>
                             <option value="<?= esc($type) ?>"
-                                <?= ($project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
+                                <?= old('project_type', $project['project_type'] ?? '') === $type ? 'selected' : '' ?>>
                                 <?= esc($type) ?>
                             </option>
                         <?php endforeach; ?>
@@ -134,7 +162,7 @@
                         <?php foreach ($projectManagers ?? [] as $mgr): ?>
                             <?php $label = trim(($mgr['first_name'] ?? '') . ' ' . ($mgr['last_name'] ?? '')); ?>
                             <option value="<?= esc($mgr['id'] ?? '') ?>"
-                                <?= (($project['pm_id_normalized'] ?? '') === ($mgr['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= old('project_manager_id', $project['pm_id_normalized'] ?? '') === ($mgr['id'] ?? '') ? 'selected' : '' ?>>
                                 <?= esc($label ?: ($mgr['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
@@ -148,7 +176,7 @@
                         <?php foreach ($siteEngineers ?? [] as $eng): ?>
                             <?php $label = trim(($eng['first_name'] ?? '') . ' ' . ($eng['last_name'] ?? '')); ?>
                             <option value="<?= esc($eng['id'] ?? '') ?>"
-                                <?= (($project['se_id_normalized'] ?? '') === ($eng['id'] ?? '')) ? 'selected' : '' ?>>
+                                <?= old('site_engineer_id', $project['se_id_normalized'] ?? '') === ($eng['id'] ?? '') ? 'selected' : '' ?>>
                                 <?= esc($label ?: ($eng['email'] ?? 'N/A')) ?>
                             </option>
                         <?php endforeach; ?>
@@ -158,29 +186,29 @@
 
             <div class="pz-form-row cols-2" style="margin-top:.65rem">
                 <div class="pz-form-group">
-                    <label for="start_date">Start Date</label>
+                    <label for="start_date">Start Date *</label>
                     <div class="date-picker" data-target="start">
                         <input type="text" id="start_date_display" class="date-display"
                                placeholder="DD/MM/YYYY"
-                               value="<?= esc((($project['start_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string)$project['start_date_value'])) : '') ?>"
+                               value="<?= esc($sdDisplay) ?>"
                                readonly>
                         <input type="hidden" id="start_date" name="start_date"
-                               value="<?= esc($project['start_date_value'] ?? ($project['start_date'] ?? '')) ?>">
-                        <button type="button" class="date-toggle">📅</button>
+                               value="<?= esc($sdVal) ?>">
+                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
                         <div class="calendar-popup" aria-hidden="true"></div>
                     </div>
                 </div>
 
                 <div class="pz-form-group">
-                    <label for="end_date">End Date</label>
+                    <label for="end_date">End Date *</label>
                     <div class="date-picker" data-target="end">
                         <input type="text" id="end_date_display" class="date-display"
                                placeholder="DD/MM/YYYY"
-                               value="<?= esc((($project['end_date_value'] ?? '') !== '') ? date('d/m/Y', strtotime((string)$project['end_date_value'])) : '') ?>"
+                               value="<?= esc($edDisplay) ?>"
                                readonly>
                         <input type="hidden" id="end_date" name="end_date"
-                               value="<?= esc($project['end_date_value'] ?? ($project['end_date'] ?? '')) ?>">
-                        <button type="button" class="date-toggle">📅</button>
+                               value="<?= esc($edVal) ?>">
+                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
                         <div class="calendar-popup" aria-hidden="true"></div>
                     </div>
                 </div>
@@ -191,14 +219,14 @@
                     <label for="budget">Budget *</label>
                     <input type="number" id="budget" name="budget"
                            min="0" step="0.01"
-                           value="<?= esc($project['budget'] ?? '') ?>" required>
+                           value="<?= esc(old('budget', $project['budget'] ?? '')) ?>" required>
                 </div>
 
                 <div class="pz-form-group">
                     <label for="delay_ping_days">Ping if Delayed by (Days)</label>
                     <input type="number" id="delay_ping_days" name="delay_ping_days"
                            min="0" step="1" placeholder="e.g. 3"
-                           value="<?= esc($project['delay_ping_days'] ?? '') ?>">
+                           value="<?= esc(old('delay_ping_days', $project['delay_ping_days'] ?? '')) ?>">
                     <small class="pz-field-hint">Notify admins and PM when ML predicts a delay ≥ this many days. Leave 0 to ping on any predicted delay.</small>
                 </div>
 
@@ -240,21 +268,28 @@
 
         <!-- ── Project Schedule (phase accordion) ─────────── -->
         <div class="pz-form-section">
-            <?php $hasSavedPhases = !empty($phases); ?>
+            <?php
+                // $hasSavedPhases and $phases already set by the old() override block above
+                if ($wasSubmitted) {
+                    $schedChecked = !empty(old('add_tasks_now'));
+                } else {
+                    $schedChecked = $hasSavedPhases;
+                }
+            ?>
 
             <div class="form-group add-tasks-toggle">
                 <label class="checkbox-label">
                     <input type="checkbox" id="add_tasks_now" name="add_tasks_now"
-                           <?= $hasSavedPhases ? 'checked' : '' ?>>
+                           <?= $schedChecked ? 'checked' : '' ?>>
                     <span class="checkbox-custom"></span>
-                    Add project schedule
+                    Add project schedule<?= !$isEdit ? ' <span style="color:#c0392b;font-weight:700">*</span>' : '' ?>
                 </label>
             </div>
 
             <input type="hidden" id="overall_progress" name="overall_progress"
                    value="<?= esc($project['overall_progress'] ?? ($project['completion_percent'] ?? 0)) ?>">
 
-            <div id="scheduleSection" <?= $hasSavedPhases ? '' : 'style="display:none"' ?>>
+            <div id="scheduleSection" <?= $schedChecked ? '' : 'style="display:none"' ?>>
                 <div class="section-title-row">
                     <h2>Project Schedule</h2>
                     <button type="button" id="addPhaseBtn" class="btn btn-add">+ Add Phase</button>
@@ -311,7 +346,7 @@
                                     <div class="date-picker phase-card-date-picker">
                                         <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
                                         <input type="hidden" name="phases[<?= $pIdx ?>][site_date]" value="<?= esc($phaseSiteDate) ?>">
-                                        <button type="button" class="date-toggle">📅</button>
+                                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
                                         <div class="calendar-popup" aria-hidden="true"></div>
                                     </div>
                                 </div>
@@ -741,17 +776,30 @@ if (window.location.hostname === 'localhost') {
         if (progressInput) progressInput.value = 0;
     }
 
-    // ── Form toast ─────────────────────────────────────────────
+    // ── Form validation toast ──────────────────────────────────
     var _toastTimer = null;
-    function showFormToast(msg) {
-        var t = document.getElementById('formToast');
-        if (!t) return;
-        t.textContent = msg;
+    function showFormToast(msgs, title) {
+        var t  = document.getElementById('formToast');
+        var tl = document.getElementById('formToastList');
+        var th = t ? t.querySelector('.ft-title') : null;
+        if (!t || !tl) return;
+        if (typeof msgs === 'string') msgs = [msgs];
+        if (th) th.textContent = title || 'Please complete all required fields';
+        tl.innerHTML = msgs.map(function (m) {
+            return '<li><span class="material-symbols-outlined ft-bullet">radio_button_checked</span>' + escHtml(m) + '</li>';
+        }).join('');
         t.classList.add('show');
         clearTimeout(_toastTimer);
-        _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 4500);
+        _toastTimer = setTimeout(function () { t.classList.remove('show'); }, 6000);
     }
     window.showFormToast = showFormToast;
+    var _ftClose = document.getElementById('formToastClose');
+    if (_ftClose) {
+        _ftClose.addEventListener('click', function () {
+            var t = document.getElementById('formToast');
+            if (t) { t.classList.remove('show'); clearTimeout(_toastTimer); }
+        });
+    }
 
     // ── Build a milestone card element ─────────────────────────
     function buildPhaseItem(pi, data) {
@@ -789,7 +837,7 @@ if (window.location.hostname === 'localhost') {
                     '<div class="date-picker phase-card-date-picker">' +
                         '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
                         '<input type="hidden" name="phases[' + pi + '][site_date]" value="' + escHtml(data.site_date || '') + '">' +
-                        '<button type="button" class="date-toggle">\u{1F4C5}</button>' +
+                        '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
                         '<div class="calendar-popup" aria-hidden="true"></div>' +
                     '</div>' +
                 '</div>' +
@@ -799,6 +847,7 @@ if (window.location.hostname === 'localhost') {
             window.initPhaseDatePicker(card.querySelector('.date-picker'));
         }
 
+        attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
@@ -806,8 +855,28 @@ if (window.location.hostname === 'localhost') {
         return card;
     }
 
+    // ── Clear error highlight as soon as a field is touched ────
+    function attachFieldErrorClearing(card) {
+        var nameInp   = card.querySelector('.phase-card-name-inp');
+        var weightInp = card.querySelector('.phase-weight-inp');
+        var weightGrp = card.querySelector('.phase-weight-group');
+        var qtyInp    = card.querySelector('.phase-card-inp');
+        var dateDisp  = card.querySelector('.phase-card-date-picker .date-display');
+        var dateHid   = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+
+        if (nameInp)   nameInp.addEventListener('input',  function () { nameInp.classList.remove('pz-field-error'); });
+        if (weightInp) weightInp.addEventListener('input', function () {
+            if (weightGrp) weightGrp.classList.remove('pz-field-error');
+            weightInp.classList.remove('pz-field-error');
+        });
+        if (qtyInp)    qtyInp.addEventListener('input',   function () { qtyInp.classList.remove('pz-field-error'); });
+        // date picker clears on hidden input change (set by the calendar)
+        if (dateHid)   dateHid.addEventListener('change', function () { if (dateDisp) dateDisp.classList.remove('pz-field-error'); });
+    }
+
     // ── Attach events to PHP-rendered cards (edit mode) ────────
     function attachExistingCard(card) {
+        attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
@@ -898,18 +967,128 @@ if (window.location.hostname === 'localhost') {
         });
     }
 
-    // ── Submit: block when total > 100% ───────────────────────
-    document.getElementById('projectForm').addEventListener('submit', function (e) {
-        if (!checkbox || !checkbox.checked) return;
-        var total = 0;
-        container.querySelectorAll('.phase-weight-inp').forEach(function (inp) {
-            total += parseFloat(inp.value) || 0;
+    // ── Submit: required fields → milestone fields → weight ───
+    var isEdit = <?= $isEdit ? 'true' : 'false' ?>;
+
+    // Clear all milestone field-error highlights
+    function clearMilestoneErrors() {
+        container.querySelectorAll('.pz-field-error').forEach(function (el) {
+            el.classList.remove('pz-field-error');
         });
-        total = Math.round(total * 10) / 10;
-        if (Math.abs(total - 100) > 0.5) {
+    }
+
+    document.getElementById('projectForm').addEventListener('submit', function (e) {
+        clearMilestoneErrors();
+
+        // ── 1. Top-level required fields ──────────────────────
+        var errs = [];
+        var nameEl   = document.getElementById('project_name');
+        var clientEl = document.getElementById('client_name');
+        var typeEl   = document.getElementById('project_type');
+        var addrEl   = document.getElementById('location_address');
+        var pmEl     = document.getElementById('project_manager_id');
+        var seEl     = document.getElementById('site_engineer_id');
+        var budgetEl = document.getElementById('budget');
+        var startEl  = document.getElementById('start_date');
+        var endEl    = document.getElementById('end_date');
+        var schedCb  = document.getElementById('add_tasks_now');
+
+        if (nameEl   && !nameEl.value.trim())   errs.push('Project Name');
+        if (clientEl && !clientEl.value.trim()) errs.push('Client Name');
+        if (typeEl   && !typeEl.value)          errs.push('Tower Type');
+        if (addrEl   && !addrEl.value.trim())   errs.push('Address');
+        if (pmEl     && !pmEl.value)            errs.push('Project Manager');
+        if (seEl     && !seEl.value)            errs.push('Site Engineer');
+        if (!startEl || !startEl.value)         errs.push('Start Date');
+        if (!endEl   || !endEl.value)           errs.push('End Date');
+        if (budgetEl && budgetEl.value === '')   errs.push('Budget');
+
+        if (!isEdit) {
+            if (!schedCb || !schedCb.checked) {
+                errs.push('Project Schedule (check the box and add milestones)');
+            } else if (container.querySelectorAll('.phase-card').length === 0) {
+                errs.push('Project Schedule (add at least one milestone)');
+            }
+        } else if (schedCb && schedCb.checked && container.querySelectorAll('.phase-card').length === 0) {
+            errs.push('Project Schedule (add at least one milestone)');
+        }
+
+        if (errs.length > 0) {
             e.preventDefault();
             e.stopImmediatePropagation();
-            showFormToast('Total milestone weight is ' + total.toFixed(1) + '% — must equal 100%. Adjust before saving.');
+            showFormToast(errs);
+            return;
+        }
+
+        // ── 2. Milestone field validation ──────────────────────
+        if (checkbox && checkbox.checked) {
+            var phaseCards  = container.querySelectorAll('.phase-card');
+            var mileErrs    = [];   // { idx, label, missing[] }
+            var firstErrCard = null;
+
+            phaseCards.forEach(function (card, idx) {
+                var nameInp    = card.querySelector('.phase-card-name-inp');
+                var weightInp  = card.querySelector('.phase-weight-inp');
+                var weightGrp  = card.querySelector('.phase-weight-group');
+                var qtyInp     = card.querySelector('.phase-card-inp');
+                var dateDisp   = card.querySelector('.phase-card-date-picker .date-display');
+                var dateHid    = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+                var mileName   = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'Milestone ' + (idx + 1);
+                var missing    = [];
+
+                if (!nameInp || !nameInp.value.trim()) {
+                    missing.push('Name');
+                    if (nameInp) nameInp.classList.add('pz-field-error');
+                }
+                var wVal = parseFloat(weightInp ? weightInp.value : '');
+                if (!weightInp || weightInp.value === '' || isNaN(wVal) || wVal <= 0) {
+                    missing.push('Weight %');
+                    if (weightGrp) weightGrp.classList.add('pz-field-error');
+                    else if (weightInp) weightInp.classList.add('pz-field-error');
+                }
+                var qVal = parseFloat(qtyInp ? qtyInp.value : '');
+                if (!qtyInp || qtyInp.value === '' || isNaN(qVal)) {
+                    missing.push('Qty');
+                    if (qtyInp) qtyInp.classList.add('pz-field-error');
+                }
+                if (!dateHid || !dateHid.value) {
+                    missing.push('Target Date');
+                    if (dateDisp) dateDisp.classList.add('pz-field-error');
+                }
+
+                if (missing.length > 0) {
+                    if (!firstErrCard) firstErrCard = card;
+                    mileErrs.push({ idx: idx + 1, label: mileName, missing: missing });
+                }
+            });
+
+            if (mileErrs.length > 0) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                var MAX = 5;
+                var lines = mileErrs.slice(0, MAX).map(function (m) {
+                    return m.idx + '. ' + m.label + ' — ' + m.missing.join(', ');
+                });
+                if (mileErrs.length > MAX) lines.push('... and ' + (mileErrs.length - MAX) + ' more milestone(s)');
+                showFormToast(lines, 'Fix incomplete milestones (' + mileErrs.length + ')');
+                if (firstErrCard) firstErrCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
+            // ── 3. Weight total check ──────────────────────────
+            var total = 0;
+            container.querySelectorAll('.phase-weight-inp').forEach(function (inp) {
+                total += parseFloat(inp.value) || 0;
+            });
+            total = Math.round(total * 10) / 10;
+            if (Math.abs(total - 100) > 0.5) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                showFormToast(
+                    ['Current total is ' + total.toFixed(1) + '% — adjust weights so they add up to 100%.'],
+                    'Milestone weights must total 100%'
+                );
+            }
         }
     }, true);
 
@@ -920,6 +1099,64 @@ if (window.location.hostname === 'localhost') {
 
     enableDragSort(container);
     updateTotal();
+
+    // ── Auto-save hooks ────────────────────────────────────────
+    window.pzBuildPhaseCard = buildPhaseItem;
+
+    window['pzAsSave_projectForm'] = function () {
+        var xk = 'pz_as_projectForm' + location.pathname + '_x';
+        var phData = [];
+        container.querySelectorAll('.phase-card').forEach(function (card) {
+            phData.push({
+                name:      (card.querySelector('.phase-card-name-inp') || {}).value || '',
+                weight:    (card.querySelector('.phase-weight-inp')    || {}).value || '',
+                qty:       (card.querySelector('.phase-card-inp')      || {}).value || '',
+                unit:      (card.querySelector('.phase-card-sel')      || {}).value || 'pcs',
+                site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || ''
+            });
+        });
+        try {
+            sessionStorage.setItem(xk, JSON.stringify({
+                checked: checkbox ? checkbox.checked : false,
+                phases:  phData
+            }));
+        } catch (e) {}
+    };
+
+    window['pzAsRestore_projectForm'] = function (extraData) {
+        if (!extraData) return;
+
+        // Restore schedule checkbox + section visibility (no change event fired)
+        if (checkbox && extraData.checked !== undefined) {
+            checkbox.checked = !!extraData.checked;
+            setSectionVisible(!!extraData.checked);
+        }
+
+        // Rebuild phase cards from saved JSON
+        if (Array.isArray(extraData.phases) && extraData.phases.length > 0) {
+            container.innerHTML = '';
+            extraData.phases.forEach(function (ph, pi) {
+                container.appendChild(buildPhaseItem(pi, ph));
+            });
+            updateTotal();
+        }
+
+        // Refresh date display inputs from their restored hidden values
+        function refreshDisp(hidId, dispId) {
+            var h = document.getElementById(hidId), d = document.getElementById(dispId);
+            if (!h || !d || !h.value) return;
+            try {
+                var dt = new Date(h.value);
+                if (!isNaN(dt)) {
+                    d.value = ('0' + dt.getDate()).slice(-2) + '/' +
+                              ('0' + (dt.getMonth() + 1)).slice(-2) + '/' +
+                              dt.getFullYear();
+                }
+            } catch (e) {}
+        }
+        refreshDisp('start_date', 'start_date_display');
+        refreshDisp('end_date',   'end_date_display');
+    };
 }());
 </script>
 
@@ -938,9 +1175,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var now = new Date(), viewYear = now.getFullYear(), viewMonth = now.getMonth();
         var mode = 'days', yearsStart = Math.floor(viewYear / 12) * 12;
         var header = document.createElement('div'); header.className = 'cal-header';
-        var prev = document.createElement('button'); prev.type = 'button'; prev.textContent = '◀';
+        var prev = document.createElement('button'); prev.type = 'button'; prev.className = 'cal-nav-btn'; prev.innerHTML = '<span class="material-symbols-outlined">chevron_left</span>';
         var title = document.createElement('div'); title.className = 'cal-title';
-        var next = document.createElement('button'); next.type = 'button'; next.textContent = '▶';
+        var next = document.createElement('button'); next.type = 'button'; next.className = 'cal-nav-btn'; next.innerHTML = '<span class="material-symbols-outlined">chevron_right</span>';
         header.appendChild(prev); header.appendChild(title); header.appendChild(next);
         var grid = document.createElement('div'); grid.className = 'cal-grid';
         container.appendChild(header); container.appendChild(grid);
@@ -965,6 +1202,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         e.addEventListener('click', function () {
                             inputHidden.value = cellDate;
                             inputDisplay.value = pad(day) + '/' + pad(viewMonth + 1) + '/' + viewYear;
+                            inputHidden.dispatchEvent(new Event('change'));
                             container.classList.remove('open'); container.setAttribute('aria-hidden', 'true');
                             onSelect(cellDate);
                         });
@@ -1053,16 +1291,23 @@ document.addEventListener('DOMContentLoaded', function () {
             opts.onSelect = function () {};
         }
 
-        createCalendar(popup, hidden, display, opts);
+        window.pzCreateCalendar(popup, hidden, display, opts);
 
         toggle.addEventListener('click', function () {
             var open = popup.classList.toggle('open');
             popup.setAttribute('aria-hidden', !open);
-            // Re-render so disabled days reflect the current partner value
-            if (open && popup._rerender) popup._rerender();
+            if (open) {
+                if (popup._rerender) popup._rerender();
+                // Flip upward if the popup would overflow the viewport bottom
+                popup.classList.remove('above');
+                var rect = popup.getBoundingClientRect();
+                if (rect.bottom > window.innerHeight - 16) {
+                    popup.classList.add('above');
+                }
+            }
         });
         document.addEventListener('click', function (e) {
-            if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); }
+            if (!wrapper.contains(e.target)) { popup.classList.remove('open', 'above'); popup.setAttribute('aria-hidden', 'true'); }
         });
     }
 
@@ -1077,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', function () {
             e.preventDefault();
             e.stopImmediatePropagation();
             if (window.showFormToast) {
-                window.showFormToast('End date must be on or after the start date.');
+                window.showFormToast(['End date must be on or after the start date.']);
             }
             return false;
         }

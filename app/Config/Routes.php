@@ -63,9 +63,10 @@ $routes->post('projects/(:segment)/resources/bulk-assign-manpower', 'Projects::b
 $routes->post('projects/(:segment)/resources/bulk-assign-equipment','Projects::bulkAssignEquipment/$1');
 
 // Project Reports (Emergency + Daily Progress)
-$routes->get('projects/(:segment)/emergency-reports/json',         'Reports::emergencyList/$1');
-$routes->get('projects/(:segment)/emergency-reports/(:segment)',   'Reports::emergencyShow/$1/$2');
-$routes->post('projects/(:segment)/emergency-reports',             'Reports::emergencyCreate/$1');
+$routes->get('projects/(:segment)/emergency-reports/json',                    'Reports::emergencyList/$1');
+$routes->get('projects/(:segment)/emergency-reports/(:segment)',              'Reports::emergencyShow/$1/$2');
+$routes->post('projects/(:segment)/emergency-reports',                         'Reports::emergencyCreate/$1');
+$routes->post('projects/(:segment)/emergency-reports/(:segment)/resolve',      'Reports::emergencyResolve/$1/$2');
 $routes->get('projects/(:segment)/daily-reports/json',             'Reports::dailyList/$1');
 $routes->get('projects/(:segment)/daily-reports/(:segment)',       'Reports::dailyShow/$1/$2');
 $routes->post('projects/(:segment)/daily-reports',                 'Reports::dailyCreate/$1');
@@ -90,6 +91,7 @@ $routes->post('requests/recommend-source',        'ResourceRequests::recommendSo
 $routes->post('requests/approve/(:segment)',       'ResourceRequests::approve/$1');
 $routes->post('requests/approve-secondary/(:segment)', 'ResourceRequests::approveSecondary/$1');
 $routes->post('requests/reject/(:segment)',          'ResourceRequests::reject/$1');
+$routes->post('requests/cancel/(:segment)',          'ResourceRequests::cancel/$1');
 $routes->post('requests/accept-delivery/(:segment)', 'ResourceRequests::acceptDelivery/$1');
 
 // Resources Routes

@@ -7,6 +7,7 @@ if (!function_exists('rr_badge')) {
             'pending secondary approval' => 'pz-badge-pending-secondary',
             'in-transit'                 => 'pz-badge-in-transit',
             'rejected'                   => 'pz-badge-rejected',
+            'cancelled'                  => 'pz-badge-rejected',
             'completed'                  => 'pz-badge-completed',
         ];
         $cls = $map[strtolower($status)] ?? 'pz-badge-pending';
