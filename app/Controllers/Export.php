@@ -14,6 +14,7 @@ use Dompdf\Options;
 class Export extends BaseController
 {
     protected FirestoreService $firestore;
+    private array $_userNameCache = [];
 
     public function __construct()
     {
@@ -502,7 +503,12 @@ class Export extends BaseController
 
     private function exportPdf(array $headers, array $rows, string $title)
     {
-        $html = $this->buildPrintHtml($headers, $rows, $title, forPdf: true);
+        // Raise limits for large datasets; PDF rendering is memory-intensive
+        $prevMemory = ini_set('memory_limit', '256M');
+        $prevTime   = ini_get('max_execution_time');
+        set_time_limit(120);
+
+        $html = $this->buildPrintHtml($headers, $rows, $title, true);
 
         $options = new Options();
         $options->setIsRemoteEnabled(false);
@@ -516,24 +522,27 @@ class Export extends BaseController
         $pageWidthMm = 297;
         $colCount    = count($headers);
         $rowCount    = count($rows);
-        // More columns → cells wrap more → rows taller
         $mmPerRow    = $colCount > 10 ? 26 : ($colCount > 6 ? 20 : 14);
-        $totalHeightMm = 55               // logo header + table header row
-                       + ($rowCount * $mmPerRow)
-                       + 20;             // footer + bottom margin
-        $pageHeightMm = max(210, $totalHeightMm); // never shorter than A4 height
+        $totalHeightMm = 55 + ($rowCount * $mmPerRow) + 20;
+        $pageHeightMm  = max(210, $totalHeightMm);
         $dompdf->setPaper([0, 0, $pageWidthMm * $ptPerMm, $pageHeightMm * $ptPerMm]);
         $dompdf->render();
 
+        $pdfContent = $dompdf->output();
+
+        // Restore limits
+        if ($prevMemory !== false) ini_set('memory_limit', $prevMemory);
+        set_time_limit((int)$prevTime);
+
         $filename = strtolower(str_replace(' ', '_', $title)) . '_' . date('Ymd') . '.pdf';
 
-        // Flush all output buffers so no buffered content corrupts the binary PDF stream
-        while (ob_get_level() > 0) {
-            ob_end_clean();
-        }
-
-        $dompdf->stream($filename, ['Attachment' => true]);
-        exit;
+        // Return via CI4 response — avoids raw header() / OB conflicts
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Content-Length', (string) strlen($pdfContent))
+            ->setHeader('Cache-Control', 'private, no-cache, must-revalidate')
+            ->setBody($pdfContent);
     }
 
     private function exportPrint(array $headers, array $rows, string $title)
@@ -755,15 +764,18 @@ HTML;
             return '';
         }
         if ($id === '') return '';
+        if (array_key_exists($id, $this->_userNameCache)) {
+            return $this->_userNameCache[$id];
+        }
         try {
             $doc = $this->firestore->getDb()->collection('users')->document($id)->snapshot();
             if ($doc->exists()) {
-                $d = $doc->data();
+                $d    = $doc->data();
                 $name = trim(($d['first_name'] ?? '') . ' ' . ($d['last_name'] ?? ''));
-                return $name ?: ($d['email'] ?? $id);
+                return $this->_userNameCache[$id] = ($name ?: ($d['email'] ?? $id));
             }
         } catch (\Throwable) {}
-        return $id;
+        return $this->_userNameCache[$id] = $id;
     }
 
     private function normDate(mixed $val): string
