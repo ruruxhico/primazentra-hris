@@ -56,9 +56,6 @@
                 <button type="submit" class="auth-submit">LOGIN</button>
             </form>
 
-            <div class="auth-footer-link">
-                No account yet? <a href="<?= base_url('auth/register') ?>">Register here</a>
-            </div>
         </div>
     </div>
 <?= $this->endSection() ?>

@@ -26,6 +26,7 @@
             <?php endif; ?>
 
             <form action="<?= base_url('auth/processRegister') ?>" method="post" class="auth-form" novalidate id="registerForm" data-autosave>
+                <input type="hidden" name="invite_token" value="<?= esc($invite_token ?? '') ?>">
                 <div class="auth-section-label">
                     <span class="auth-section-icon material-symbols-outlined" aria-hidden="true">person</span>
                     <span>Personal Information</span>

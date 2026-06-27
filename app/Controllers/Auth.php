@@ -336,11 +336,77 @@ class Auth extends BaseController {
         return redirect()->to('/login')->with('success', 'Password changed successfully. Please log in with your new password.');
     }
 
+    // ── Invite token helpers ──────────────────────────────────────────────
+
+    private function validateInviteToken(string $token): bool
+    {
+        if ($token === '') return false;
+        try {
+            $doc = $this->firestore->getDb()
+                ->collection('invite_tokens')->document($token)->snapshot();
+            if (!$doc->exists()) return false;
+            $d = $doc->data();
+            if ($d['used'] ?? false) return false;
+            $exp = $d['expires_at'] ?? null;
+            if ($exp instanceof Timestamp && $exp->get() < new \DateTime()) return false;
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function consumeInviteToken(string $token): void
+    {
+        try {
+            $this->firestore->getDb()
+                ->collection('invite_tokens')->document($token)
+                ->update([['path' => 'used', 'value' => true]]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::consumeInviteToken - ' . $e->getMessage());
+        }
+    }
+
+    public function generateInvite()
+    {
+        if (!session()->get('isLoggedIn') || !pz_can('create_staff')) {
+            return $this->response->setStatusCode(403)->setJSON(['error' => 'Forbidden']);
+        }
+        $token = bin2hex(random_bytes(32));
+        try {
+            $now = new Timestamp(new \DateTime());
+            $exp = new Timestamp((new \DateTime())->modify('+48 hours'));
+            $this->firestore->getDb()->collection('invite_tokens')->document($token)->set([
+                'token'          => $token,
+                'created_at'     => $now,
+                'expires_at'     => $exp,
+                'used'           => false,
+                'created_by_uid' => (string)(session()->get('userId') ?? ''),
+            ]);
+            return $this->response->setJSON([
+                'url' => base_url('register?token=' . $token),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Auth::generateInvite - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Could not generate invite link.']);
+        }
+    }
+
+    // ── Registration ──────────────────────────────────────────────────────
+
     public function register() {
-        return view('auth/register');
+        $token = (string)($this->request->getGet('token') ?? '');
+        if (!$this->validateInviteToken($token)) {
+            return redirect()->to('/login')->with('error', 'This registration link is invalid or has expired.');
+        }
+        return view('auth/register', ['invite_token' => $token]);
     }
 
     public function processRegister() {
+        $inviteToken = (string)($this->request->getPost('invite_token') ?? '');
+        if (!$this->validateInviteToken($inviteToken)) {
+            return redirect()->to('/login')->with('error', 'This registration link is invalid or has expired.');
+        }
+
         // Logic for Administrator self-registration
         $email = strtolower(trim((string) $this->request->getPost('email')));
         $password = (string) $this->request->getPost('password');
@@ -414,6 +480,8 @@ class Auth extends BaseController {
         } catch (\Throwable $e) {
             return redirect()->back()->withInput()->with('error', 'Failed to create Firebase Authentication user: ' . $e->getMessage());
         }
+
+        $this->consumeInviteToken($inviteToken);
 
         return redirect()->to('/login')->with('success', 'Administrator Account Created');
     }
