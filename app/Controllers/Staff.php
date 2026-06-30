@@ -101,7 +101,7 @@ class Staff extends BaseController
                     strcasecmp((string) ($s['role'] ?? ''), $filterRole) === 0));
             }
 
-            $perPage     = config('Pager')->perPage;
+            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
             $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
             $total       = count($staff);
 

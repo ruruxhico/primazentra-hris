@@ -98,7 +98,7 @@ class Dashboard extends BaseController
                 log_message('warning', 'Dashboard: manpower fetch failed - ' . $e->getMessage());
             }
             $availableManpower = array_values(array_filter($allManpower, function ($m) {
-                return ($m['status'] ?? '') === 'Available';
+                return strtoupper($m['status'] ?? '') === 'AVAILABLE';
             }));
 
             // ── Build project → assigned-resource maps ────────────────

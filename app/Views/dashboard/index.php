@@ -2,6 +2,12 @@
 
 <?= $this->section('head') ?>
 <link rel="stylesheet" href="<?= asset_url('css/dashboard-summary.css') ?>?v=<?= filemtime(ROOTPATH . 'public/css/dashboard-summary.css') ?>">
+<style>
+.mp-type-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.1rem;}
+.mp-type-chip{padding:.3rem .85rem;border-radius:999px;border:1.5px solid #C8A951;background:#fff;color:#7a5c1e;font-size:.82rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:background .13s,color .13s;}
+.mp-type-chip.selected{background:#C8A951;color:#fff;}
+.mp-type-chip:hover:not(.selected){background:#fdf3d8;}
+</style>
 <?php if (!empty($googleMapsBrowserKey)): ?>
 <script>
 window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
@@ -28,6 +34,17 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <div class="dnd-modal-project" id="dndSrcLabel"></div>
             <div class="dnd-modal-label">to</div>
             <div class="dnd-modal-project" id="dndDestLabel"></div>
+            <div id="dndManpowerTypeGroup" style="display:none;margin-top:.9rem;">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:#5a4020;margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em;">Manpower Type</label>
+                <div class="mp-type-chips" id="dndManpowerTypeChips" data-target="dndManpowerType">
+                    <button type="button" class="mp-type-chip" data-value="Foreman">Foreman</button>
+                    <button type="button" class="mp-type-chip" data-value="Mason">Mason</button>
+                    <button type="button" class="mp-type-chip" data-value="Electrician">Electrician</button>
+                    <button type="button" class="mp-type-chip" data-value="Labor/Helper">Labor/Helper</button>
+                </div>
+                <input type="hidden" id="dndManpowerType" value="">
+                <div id="dndManpowerTypeErr" style="display:none;margin-top:.3rem;font-size:.8rem;color:#991b1b;"></div>
+            </div>
         </div>
         <div class="dnd-modal-actions">
             <button class="dnd-modal-cancel" id="dndCancelBtn">Cancel</button>
@@ -53,6 +70,17 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                 <option value="Equipment">Equipment</option>
                 <option value="Tools">Tools</option>
             </select>
+        </div>
+
+        <div id="reqManpowerTypeGroup" style="display:none;margin-bottom:.85rem;">
+            <label style="display:block;font-size:.8rem;font-weight:600;color:#5a4020;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.04em;">Manpower Type</label>
+            <div class="mp-type-chips" id="reqManpowerTypeChips" data-target="reqManpowerType">
+                <button type="button" class="mp-type-chip" data-value="Foreman">Foreman</button>
+                <button type="button" class="mp-type-chip" data-value="Mason">Mason</button>
+                <button type="button" class="mp-type-chip" data-value="Electrician">Electrician</button>
+                <button type="button" class="mp-type-chip" data-value="Labor/Helper">Labor/Helper</button>
+            </div>
+            <input type="hidden" id="reqManpowerType" value="">
         </div>
 
         <div id="reqModelGroup" style="display:none;margin-bottom:.85rem;">
@@ -810,8 +838,25 @@ document.addEventListener('DOMContentLoaded', function () {
         if (_state === 'form') {
             html += '<button class="rpt-btn-submit" onclick="submitReport()">Submit</button>';
         }
+        if (_state === 'summary') {
+            html += '<button class="rpt-btn-print" onclick="printProgressSummary()"><span class="material-symbols-outlined">picture_as_pdf</span>Download PDF</button>';
+        }
         f.innerHTML = html;
     }
+
+    window.printProgressSummary = function () {
+        var fromId = _summaryType === 'weekly' ? 'rptWkFrom' : 'rptMsFrom';
+        var toId   = _summaryType === 'weekly' ? 'rptWkTo'   : 'rptMsTo';
+        var fromEl = document.getElementById(fromId);
+        var toEl   = document.getElementById(toId);
+
+        var params = new URLSearchParams({
+            type:      _summaryType,
+            date_from: fromEl ? (fromEl.value || '') : '',
+            date_to:   toEl   ? (toEl.value   || '') : '',
+        });
+        window.location.href = _base + '/projects/' + _pid + '/summary-pdf?' + params.toString();
+    };
 
     function fetchDates() {
         var url = _base + '/projects/' + _pid +
@@ -1191,6 +1236,16 @@ document.addEventListener('DOMContentLoaded', function () {
         return day + '-' + mon + '-' + yr;
     }
 
+    function _mkDp(id, val) {
+        var disp = val ? val.slice(8,10) + '/' + val.slice(5,7) + '/' + val.slice(0,4) : '';
+        return '<div class="date-picker" id="' + id + 'Picker" style="flex-shrink:0;">' +
+               '<input type="text" class="date-display" placeholder="DD/MM/YYYY"' + (disp ? ' value="' + disp + '"' : '') + ' readonly style="width:105px;padding:.28rem .4rem;font-size:.8rem;">' +
+               '<input type="hidden" id="' + id + '" value="' + (val || '') + '">' +
+               '<button type="button" class="date-toggle" style="padding:.28rem .4rem;"><span class="material-symbols-outlined" style="font-size:1rem;">calendar_month</span></button>' +
+               '<div class="calendar-popup" aria-hidden="true"></div>' +
+               '</div>';
+    }
+
     function _renderSummary() {
         var d = _summaryData || {};
         var html = '';
@@ -1204,7 +1259,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // If no saved weekly_targets but project has start/end dates,
             // generate week slots with S-curve targets (mirrors mobile behavior)
             var scurveFallback = false;
-            if (!targets.length && d.startDate && d.endDate) {
+            var hasValidDates  = d.startDate && d.endDate && d.startDate < d.endDate;
+            if (!targets.length && hasValidDates) {
                 var _s  = new Date(d.startDate + 'T00:00:00');
                 var _e  = new Date(d.endDate   + 'T00:00:00');
                 var _n  = Math.max(1, Math.ceil((_e - _s) / (7 * 24 * 3600 * 1000)));
@@ -1222,19 +1278,46 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Show only weeks that have already started (mirror mobile behaviour)
             var _today = new Date(); _today.setHours(0, 0, 0, 0);
+            var allTargets = targets.slice();
             targets = targets.filter(function(wt) {
                 if (!wt.week_start) return true;
                 return new Date(wt.week_start + 'T00:00:00') <= _today;
             });
 
-            if (!targets.length) {
+            if (!d.startDate || !d.endDate) {
                 html += '<div class="rpt-sum-empty">No project dates set. Add a start and end date to the project to generate the weekly target table.</div>';
+            } else if (d.startDate >= d.endDate) {
+                html += '<div class="rpt-sum-empty">Project end date is before the start date. Please correct the project schedule.</div>';
+            } else if (!targets.length && allTargets.length) {
+                html += '<div class="rpt-sum-empty">Project has not started yet — weekly summary will appear once the start date is reached (' + d.startDate + ').</div>';
+            } else if (!targets.length) {
+                html += '<div class="rpt-sum-empty">No weekly data available yet.</div>';
             } else {
-                html += '<div class="rpt-sum-title">Cumulative Weekly Progress Target Summary</div>';
+                var wkDefaultFrom = d.startDate || '';
+                var wkDefaultTo   = d.endDate   || '';
+
+                html += '<div class="rpt-sum-overall-hdr">';
+                html += '<div class="rpt-sum-overall-title">Cumulative Weekly Progress Target Summary</div>';
+                html += '<div class="rpt-sum-overall-sub" id="rptWkHdrDateRange">' + _fmtDate(wkDefaultFrom) + ' → ' + _fmtDate(wkDefaultTo) + '</div>';
+                html += '<div class="rpt-sum-overall-badge">' + targets.length + ' week' + (targets.length !== 1 ? 's' : '') + ' tracked</div>';
+                html += '</div>';
+
                 if (scurveFallback) {
                     html += '<div style="font-size:.76rem;color:#8C701C;background:#fffbee;border:1px solid #e8d9a8;border-radius:6px;padding:.4rem .75rem;margin-bottom:.75rem;">Targets computed via S-curve (no saved schedule). Save a milestone schedule to use custom targets.</div>';
                 }
-                html += '<table class="rpt-sum-table">';
+
+                html += '<div class="rpt-no-print" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;flex-wrap:nowrap;">' +
+                        '<label style="font-size:.78rem;font-weight:600;color:#5a4020;white-space:nowrap;">From</label>' +
+                        _mkDp('rptWkFrom', wkDefaultFrom) +
+                        '<span style="color:#8a6420;font-weight:700;">&#8594;</span>' +
+                        '<label style="font-size:.78rem;font-weight:600;color:#5a4020;white-space:nowrap;">To</label>' +
+                        _mkDp('rptWkTo', wkDefaultTo) +
+                        '<button onclick="applyWkDateFilter()" style="padding:.3rem .8rem;border:none;border-radius:6px;background:#8a6420;color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;">Apply</button>' +
+                        '<button onclick="clearWkDateFilter()" style="padding:.3rem .8rem;border:1px solid #d5c68a;border-radius:6px;background:#fdf9f0;color:#5a4020;font-size:.82rem;font-weight:600;cursor:pointer;">Clear</button>' +
+                        '<span id="rptWkFilterMsg" style="font-size:.76rem;margin-left:.1rem;white-space:nowrap;"></span>' +
+                        '</div>';
+
+                html += '<table class="rpt-sum-table" id="rptWkTable">';
                 html += '<thead><tr>' +
                         '<th>Week No.</th>' +
                         '<th class="num">Running Cumulative %</th>' +
@@ -1252,7 +1335,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     var targetPct = Number(wt.target_percent || 0);
                     var variance  = hasActual ? (actualPct - targetPct) : null;
 
-                    html += '<tr>';
+                    html += '<tr data-week-start="' + (wt.week_start || '') + '">';
                     html += '<td>' + h(weekLabel) + '</td>';
                     html += '<td class="num">' + (actualPct !== null ? _pct(actualPct, 2) : '') + '</td>';
                     html += '<td class="num">' + _pct(targetPct, 2) + '</td>';
@@ -1288,11 +1371,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     '</tr></tbody></table>';
 
             html += '<div class="rpt-sum-ms-heading">MILESTONE SUMMARY</div>';
+
+            // Date range filter row
+            html += '<div class="rpt-no-print" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:nowrap;">' +
+                    '<label style="font-size:.78rem;font-weight:600;color:#5a4020;white-space:nowrap;">From</label>' +
+                    _mkDp('rptMsFrom', '') +
+                    '<span style="color:#8a6420;font-weight:700;">&#8594;</span>' +
+                    '<label style="font-size:.78rem;font-weight:600;color:#5a4020;white-space:nowrap;">To</label>' +
+                    _mkDp('rptMsTo', '') +
+                    '<button onclick="applyMsDateFilter()" style="padding:.3rem .8rem;border:none;border-radius:6px;background:#8a6420;color:#fff;font-size:.82rem;font-weight:600;cursor:pointer;">Apply</button>' +
+                    '<button onclick="clearMsDateFilter()" style="padding:.3rem .8rem;border:1px solid #d5c68a;border-radius:6px;background:#fdf9f0;color:#5a4020;font-size:.82rem;font-weight:600;cursor:pointer;">Clear</button>' +
+                    '<span id="rptMsFilterMsg" style="font-size:.76rem;margin-left:.1rem;white-space:nowrap;"></span>' +
+                    '</div>';
+
             if (!milestones.length) {
                 html += '<div class="rpt-sum-empty">No milestones defined.</div>';
             } else {
-                html += '<table class="rpt-sum-table"><thead><tr style="background:#b8d4e8">' +
-                        '<th>MILESTONE</th><th>TARGET DATE</th>' +
+                html += '<table class="rpt-sum-table" id="rptMsTable"><thead><tr style="background:#b8d4e8">' +
+                        '<th>MILESTONE</th><th>TARGET DATE</th><th>DATE OF COMPLETION</th>' +
                         '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>' +
                         '<th class="num">VARIANCE</th><th>STATUS</th>' +
                         '</tr></thead><tbody>';
@@ -1307,7 +1403,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     var actualPct = m.completion_percent * m.weight_percent / 100;
                     var plannedR  = hasTD ? m.weight_percent : null;
                     var varRow    = (tdPassed && plannedR !== null) ? actualPct - plannedR : null;
-                    html += '<tr><td>' + h(m.milestone_name) + '</td><td>' + _fmtDate(m.target_date) + '</td>' +
+                    var completionDate = m.actual_completion_date ? _fmtDate(m.actual_completion_date) : '<span class="muted">—</span>';
+                    html += '<tr data-target-date="' + (m.target_date || '') + '"><td>' + h(m.milestone_name) + '</td><td>' + _fmtDate(m.target_date) + '</td>' +
+                            '<td>' + completionDate + '</td>' +
                             '<td class="num">' + (plannedR !== null ? _pct(plannedR, 1) : '—') + '</td>' +
                             '<td class="num">' + _pct(actualPct, 1) + '</td>' +
                             '<td class="num">' + (varRow !== null ? _vari(varRow, 2) : '<span class="muted">—</span>') + '</td>' +
@@ -1318,10 +1416,142 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         document.getElementById('rptSummaryEl').innerHTML = html;
+        ['rptWkFromPicker','rptWkToPicker','rptMsFromPicker','rptMsToPicker'].forEach(function(pid) {
+            var dp = document.getElementById(pid);
+            if (dp && window.pzInitDatePicker) window.pzInitDatePicker(dp, {
+                getMin: function() { return d.startDate || ''; },
+                getMax: function() { return d.endDate   || ''; }
+            });
+        });
         setState('summary');
         document.getElementById('rptModalTitle').textContent =
             (_summaryType === 'weekly' ? 'Weekly Summary' : 'Overall Progress') + ' — ' + _pname;
     }
+
+    function _rptSetMsg(elId, text, isError) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        el.textContent  = text;
+        el.style.color      = isError ? '#c0392b' : '#2e7d32';
+        el.style.fontWeight = '600';
+    }
+
+    function _rptEmptyRow(colspan, msg) {
+        var tr = document.createElement('tr');
+        tr.id  = 'rptEmptyRow';
+        var td = document.createElement('td');
+        td.colSpan      = colspan;
+        td.textContent  = msg;
+        td.style.cssText = 'text-align:center;color:#999;font-style:italic;padding:12px;';
+        tr.appendChild(td);
+        return tr;
+    }
+
+    window.applyMsDateFilter = function () {
+        var from  = (document.getElementById('rptMsFrom') || {}).value || '';
+        var to    = (document.getElementById('rptMsTo')   || {}).value || '';
+        var table = document.getElementById('rptMsTable');
+        if (!table) return;
+
+        if (!from && !to) { _rptSetMsg('rptMsFilterMsg', 'Select at least one date.', true); return; }
+        if (from && to && from > to) { _rptSetMsg('rptMsFilterMsg', 'From must be before To.', true); return; }
+
+        var tbody = table.querySelector('tbody');
+        var old   = tbody.querySelector('#rptEmptyRow');
+        if (old) old.remove();
+
+        var total = 0, visible = 0;
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+            var td   = row.dataset.targetDate || '';
+            var show = true;
+            if (from && td && td < from) show = false;
+            if (to   && td && td > to)   show = false;
+            if (!td && (from || to))     show = false;
+            row.style.display = show ? '' : 'none';
+            total++;
+            if (show) visible++;
+        });
+
+        if (visible === 0) {
+            tbody.appendChild(_rptEmptyRow(3, 'No records match the selected date range.'));
+            _rptSetMsg('rptMsFilterMsg', 'No results.', true);
+        } else {
+            _rptSetMsg('rptMsFilterMsg', 'Showing ' + visible + ' of ' + total + ' rows.', false);
+        }
+    };
+
+    window.clearMsDateFilter = function () {
+        ['rptMsFromPicker','rptMsToPicker'].forEach(function(pid) {
+            var dp = document.getElementById(pid);
+            if (!dp) return;
+            var h = dp.querySelector('input[type="hidden"]');
+            var d = dp.querySelector('.date-display');
+            if (h) h.value = '';
+            if (d) d.value = '';
+        });
+        var table = document.getElementById('rptMsTable');
+        if (table) {
+            var old = table.querySelector('#rptEmptyRow');
+            if (old) old.remove();
+            table.querySelectorAll('tbody tr').forEach(function (r) { r.style.display = ''; });
+        }
+        _rptSetMsg('rptMsFilterMsg', '', false);
+    };
+
+    window.applyWkDateFilter = function () {
+        var from  = (document.getElementById('rptWkFrom') || {}).value || '';
+        var to    = (document.getElementById('rptWkTo')   || {}).value || '';
+        var table = document.getElementById('rptWkTable');
+        if (!table) return;
+
+        if (!from && !to) { _rptSetMsg('rptWkFilterMsg', 'Select at least one date.', true); return; }
+        if (from && to && from > to) { _rptSetMsg('rptWkFilterMsg', 'From must be before To.', true); return; }
+
+        var tbody = table.querySelector('tbody');
+        var old   = tbody.querySelector('#rptEmptyRow');
+        if (old) old.remove();
+
+        var total = 0, visible = 0;
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+            var ws   = row.dataset.weekStart || '';
+            var show = true;
+            if (from && ws && ws < from) show = false;
+            if (to   && ws && ws > to)   show = false;
+            if (!ws && (from || to))     show = false;
+            row.style.display = show ? '' : 'none';
+            total++;
+            if (show) visible++;
+        });
+
+        var fmt = function(s) { return s ? new Date(s + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'2-digit', year:'numeric'}) : '—'; };
+        var hdr = document.getElementById('rptWkHdrDateRange');
+        if (hdr) hdr.textContent = fmt(from) + ' → ' + fmt(to);
+
+        if (visible === 0) {
+            tbody.appendChild(_rptEmptyRow(4, 'No records match the selected date range.'));
+            _rptSetMsg('rptWkFilterMsg', 'No results.', true);
+        } else {
+            _rptSetMsg('rptWkFilterMsg', 'Showing ' + visible + ' of ' + total + ' rows.', false);
+        }
+    };
+
+    window.clearWkDateFilter = function () {
+        ['rptWkFromPicker','rptWkToPicker'].forEach(function(pid) {
+            var dp = document.getElementById(pid);
+            if (!dp) return;
+            var h = dp.querySelector('input[type="hidden"]');
+            var d = dp.querySelector('.date-display');
+            if (h) h.value = '';
+            if (d) d.value = '';
+        });
+        var table = document.getElementById('rptWkTable');
+        if (table) {
+            var old = table.querySelector('#rptEmptyRow');
+            if (old) old.remove();
+            table.querySelectorAll('tbody tr').forEach(function (r) { r.style.display = ''; });
+        }
+        _rptSetMsg('rptWkFilterMsg', '', false);
+    };
 
     // Close on overlay click
     document.addEventListener('DOMContentLoaded', function () {
@@ -1538,6 +1768,20 @@ document.addEventListener('DOMContentLoaded', function () {
     confirmBtn && confirmBtn.addEventListener('click', function () {
         if (!pendingTransfer) return;
         var t = pendingTransfer;
+
+        // Validate manpower type if category is manpower
+        var dndMpSel = document.getElementById('dndManpowerType');
+        var dndMpErr = document.getElementById('dndManpowerTypeErr');
+        if (t.cat === 'manpower') {
+            var mpType = dndMpSel ? dndMpSel.value : '';
+            if (!mpType) {
+                if (dndMpErr) { dndMpErr.textContent = 'Please select a manpower type.'; dndMpErr.style.display = ''; }
+                return;
+            }
+            t.manpowerType = mpType;
+        }
+        if (dndMpErr) dndMpErr.style.display = 'none';
+
         pendingTransfer = null;
 
         // 1. Close modal immediately — no waiting for the network call
@@ -1571,6 +1815,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 destination_project_id:   t.destPid,
                 destination_project_name: t.destPname,
                 quantity:                 1,
+                manpower_type:            t.manpowerType || null,
             }),
         })
         .then(function (r) { return r.json(); })
@@ -1755,6 +2000,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('dndResLabel').textContent  = resName.trim();
                     document.getElementById('dndSrcLabel').textContent  = srcPname  || '—';
                     document.getElementById('dndDestLabel').textContent = destPname || '—';
+                    var dndMpGroup = document.getElementById('dndManpowerTypeGroup');
+                    var dndMpSel   = document.getElementById('dndManpowerType');
+                    var dndMpErr   = document.getElementById('dndManpowerTypeErr');
+                    if (dndMpGroup) {
+                        dndMpGroup.style.display = (cat === 'manpower') ? '' : 'none';
+                        if (dndMpSel) dndMpSel.value = '';
+                        document.querySelectorAll('#dndManpowerTypeChips .mp-type-chip').forEach(function(c){c.classList.remove('selected');});
+                        if (dndMpErr) dndMpErr.style.display = 'none';
+                    }
                     overlay.classList.add('open');
                 },
             });
@@ -1815,6 +2069,19 @@ function toggleMapPanel() {
         setInterval(function () { window.moveMlSlide(1); }, 6000);
     }
 }());
+</script>
+
+<script>
+document.addEventListener('click', function(e) {
+    var chip = e.target.closest('.mp-type-chip');
+    if (!chip) return;
+    var container = chip.closest('.mp-type-chips');
+    if (!container) return;
+    container.querySelectorAll('.mp-type-chip').forEach(function(c){c.classList.remove('selected');});
+    chip.classList.add('selected');
+    var hidden = document.getElementById(container.dataset.target);
+    if (hidden) hidden.value = chip.dataset.value;
+});
 </script>
 
 <?= $this->endSection() ?>
@@ -2074,15 +2341,17 @@ function toggleMapPanel() {
         ];
     }, $activeProjects ?? []))) ?>;
 
-    var overlay    = document.getElementById('reqModalOverlay');
-    var categoryEl = document.getElementById('reqCategory');
-    var modelGroup = document.getElementById('reqModelGroup');
-    var modelEl    = document.getElementById('reqModel');
-    var qtyEl      = document.getElementById('reqQty');
-    var submitBtn  = document.getElementById('reqSubmitBtn');
-    var cancelBtn  = document.getElementById('reqCancelBtn');
-    var errBox     = document.getElementById('reqModalError');
-    var projName   = document.getElementById('reqModalProjName');
+    var overlay            = document.getElementById('reqModalOverlay');
+    var categoryEl         = document.getElementById('reqCategory');
+    var modelGroup         = document.getElementById('reqModelGroup');
+    var modelEl            = document.getElementById('reqModel');
+    var manpowerTypeGroup  = document.getElementById('reqManpowerTypeGroup');
+    var manpowerTypeEl     = document.getElementById('reqManpowerType');
+    var qtyEl              = document.getElementById('reqQty');
+    var submitBtn          = document.getElementById('reqSubmitBtn');
+    var cancelBtn          = document.getElementById('reqCancelBtn');
+    var errBox             = document.getElementById('reqModalError');
+    var projName           = document.getElementById('reqModalProjName');
 
     var _pid = '', _pname = '';
     var _csrfName = document.querySelector('meta[name="csrf-name"]').content;
@@ -2095,6 +2364,9 @@ function toggleMapPanel() {
         categoryEl.value = '';
         modelEl.innerHTML = '<option value="">Choose model</option>';
         modelGroup.style.display = 'none';
+        manpowerTypeEl.value = '';
+        document.querySelectorAll('#reqManpowerTypeChips .mp-type-chip').forEach(function(c){c.classList.remove('selected');});
+        manpowerTypeGroup.style.display = 'none';
         qtyEl.value = '1';
         errBox.style.display = 'none';
         submitBtn.disabled = false;
@@ -2118,8 +2390,17 @@ function toggleMapPanel() {
                        modelEl.appendChild(opt);
                    });
             modelGroup.style.display = 'block';
+            manpowerTypeGroup.style.display = 'none';
+            manpowerTypeEl.value = '';
+            document.querySelectorAll('#reqManpowerTypeChips .mp-type-chip').forEach(function(c){c.classList.remove('selected');});
+        } else if (cat === 'manpower') {
+            modelGroup.style.display = 'none';
+            manpowerTypeEl.value = '';
+            document.querySelectorAll('#reqManpowerTypeChips .mp-type-chip').forEach(function(c){c.classList.remove('selected');});
+            manpowerTypeGroup.style.display = 'block';
         } else {
             modelGroup.style.display = 'none';
+            manpowerTypeGroup.style.display = 'none';
         }
     });
 
@@ -2129,11 +2410,14 @@ function toggleMapPanel() {
         var qty = parseInt(qtyEl.value, 10) || 1;
         if (!cat) { showErr('Please select a resource category.'); return; }
 
-        var modelId = '', modelName = '';
+        var modelId = '', modelName = '', manpowerType = '';
         if (cat.toLowerCase() === 'equipment' || cat.toLowerCase() === 'tools') {
             modelId = modelEl.value;
             if (!modelId) { showErr('Please select a model.'); return; }
             modelName = (modelEl.options[modelEl.selectedIndex] || {}).text || '';
+        } else if (cat.toLowerCase() === 'manpower') {
+            manpowerType = manpowerTypeEl.value;
+            if (!manpowerType) { showErr('Please select a manpower type.'); return; }
         }
 
         submitBtn.disabled = true;
@@ -2149,9 +2433,10 @@ function toggleMapPanel() {
             body: JSON.stringify({
                 request_kind:             'manual',
                 resource_category:        cat,
-                resource_name:            modelName,
+                resource_name:            modelName || manpowerType,
                 requested_model_id:       modelId   || null,
                 requested_model_name:     modelName || null,
+                manpower_type:            manpowerType || null,
                 destination_project_id:   _pid,
                 destination_project_name: _pname,
                 requested_quantity:       qty,

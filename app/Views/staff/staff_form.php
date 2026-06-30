@@ -87,20 +87,6 @@
                     </select>
                 </div>
             </div>
-            <div class="pz-form-row full" style="margin-top:.65rem">
-                <div class="pz-form-group">
-                    <label>Contact No</label>
-                    <div class="phone-input-group">
-                        <input type="tel" id="staffContact" name="contact_no_display"
-                               placeholder="Phone number" inputmode="tel" autocomplete="tel"
-                               value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
-                    </div>
-                    <input type="hidden" name="country_code" id="staffCountryCode" value="PH">
-                    <input type="hidden" name="contact_no" id="staffContactFull" value="<?= esc((string)($staff['contact_no'] ?? '')) ?>">
-                    <small class="phone-hint" id="staffPhoneHint">Include an active mobile number.</small>
-                    <small class="phone-error" id="staffPhoneError" hidden>Please enter a valid phone number.</small>
-                </div>
-            </div>
         </div>
 
         <div class="pz-policy-notice">
@@ -122,42 +108,7 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
-<script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/js/intlTelInput.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const phoneInput    = document.getElementById('staffContact');
-    const countryInput  = document.getElementById('staffCountryCode');
-    const hiddenContact = document.getElementById('staffContactFull');
-    const phoneHint     = document.getElementById('staffPhoneHint');
-    const phoneError    = document.getElementById('staffPhoneError');
-
-    if (!window.intlTelInput || !phoneInput) return;
-
-    const iti = window.intlTelInput(phoneInput, {
-        initialCountry: 'ph',
-        preferredCountries: ['ph', 'us', 'sg', 'au', 'gb'],
-        separateDialCode: true,
-        autoPlaceholder: 'aggressive',
-        formatOnDisplay: true,
-        strictMode: false,
-        utilsScript: 'https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/js/utils.js'
-    });
-
-    function syncFields() {
-        const data = iti.getSelectedCountryData() || {};
-        countryInput.value  = String(data.iso2 || 'ph').toUpperCase();
-        hiddenContact.value = iti.getNumber() || phoneInput.value.trim();
-        phoneHint.textContent = 'Selected: ' + (data.name || 'Country') + (data.dialCode ? ' (+' + data.dialCode + ')' : '');
-    }
-
-    phoneInput.addEventListener('countrychange', syncFields);
-    phoneInput.addEventListener('input', function () { phoneError.hidden = true; syncFields(); });
-    phoneInput.addEventListener('blur', function () {
-        if (phoneInput.value.trim() && !iti.isValidNumber()) phoneError.hidden = false;
-        syncFields();
-    });
-    syncFields();
-});
 
 // Avatar preview
 document.getElementById('profile_picture').addEventListener('change', function () {

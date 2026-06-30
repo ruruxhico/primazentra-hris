@@ -90,6 +90,12 @@
             </a>
         </div>
         <?php endif; ?>
+
+        <div class="pager-top">
+            <span>Show</span>
+            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <span>records per page</span>
+        </div>
     </div>
 
     <div id="eqFilterPanel" class="rv-filter-panel" style="display:none">
@@ -226,6 +232,12 @@
             </a>
         </div>
         <?php endif; ?>
+
+        <div class="pager-top">
+            <span>Show</span>
+            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <span>records per page</span>
+        </div>
     </div>
 
     <div id="toolsFilterPanel" class="rv-filter-panel" style="display:none">
@@ -362,6 +374,12 @@
             </a>
         </div>
         <?php endif; ?>
+
+        <div class="pager-top">
+            <span>Show</span>
+            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <span>records per page</span>
+        </div>
     </div>
 
     <div id="mpFilterPanel" class="rv-filter-panel" style="display:none">

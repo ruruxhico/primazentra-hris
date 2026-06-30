@@ -214,18 +214,41 @@
         var toggle  = wrapper.querySelector('.date-toggle');
         var popup   = wrapper.querySelector('.calendar-popup');
         createCalendar(popup, hidden, display, opts || {});
+
+        function _placePopup() {
+            var r = toggle.getBoundingClientRect();
+            popup.style.position = 'fixed';
+            popup.style.zIndex   = '99999';
+            popup.style.right    = 'auto';
+            popup.style.left     = r.left + 'px';
+            popup.style.top      = (r.bottom + 6) + 'px';
+            popup.style.bottom   = 'auto';
+            // flip above if it would clip below the viewport
+            var popH = popup.offsetHeight || 290;
+            if (r.bottom + 6 + popH > window.innerHeight - 12) {
+                popup.style.top    = 'auto';
+                popup.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+            }
+            // prevent right-edge overflow
+            var popW = popup.offsetWidth || 280;
+            if (r.left + popW > window.innerWidth - 8) {
+                popup.style.left = Math.max(8, window.innerWidth - popW - 8) + 'px';
+            }
+        }
+
         toggle.addEventListener('click', function () {
             var open = popup.classList.toggle('open');
             popup.setAttribute('aria-hidden', !open);
             if (open) {
                 if (popup._rerender) popup._rerender();
-                popup.classList.remove('above');
-                var rect = popup.getBoundingClientRect();
-                if (rect.bottom > window.innerHeight - 16) popup.classList.add('above');
+                _placePopup();
             }
         });
         document.addEventListener('click', function (e) {
-            if (!wrapper.contains(e.target)) { popup.classList.remove('open', 'above'); popup.setAttribute('aria-hidden', 'true'); }
+            if (!wrapper.contains(e.target)) {
+                popup.classList.remove('open');
+                popup.setAttribute('aria-hidden', 'true');
+            }
         });
     };
 }());
@@ -941,6 +964,31 @@
           var url = new URL(window.location.href);
           url.searchParams.set(pageParam, n);
           window.location.href = url.toString();
+        });
+      });
+
+      // "Records per page" — apply on Enter or when input loses focus with a changed value
+      var _PAGE_PARAMS = ['page', 'page_projects', 'page_equipment', 'page_tools', 'page_manpower'];
+      function _applyPerPage(inp) {
+        var val = parseInt(inp.value, 10);
+        if (isNaN(val) || val < 1) return;
+        val = Math.max(5, Math.min(200, val));
+        var url = new URL(window.location.href);
+        url.searchParams.set('per_page', val);
+        _PAGE_PARAMS.forEach(function(p) { url.searchParams.delete(p); });
+        window.location.href = url.toString();
+      }
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        var inp = e.target;
+        if (!inp.classList.contains('pager-per-page')) return;
+        e.preventDefault();
+        _applyPerPage(inp);
+      });
+      document.querySelectorAll('.pager-per-page').forEach(function(inp) {
+        var _orig = inp.value;
+        inp.addEventListener('blur', function() {
+          if (inp.value !== _orig) _applyPerPage(inp);
         });
       });
     });
