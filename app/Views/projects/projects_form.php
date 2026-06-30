@@ -1298,16 +1298,26 @@ document.addEventListener('DOMContentLoaded', function () {
             popup.setAttribute('aria-hidden', !open);
             if (open) {
                 if (popup._rerender) popup._rerender();
-                // Flip upward if the popup would overflow the viewport bottom
-                popup.classList.remove('above');
-                var rect = popup.getBoundingClientRect();
-                if (rect.bottom > window.innerHeight - 16) {
-                    popup.classList.add('above');
+                var r = toggle.getBoundingClientRect();
+                popup.style.position = 'fixed';
+                popup.style.zIndex   = '99999';
+                popup.style.right    = 'auto';
+                popup.style.left     = r.left + 'px';
+                popup.style.top      = (r.bottom + 6) + 'px';
+                popup.style.bottom   = 'auto';
+                var popH = popup.offsetHeight || 290;
+                if (r.bottom + 6 + popH > window.innerHeight - 12) {
+                    popup.style.top    = 'auto';
+                    popup.style.bottom = (window.innerHeight - r.top + 6) + 'px';
+                }
+                var popW = popup.offsetWidth || 280;
+                if (r.left + popW > window.innerWidth - 8) {
+                    popup.style.left = Math.max(8, window.innerWidth - popW - 8) + 'px';
                 }
             }
         });
         document.addEventListener('click', function (e) {
-            if (!wrapper.contains(e.target)) { popup.classList.remove('open', 'above'); popup.setAttribute('aria-hidden', 'true'); }
+            if (!wrapper.contains(e.target)) { popup.classList.remove('open'); popup.setAttribute('aria-hidden', 'true'); }
         });
     }
 

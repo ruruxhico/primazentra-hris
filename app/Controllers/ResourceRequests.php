@@ -55,7 +55,7 @@ class ResourceRequests extends BaseController
             $requests = [];
         }
 
-        $perPage     = config('Pager')->perPage;
+        $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
         $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
         $total       = count($requests);
         $pager       = service('pager');
@@ -758,6 +758,7 @@ class ResourceRequests extends BaseController
         $modelId       = trim($body['requested_model_id'] ?? $body['resource_id'] ?? '');
         $sourceResId   = trim($body['source_resource_id'] ?? $body['unit_id'] ?? '');
         $sourceResCode = trim($body['source_resource_code'] ?? '');
+        $manpowerType  = trim($body['manpower_type'] ?? '');
 
         if (!$category || !$destPid) {
             return $this->jsonError('Missing required fields.');
@@ -789,6 +790,7 @@ class ResourceRequests extends BaseController
             'resource_name'          => $resName,
             'requested_model_id'     => $modelId ?: null,
             'requested_model_name'   => $resName ?: null,
+            'manpower_type'          => $manpowerType ?: null,
             'source_resource_id'     => $sourceResId ?: null,
             'source_resource_code'   => $sourceResCode ?: null,
             'requested_quantity'     => $qty,

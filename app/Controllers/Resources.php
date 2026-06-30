@@ -91,7 +91,7 @@ class Resources extends BaseController
             }
 
             // ── Pagination (separate per table) ─────────────────────────────
-            $perPage = config('Pager')->perPage;
+            $perPage = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
             $pager   = service('pager');
 
             $eqPage    = max(1, (int)($this->request->getGet('page_equipment') ?? 1));
@@ -731,7 +731,7 @@ class Resources extends BaseController
                     strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
             }
 
-            $perPage     = config('Pager')->perPage;
+            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
             $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
             $itemsTotal  = count($items);
             $pager       = service('pager');

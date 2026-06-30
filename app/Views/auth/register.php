@@ -1,8 +1,5 @@
 <?= $this->extend('layouts/auth') ?>
 
-<?= $this->section('head') ?>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/css/intlTelInput.css">
-<?= $this->endSection() ?>
 
 <?= $this->section('content') ?>
     <div class="auth-shell auth-shell--register">
@@ -93,28 +90,6 @@
                     </div>
                 </div>
 
-                <div class="auth-contact-block">
-                    <div class="auth-field auth-field--full">
-                        <label for="contactNumber">CONTACT NUMBER *</label>
-                        <div class="phone-input-group">
-                            <input
-                                type="tel"
-                                id="contactNumber"
-                                name="contact_number_display"
-                                placeholder="Phone number"
-                                inputmode="tel"
-                                autocomplete="tel"
-                                required
-                                value="<?= esc(old('contact_number_display')) ?>"
-                            >
-                        </div>
-                        <input type="hidden" name="country_code" id="countryCode" value="<?= esc(old('country_code', 'PH')) ?>">
-                        <input type="hidden" name="contact_number" id="contactNumberFull" value="<?= esc(old('contact_number')) ?>">
-                        <small class="phone-hint" id="phoneHint">Include your active mobile number.</small>
-                        <small class="phone-error" id="phoneError" hidden>Please enter a valid phone number for the selected country.</small>
-                    </div>
-                </div>
-
                 <div class="auth-role-row">
                     <label class="auth-radio-pill">
                         <input type="radio" name="role_display" value="administrator" checked>
@@ -133,8 +108,6 @@
 <?= $this->endSection() ?>
 
 <?= $this->section('scripts') ?>
-    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/js/intlTelInput.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/js/utils.js"></script>
     <script>
         document.addEventListener('click', function (event) {
             const toggle = event.target.closest('[data-password-toggle]');
@@ -151,84 +124,8 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             const form = document.querySelector('.auth-form');
-            const phoneInput = document.getElementById('contactNumber');
-            const countryCodeInput = document.getElementById('countryCode');
-            const hiddenContact = document.getElementById('contactNumberFull');
-            const phoneHint = document.getElementById('phoneHint');
-            const phoneError = document.getElementById('phoneError');
             const password = document.getElementById('password');
             const confirmPassword = document.getElementById('confirmPassword');
-
-            let phoneInstance = null;
-            if (window.intlTelInput && phoneInput && hiddenContact && countryCodeInput) {
-                phoneInstance = window.intlTelInput(phoneInput, {
-                    initialCountry: (countryCodeInput.value || 'PH').toLowerCase(),
-                    preferredCountries: ['ph', 'us', 'sg', 'au', 'gb'],
-                    separateDialCode: true,
-                    autoPlaceholder: 'aggressive',
-                    formatOnDisplay: true,
-                    strictMode: false,
-                    utilsScript: 'https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.12/build/js/utils.js'
-                });
-
-                const syncPhoneFields = function () {
-                    const countryData = phoneInstance.getSelectedCountryData() || {};
-                    countryCodeInput.value = String(countryData.iso2 || 'ph').toUpperCase();
-                    hiddenContact.value = phoneInstance.getNumber() || phoneInput.value.trim();
-                    phoneHint.textContent = 'Selected: ' + (countryData.name || 'Country') + ' (' + (countryData.dialCode ? '+' + countryData.dialCode : '') + ')';
-                };
-
-                phoneInput.addEventListener('countrychange', syncPhoneFields);
-                phoneInput.addEventListener('blur', syncPhoneFields);
-                phoneInput.addEventListener('input', syncPhoneFields);
-                syncPhoneFields();
-            }
-
-            const setPhoneValidity = function () {
-                if (!phoneInstance || !phoneInput) {
-                    return true;
-                }
-
-                const value = phoneInput.value.trim();
-                if (value === '') {
-                    phoneError.textContent = 'Contact number is required.';
-                    phoneError.hidden = false;
-                    return false;
-                }
-
-                const isValid = phoneInstance.isValidNumber();
-                if (!isValid) {
-                    phoneError.textContent = 'Please enter a valid phone number for the selected country.';
-                    phoneError.hidden = false;
-                    return false;
-                }
-
-                clearPhoneError();
-
-                return true;
-            };
-
-            const showPhoneError = function (message) {
-                if (!phoneError) return;
-                phoneError.textContent = message;
-                phoneError.hidden = false;
-            };
-
-            const clearPhoneError = function () {
-                if (!phoneError) return;
-                phoneError.textContent = 'Please enter a valid phone number for the selected country.';
-                phoneError.hidden = true;
-            };
-
-            if (phoneInput) {
-                phoneInput.addEventListener('blur', setPhoneValidity);
-                phoneInput.addEventListener('input', function () {
-                    clearPhoneError();
-                    if (phoneInput.value.trim() !== '') {
-                        setPhoneValidity();
-                    }
-                });
-            }
 
             form.addEventListener('submit', function (event) {
                 if (password.value !== confirmPassword.value) {
@@ -238,19 +135,8 @@
                         confirmError.textContent = 'Passwords do not match.';
                         confirmError.classList.remove('hidden');
                     }
-                            confirmPassword.focus();
+                    confirmPassword.focus();
                     return;
-                }
-
-                if (!setPhoneValidity()) {
-                    event.preventDefault();
-                    return;
-                }
-
-                if (phoneInstance && hiddenContact && countryCodeInput) {
-                    const countryData = phoneInstance.getSelectedCountryData() || {};
-                    countryCodeInput.value = String(countryData.iso2 || 'ph').toUpperCase();
-                    hiddenContact.value = phoneInstance.getNumber() || phoneInput.value.trim();
                 }
             });
 
@@ -261,13 +147,6 @@
                     confirmError.classList.add('hidden');
                 }
             });
-
-            // After pzAutoSave restores the phone display value, re-sync the intl-tel-input state
-            window['pzAsRestore_registerForm'] = function () {
-                if (phoneInstance && phoneInput && phoneInput.value) {
-                    syncPhoneFields();
-                }
-            };
         });
     </script>
 <?= $this->endSection() ?>

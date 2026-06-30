@@ -119,6 +119,8 @@
 
         const isPassword = input.type === 'password';
         input.type = isPassword ? 'text' : 'password';
+        input.setAttribute('autocapitalize', 'none');
+        input.setAttribute('autocorrect', 'off');
         if (icon) {
             icon.textContent = isPassword ? 'visibility_off' : 'visibility';
         }

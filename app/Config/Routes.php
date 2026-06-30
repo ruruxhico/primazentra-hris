@@ -49,6 +49,7 @@ $routes->get('projects/delete/(:segment)', 'Projects::delete/$1');
 
 // Project Progress Summary JSON (for modal Weekly / Overall buttons)
 $routes->get('projects/(:segment)/progress-summary', 'Projects::progressSummaryJson/$1');
+$routes->get('projects/(:segment)/summary-pdf', 'Projects::progressSummaryPdf/$1');
 
 // Project Schedule / Milestone Management
 $routes->get('projects/(:segment)/schedule',  'Projects::schedule/$1');

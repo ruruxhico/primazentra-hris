@@ -54,6 +54,12 @@ $canBulk    = $canArchive || $canDelete;
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
     </div>
+
+    <div class="pager-top">
+        <span>Show</span>
+        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <span>records per page</span>
+    </div>
 </div>
 
 <!-- Filter panel -->

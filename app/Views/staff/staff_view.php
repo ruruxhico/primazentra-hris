@@ -76,6 +76,12 @@
         </a>
     </div>
     <?php endif; ?>
+
+    <div class="pager-top">
+        <span>Show</span>
+        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <span>records per page</span>
+    </div>
 </div>
 
 <!-- Filter Panel -->

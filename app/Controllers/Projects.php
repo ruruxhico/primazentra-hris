@@ -140,7 +140,7 @@ class Projects extends BaseController
             }
 
             // â€” Paginate â€”
-            $perPage     = config('Pager')->perPage;
+            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
             $currentPage = max(1, (int) ($this->request->getGet('page_projects') ?? 1));
             $total       = count($projects);
 
@@ -680,16 +680,17 @@ class Projects extends BaseController
                 if (!$mDoc->exists()) continue;
                 $m = $mDoc->data();
                 $milestones[] = [
-                    'id'                 => $mDoc->id(),
-                    'milestone_name'     => (string)($m['milestone_name']    ?? ''),
-                    'order'              => (int)($m['order']                ?? 0),
-                    'weight_percent'     => (float)($m['weight_percent']     ?? 0),
-                    'target_quantity'    => (float)($m['target_quantity']    ?? 0),
-                    'completed_quantity' => (float)($m['completed_quantity'] ?? 0),
-                    'completion_percent' => (float)($m['completion_percent'] ?? 0),
-                    'status'             => (string)($m['status']            ?? 'Not Started'),
-                    'target_date'        => $this->psTsToDate($m['target_date'] ?? null),
-                    'unit'               => (string)($m['unit']              ?? ''),
+                    'id'                     => $mDoc->id(),
+                    'milestone_name'         => (string)($m['milestone_name']    ?? ''),
+                    'order'                  => (int)($m['order']                ?? 0),
+                    'weight_percent'         => (float)($m['weight_percent']     ?? 0),
+                    'target_quantity'        => (float)($m['target_quantity']    ?? 0),
+                    'completed_quantity'     => (float)($m['completed_quantity'] ?? 0),
+                    'completion_percent'     => (float)($m['completion_percent'] ?? 0),
+                    'status'                 => (string)($m['status']            ?? 'Not Started'),
+                    'target_date'            => $this->psTsToDate($m['target_date']            ?? null),
+                    'actual_completion_date' => $this->psTsToDate($m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null),
+                    'unit'                   => (string)($m['unit']              ?? ''),
                 ];
             }
             usort($milestones, static fn($a, $b) => $a['order'] <=> $b['order']);
@@ -707,6 +708,352 @@ class Projects extends BaseController
             log_message('error', 'Projects::progressSummaryJson - ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
         }
+    }
+
+    // ── Progress Summary PDF download ─────────────────────────────────────
+
+    public function progressSummaryPdf(string $id)
+    {
+        if (!session()->get('isLoggedIn')) {
+            return redirect()->to('auth/login');
+        }
+
+        $type     = (string)($this->request->getGet('type')      ?? 'weekly');
+        $dateFrom = (string)($this->request->getGet('date_from') ?? '');
+        $dateTo   = (string)($this->request->getGet('date_to')   ?? '');
+
+        try {
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('project')->document($id)->snapshot();
+            if (!$snap->exists()) {
+                return $this->response->setStatusCode(404)->setBody('Project not found.');
+            }
+
+            $p               = $snap->data();
+            $pName           = strtoupper((string)($p['project_name'] ?? 'Project'));
+            $overallProgress = (float)($p['overall_progress'] ?? 0);
+            $startDate       = $this->psTsToDate($p['start_date'] ?? null);
+            $endDate         = $this->psTsToDate($p['end_date']   ?? null);
+
+            $weeklyTargets = [];
+            foreach ((array)($p['weekly_targets'] ?? []) as $wt) {
+                if (!is_array($wt)) continue;
+                $weeklyTargets[] = [
+                    'week'           => isset($wt['week']) ? (int)$wt['week'] : null,
+                    'week_start'     => $this->psTsToDate($wt['week_start'] ?? null),
+                    'target_percent' => (float)($wt['target_percent'] ?? 0),
+                    'actual_percent' => isset($wt['actual_percent']) ? (float)$wt['actual_percent'] : null,
+                ];
+            }
+
+            $milestones = [];
+            foreach ($db->collection('project')->document($id)->collection('milestones')->documents() as $mDoc) {
+                if (!$mDoc->exists()) continue;
+                $m = $mDoc->data();
+                $milestones[] = [
+                    'milestone_name'         => (string)($m['milestone_name'] ?? ''),
+                    'order'                  => (int)($m['order'] ?? 0),
+                    'weight_percent'         => (float)($m['weight_percent'] ?? 0),
+                    'completion_percent'     => (float)($m['completion_percent'] ?? 0),
+                    'status'                 => (string)($m['status'] ?? 'Not Started'),
+                    'target_date'            => $this->psTsToDate($m['target_date'] ?? null),
+                    'actual_completion_date' => $this->psTsToDate($m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null),
+                ];
+            }
+            usort($milestones, static fn($a, $b) => $a['order'] <=> $b['order']);
+
+            $reportDate = date('Y-m-d');
+
+            if ($type === 'weekly') {
+                $html = $this->buildWeeklySummaryHtml($pName, $weeklyTargets, $startDate, $endDate, $dateFrom, $dateTo);
+            } else {
+                $html = $this->buildOverallSummaryHtml($pName, $milestones, $overallProgress, $startDate, $endDate, $reportDate, $dateFrom, $dateTo);
+            }
+
+            $fontDir = WRITEPATH . 'dompdf_fonts';
+            if (!is_dir($fontDir)) {
+                mkdir($fontDir, 0755, true);
+            }
+
+            $options = new \Dompdf\Options();
+            $options->setChroot(FCPATH);
+            $options->setFontDir($fontDir);
+            $options->setFontCache($fontDir);
+            $options->setTempDir(sys_get_temp_dir());
+
+            $dompdf = new \Dompdf\Dompdf($options);
+            $dompdf->loadHtml($html, 'UTF-8');
+            $dompdf->setPaper('A4', 'portrait');
+            $dompdf->render();
+
+            $slug     = $type === 'weekly' ? 'weekly-summary' : 'overall-summary';
+            $filename = $slug . '-' . date('Y-m-d') . '.pdf';
+
+            return $this->response
+                ->setHeader('Content-Type', 'application/pdf')
+                ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->setBody($dompdf->output());
+
+        } catch (\Throwable $e) {
+            log_message('error', 'Projects::progressSummaryPdf - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setBody('Failed to generate PDF.');
+        }
+    }
+
+    private function buildWeeklySummaryHtml(
+        string $pName,
+        array  $targets,
+        ?string $startDate,
+        ?string $endDate,
+        string  $dateFrom,
+        string  $dateTo
+    ): string {
+        $today = date('Y-m-d');
+
+        // S-curve fallback when no saved schedule
+        $scurveFallback = false;
+        if (empty($targets) && $startDate && $endDate && $startDate < $endDate) {
+            $s  = new \DateTime($startDate);
+            $e  = new \DateTime($endDate);
+            $n  = max(1, (int)ceil(($e->getTimestamp() - $s->getTimestamp()) / (7 * 86400)));
+            for ($i = 0; $i < $n; $i++) {
+                $ws = clone $s;
+                $ws->modify('+' . ($i * 7) . ' days');
+                $targets[] = [
+                    'week'           => $i + 1,
+                    'week_start'     => $ws->format('Y-m-d'),
+                    'target_percent' => round((1 - cos(M_PI * ($i + 1) / $n)) / 2 * 10000) / 100,
+                    'actual_percent' => null,
+                ];
+            }
+            $scurveFallback = true;
+        }
+
+        // Only weeks that have already started
+        $targets = array_values(array_filter($targets, static function ($wt) use ($today) {
+            return !$wt['week_start'] || $wt['week_start'] <= $today;
+        }));
+
+        // Date range filter
+        if ($dateFrom !== '' && $dateTo !== '') {
+            $targets = array_values(array_filter($targets, static function ($wt) use ($dateFrom, $dateTo) {
+                if (!$wt['week_start']) return true;
+                return $wt['week_start'] >= $dateFrom && $wt['week_start'] <= $dateTo;
+            }));
+        }
+
+        $hdrFrom  = $dateFrom !== '' ? $dateFrom : ($startDate ?? '');
+        $hdrTo    = $dateTo   !== '' ? $dateTo   : ($endDate   ?? '');
+        $fmtDate  = static function (?string $d): string {
+            if (!$d) return '—';
+            $dt = \DateTime::createFromFormat('Y-m-d', $d);
+            return $dt ? $dt->format('M j, Y') : $d;
+        };
+        $fmtWkDate = static function (?string $d): string {
+            if (!$d) return '';
+            $dt = \DateTime::createFromFormat('Y-m-d', $d);
+            if (!$dt) return $d;
+            return $dt->format('d') . '-' . $dt->format('M') . '-' . substr($dt->format('Y'), 2);
+        };
+
+        $rows = '';
+        foreach ($targets as $i => $wt) {
+            $weekNum   = $wt['week'] !== null ? (int)$wt['week'] : ($i + 1);
+            $weekLabel = 'Week ' . $weekNum . ($wt['week_start'] ? ' (' . $fmtWkDate($wt['week_start']) . ')' : '');
+            $targetPct = (float)($wt['target_percent'] ?? 0);
+            $hasActual = $wt['actual_percent'] !== null;
+            $actualPct = $hasActual ? (float)$wt['actual_percent'] : null;
+            $variance  = $hasActual ? $actualPct - $targetPct : null;
+
+            $varHtml = '';
+            if ($variance !== null) {
+                $col = $variance < -0.005 ? '#b71c1c' : ($variance > 0.005 ? '#1b5e20' : '#555');
+                $varHtml = '<span style="color:' . $col . '">' . ($variance >= 0 ? '+' : '') . number_format($variance, 2) . ' %</span>';
+            }
+
+            $rows .= '<tr>'
+                . '<td>' . htmlspecialchars($weekLabel) . '</td>'
+                . '<td class="num">' . ($actualPct !== null ? number_format($actualPct, 2) . ' %' : '') . '</td>'
+                . '<td class="num">' . number_format($targetPct, 2) . ' %</td>'
+                . '<td class="num">' . $varHtml . '</td>'
+                . '</tr>';
+        }
+
+        $scurveNote = $scurveFallback
+            ? '<p style="font-size:9px;color:#8C701C;background:#fffbee;border:1px solid #e8d9a8;border-radius:4px;padding:4px 8px;margin-bottom:8px;">Targets computed via S-curve (no saved schedule). Save a milestone schedule to use custom targets.</p>'
+            : '';
+
+        $noData = empty($targets)
+            ? '<tr><td colspan="4" style="text-align:center;color:#aaa;padding:12px;">No weekly data available for the selected range.</td></tr>'
+            : $rows;
+
+        return $this->wrapPdfHtml(
+            'Weekly Summary — ' . $pName,
+            '<div class="hdr-box">'
+            . '<div class="hdr-title">Cumulative Weekly Progress Target Summary</div>'
+            . '<div class="hdr-sub">' . $fmtDate($hdrFrom) . ' &rarr; ' . $fmtDate($hdrTo) . '</div>'
+            . '<div class="hdr-badge">' . count($targets) . ' week' . (count($targets) !== 1 ? 's' : '') . ' tracked</div>'
+            . '</div>'
+            . $scurveNote
+            . '<table><thead><tr>'
+            . '<th>Week No.</th>'
+            . '<th class="num">Running Cumulative %</th>'
+            . '<th class="num">Cumulative Target %</th>'
+            . '<th class="num">Variance (+/&ndash;)</th>'
+            . '</tr></thead><tbody>' . $noData . '</tbody></table>'
+        );
+    }
+
+    private function buildOverallSummaryHtml(
+        string  $pName,
+        array   $milestones,
+        float   $overallProgress,
+        ?string $startDate,
+        ?string $endDate,
+        string  $reportDate,
+        string  $dateFrom,
+        string  $dateTo
+    ): string {
+        $fmtDate = static function (?string $d): string {
+            if (!$d) return '—';
+            $dt = \DateTime::createFromFormat('Y-m-d', $d);
+            return $dt ? $dt->format('M j, Y') : $d;
+        };
+        $fmtPct = static fn(float $v, int $dec = 2): string => number_format($v, $dec) . ' %';
+
+        // S-curve planned-to-date
+        $plannedPct = null;
+        $variance   = null;
+        if ($startDate && $milestones) {
+            $cumW   = 0.0;
+            $points = [];
+            foreach ($milestones as $m) {
+                $cumW += (float)($m['weight_percent'] ?? 0);
+                if ($m['target_date']) {
+                    $points[] = ['date' => $m['target_date'], 'pct' => min(100.0, $cumW)];
+                }
+            }
+            if (!empty($points)) {
+                if (empty($points) || end($points)['pct'] < 100 && $endDate) {
+                    $points[] = ['date' => $endDate, 'pct' => 100.0];
+                }
+                $plannedPct = $this->sampleCurve($points, $reportDate);
+                $variance   = round($overallProgress - $plannedPct, 2);
+            }
+        }
+
+        // Date filter on milestone table
+        $filtered = $milestones;
+        if ($dateFrom !== '' && $dateTo !== '') {
+            $filtered = array_values(array_filter($milestones, static function ($m) use ($dateFrom, $dateTo) {
+                if (!$m['target_date']) return true;
+                return $m['target_date'] >= $dateFrom && $m['target_date'] <= $dateTo;
+            }));
+        }
+
+        $hdrFrom = $dateFrom !== '' ? $dateFrom : $startDate;
+        $hdrTo   = $dateTo   !== '' ? $dateTo   : $endDate;
+
+        $varHtml = ($variance !== null)
+            ? '<span style="color:' . ($variance < 0 ? '#b71c1c' : ($variance > 0 ? '#1b5e20' : '#555')) . '">'
+              . ($variance >= 0 ? '+' : '') . number_format($variance, 2) . ' %</span>'
+            : '—';
+
+        $progressRow = '<table style="margin-bottom:10px"><thead><tr style="background:#b8d4e8">'
+            . '<th>ITEM</th><th class="num">PLANNED %</th><th class="num">ACTUAL %</th><th class="num">VARIANCE (+/&ndash;)</th>'
+            . '</tr></thead><tbody>'
+            . '<tr><td><strong>PROGRESS TO DATE</strong></td>'
+            . '<td class="num">' . ($plannedPct !== null ? $fmtPct($plannedPct, 1) : '—') . '</td>'
+            . '<td class="num">' . $fmtPct($overallProgress, 2) . '</td>'
+            . '<td class="num">' . $varHtml . '</td>'
+            . '</tr></tbody></table>';
+
+        $msRows = '';
+        foreach ($filtered as $m) {
+            $actual  = (float)($m['completion_percent']) * (float)($m['weight_percent']) / 100;
+            $planned = $m['target_date'] ? (float)($m['weight_percent']) : null;
+            $tdPassed = $m['target_date'] && $m['target_date'] <= $reportDate;
+            $varRow  = ($tdPassed && $planned !== null) ? $actual - $planned : null;
+            $varRowHtml = $varRow !== null
+                ? '<span style="color:' . ($varRow < 0 ? '#b71c1c' : ($varRow > 0 ? '#1b5e20' : '#555')) . '">' . ($varRow >= 0 ? '+' : '') . number_format($varRow, 2) . ' %</span>'
+                : '—';
+
+            $stLow = strtolower($m['status'] ?? '');
+            $stLbl = $stLow === 'completed' ? 'Completed' : ($stLow === 'in progress' ? 'In Progress' : 'Not Started');
+            $stBg  = $stLow === 'completed' ? '#dcfce7' : ($stLow === 'in progress' ? '#dbeafe' : '#f3f4f6');
+            $stCol = $stLow === 'completed' ? '#166534' : ($stLow === 'in progress' ? '#1e40af' : '#374151');
+
+            $completionDate = $m['actual_completion_date'] ? $fmtDate($m['actual_completion_date']) : '—';
+
+            $msRows .= '<tr>'
+                . '<td>' . htmlspecialchars($m['milestone_name']) . '</td>'
+                . '<td>' . $fmtDate($m['target_date']) . '</td>'
+                . '<td>' . $completionDate . '</td>'
+                . '<td class="num">' . ($planned !== null ? $fmtPct($planned, 1) : '—') . '</td>'
+                . '<td class="num">' . $fmtPct($actual, 1) . '</td>'
+                . '<td class="num">' . $varRowHtml . '</td>'
+                . '<td><span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:9px;font-weight:700;background:' . $stBg . ';color:' . $stCol . '">' . $stLbl . '</span></td>'
+                . '</tr>';
+        }
+
+        $msTable = '<p style="font-weight:700;font-size:9px;text-transform:uppercase;color:#8C701C;margin:8px 0 4px;">Milestone Summary</p>'
+            . '<table><thead><tr style="background:#b8d4e8">'
+            . '<th>MILESTONE</th><th>TARGET DATE</th><th>COMPLETION DATE</th>'
+            . '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>'
+            . '<th class="num">VARIANCE</th><th>STATUS</th>'
+            . '</tr></thead><tbody>'
+            . ($msRows ?: '<tr><td colspan="7" style="text-align:center;color:#aaa">No milestones.</td></tr>')
+            . '</tbody></table>';
+
+        return $this->wrapPdfHtml(
+            'Overall Progress — ' . $pName,
+            '<div class="hdr-box">'
+            . '<div class="hdr-title">General Progress Accomplishment %</div>'
+            . '<div class="hdr-sub">' . $fmtDate($hdrFrom) . ' &rarr; ' . $fmtDate($hdrTo) . '</div>'
+            . '</div>'
+            . $progressRow
+            . $msTable
+        );
+    }
+
+    private function sampleCurve(array $points, string $date): float
+    {
+        if (empty($points)) return 0.0;
+        if ($date <= $points[0]['date']) return 0.0;
+        if ($date >= $points[count($points) - 1]['date']) return (float)$points[count($points) - 1]['pct'];
+        for ($i = 0; $i < count($points) - 1; $i++) {
+            if ($points[$i]['date'] <= $date && $date < $points[$i + 1]['date']) {
+                $span = (new \DateTime($points[$i + 1]['date']))->getTimestamp()
+                      - (new \DateTime($points[$i]['date']))->getTimestamp();
+                $t    = $span > 0
+                    ? ((new \DateTime($date))->getTimestamp() - (new \DateTime($points[$i]['date']))->getTimestamp()) / $span
+                    : 0.0;
+                return (float)$points[$i]['pct'] + $t * ((float)$points[$i + 1]['pct'] - (float)$points[$i]['pct']);
+            }
+        }
+        return 0.0;
+    }
+
+    private function wrapPdfHtml(string $title, string $body): string
+    {
+        return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' . htmlspecialchars($title) . '</title><style>'
+            . 'body{font-family:Arial,sans-serif;font-size:10px;padding:20px;color:#222;margin:0}'
+            . 'h1{font-size:11px;margin:0 0 10px;color:#3a2a0a}'
+            . '.hdr-box{background:#8C701C;color:#fff;padding:12px 16px;border-radius:6px;text-align:center;margin-bottom:10px}'
+            . '.hdr-title{font-size:11px;font-weight:700;margin-bottom:3px}'
+            . '.hdr-sub{font-size:9px;opacity:.9}'
+            . '.hdr-badge{display:inline-block;background:rgba(255,255,255,.22);padding:1px 10px;border-radius:12px;font-size:8px;margin-top:4px}'
+            . 'table{border-collapse:collapse;width:100%;margin-bottom:10px;font-size:9px}'
+            . 'th,td{border:1px solid #d0c8a8;padding:4px 7px;text-align:left}'
+            . 'th{background:#b8d4e8;color:#1a3a4a;font-size:8px;font-weight:700;text-transform:uppercase}'
+            . '.num{text-align:right}'
+            . 'tr:nth-child(even){background:#fafaf5}'
+            . '.footer{margin-top:14px;font-size:8px;color:#999;border-top:1px solid #e0e0e0;padding-top:6px}'
+            . '</style></head><body>'
+            . '<h1>' . htmlspecialchars($title) . '</h1>'
+            . $body
+            . '<div class="footer">Generated on ' . date('F j, Y \a\t g:i A') . ' &nbsp;|&nbsp; PrimaZentra</div>'
+            . '</body></html>';
     }
 
     // ── Project Schedule / Milestone Management ───────────────────────────
