@@ -329,12 +329,10 @@ document.addEventListener('DOMContentLoaded', function () {
         return words[0].substring(0, 3) + '_' + words[1] + words[2];
     }
 
-    function generateSerialRange(name, startIdx, qty) {
+    function generateSerialRange(name, startIdx) {
         var prefix = generatePrefix(name);
         if (!prefix) return '';
-        var start = String(startIdx).padStart(3, '0');
-        if (qty <= 1) return prefix + '-' + start;
-        return prefix + '-' + start + '-' + String(startIdx + qty - 1).padStart(3, '0');
+        return prefix + '-' + String(startIdx).padStart(3, '0');
     }
 
     function recalculateSerialIndices() {
@@ -347,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function () {
             card.dataset.serialIndex = currentIdx;
             var si = card.querySelector('.unit-serial-input');
             if (si && si.dataset.autoSerial === 'true') {
-                si.value = name ? generateSerialRange(name, currentIdx, qty) : '';
+                si.value = name ? generateSerialRange(name, currentIdx) : '';
             }
             var titleEl = card.querySelector('.unit-card-title');
             if (titleEl) {

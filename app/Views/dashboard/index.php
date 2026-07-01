@@ -130,19 +130,39 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             $endTs = is_numeric($bl['end_date'] ?? '') ? (int)$bl['end_date'] : @strtotime((string)($bl['end_date'] ?? ''));
             $dd    = ($endTs && $endTs < time()) ? (int)floor((time() - $endTs) / 86400) : 0;
             $blockerRows[] = [
-                'name'    => strtoupper($bl['project_name'] ?? 'Project'),
-                'status'  => ucwords((string)($bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress'))),
-                'delay'   => $dd . 'd delay',
-                'delayc'  => $dd > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
+                'name'        => strtoupper($bl['project_name'] ?? 'Project'),
+                'status'      => ucwords((string)($bl['reason'] ?? $bl['blocker_reason'] ?? (($bl['status'] ?? '') === 'Halted' ? 'Project Halted' : 'Low Progress'))),
+                'delay'       => $dd . 'd delay',
+                'delayc'      => $dd > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
+                'reason_html' => '',
             ];
         } else {
-            $isOk  = in_array(strtolower($bl['predicted'] ?? ''), ['no blocker','unknown','none','']);
-            $delay = (int)($bl['estimated_delay_days'] ?? 0);
+            $delay     = (int)($bl['estimated_delay_days'] ?? 0);
+            $predicted = strtolower((string)($bl['predicted'] ?? ''));
+            $reason    = (string)($bl['reason'] ?? '');
+
+            // Build colored reason HTML
+            $reasonHtml = '';
+            if ($reason !== '') {
+                if ($predicted === 'low progress'
+                    && preg_match('/^([\d.]+%\s*Done)\s+([\d.]+%\s*Behind)(.*)?$/iu', $reason, $m)) {
+                    $seNote     = trim(ltrim(trim($m[3] ?? ''), "\u{2014}-"));
+                    $reasonHtml = '<span class="pz-reason-ok">'   . esc(trim($m[1])) . '</span>'
+                                . ' <span class="pz-reason-warn">' . esc(trim($m[2])) . '</span>';
+                    if ($seNote !== '') {
+                        $reasonHtml .= '<br><small class="pz-reason-se">' . esc($seNote) . '</small>';
+                    }
+                } else {
+                    $reasonHtml = '<span class="pz-reason-text">' . esc($reason) . '</span>';
+                }
+            }
+
             $blockerRows[] = [
-                'name'    => strtoupper($bl['project_name'] ?? 'Project'),
-                'status'  => ucwords((string)($bl['predicted'] ?? 'Risk Detected')),
-                'delay'   => $delay . 'd delay',
-                'delayc'  => $delay > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
+                'name'        => strtoupper($bl['project_name'] ?? 'Project'),
+                'status'      => ucwords((string)($bl['predicted'] ?? 'Risk Detected')),
+                'delay'       => $delay . 'd delay',
+                'delayc'      => $delay > 0 ? 'pz-delay-warn' : 'pz-delay-ok',
+                'reason_html' => $reasonHtml,
             ];
         }
     }
@@ -171,12 +191,13 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                 <!-- Left half -->
                 <div class="pz-sc-half">
                     <table class="pz-sc-tbl">
-                        <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                        <thead><tr><th>Project</th><th>Status</th><th>Reason</th><th class="pz-sc-r">Delay</th></tr></thead>
                         <tbody>
                         <?php foreach (array_slice($chunk, 0, $bPageSize) as $row): ?>
                         <tr>
                             <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
                             <td><?= esc($row['status']) ?></td>
+                            <td class="pz-sc-reason"><?= $row['reason_html'] ?></td>
                             <td class="pz-sc-r <?= $row['delayc'] ?>"><?= esc($row['delay']) ?></td>
                         </tr>
                         <?php endforeach; ?>
@@ -189,12 +210,13 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                 <!-- Right half -->
                 <div class="pz-sc-half">
                     <table class="pz-sc-tbl">
-                        <thead><tr><th>Project</th><th>Status</th><th>Delay</th></tr></thead>
+                        <thead><tr><th>Project</th><th>Status</th><th>Reason</th><th class="pz-sc-r">Delay</th></tr></thead>
                         <tbody>
                         <?php foreach (array_slice($chunk, $bPageSize) as $row): ?>
                         <tr>
                             <td class="pz-sc-name" title="<?= esc($row['name']) ?>"><?= esc($row['name']) ?></td>
                             <td><?= esc($row['status']) ?></td>
+                            <td class="pz-sc-reason"><?= $row['reason_html'] ?></td>
                             <td class="pz-sc-r <?= $row['delayc'] ?>"><?= esc($row['delay']) ?></td>
                         </tr>
                         <?php endforeach; ?>

@@ -107,8 +107,8 @@ $count = count($items);
                 <td><?= esc($data['resource_category'] ?? $data['category'] ?? '—') ?></td>
                 <?php endif; ?>
 
-                <td><?= esc($item['archived_by'] ?? 'System') ?></td>
-                <td><?= $archivedAt ? date('d M Y, h:i A', $archivedAt) : '—' ?></td>
+                <td style="white-space:nowrap"><?= esc($item['archived_by'] ?? 'System') ?></td>
+                <td style="white-space:nowrap"><?= $archivedAt ? date('d M Y, h:i A', $archivedAt) : '—' ?></td>
                 <td class="text-center" style="white-space:nowrap">
                     <button class="del-btn del-btn-unarchive" data-id="<?= esc($item['id']) ?>">
                         <span class="material-symbols-outlined">unarchive</span> Unarchive

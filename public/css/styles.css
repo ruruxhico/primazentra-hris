@@ -6601,7 +6601,17 @@ label.rpt-cause-item { display:flex; align-items:center; gap:1rem; text-transfor
 .del-flash-err { background: #fce4e4; color: #c0392b; border: 1px solid #f5c6c6; }
 
 /* deleted/archive pages: strip extra side-margins from pz-table-wrap */
-.del-shell .pz-table-wrap { margin-left: 0; margin-right: 0; }
+.del-shell .pz-table-wrap { margin-left: 0; margin-right: 0; overflow-x: auto; }
+/* let the browser size columns by content instead of equal-width fixed layout */
+.del-shell .pz-table { table-layout: auto; min-width: 700px; }
+/* pin narrow utility columns so content columns get the remaining space */
+.del-shell .pz-table th:first-child,
+.del-shell .pz-table td:first-child { width: 44px; }
+.del-shell .pz-table th:last-child,
+.del-shell .pz-table td:last-child  { width: 1%; white-space: nowrap; }
+/* keep date / expires-in / by columns from expanding unnecessarily */
+.del-shell .pz-table td,
+.del-shell .pz-table th { vertical-align: middle; }
 
 /* == Section 29: Dashboard ML Blockers carousel == */
 .db-carousel-controls { display: flex; gap: 4px; }
@@ -6640,6 +6650,12 @@ td .action-wrap { display: inline-flex; align-items: center; gap: 0; white-space
 .pz-sc-tbl td.pz-sc-r { text-align: right; }
 .pz-sc-tbl td.pz-delay-warn { color: #c0392b; font-weight: 700; }
 .pz-sc-tbl td.pz-delay-ok { color: #999; }
+.pz-sc-tbl th.pz-sc-r { text-align: right; }
+.pz-sc-tbl td.pz-sc-reason { white-space: normal; vertical-align: middle; max-width: 160px; line-height: 1.3; }
+.pz-reason-ok   { color: #FFC107; font-weight: 700; font-size: .78rem; }
+.pz-reason-warn { color: #c0392b; font-weight: 700; font-size: .78rem; }
+.pz-reason-se   { display: block; font-size: .65rem; color: #9a7b3a; font-style: italic; white-space: normal; margin-top: 2px; }
+.pz-reason-text { font-size: .75rem; color: #5a3a00; white-space: normal; }
 .pz-sc-divider { width: 1px; background: #E8D9A8; flex-shrink: 0; align-self: stretch; }
 .pz-sc-cols { display: flex; gap: .6rem; overflow: hidden; }
 .pz-sc-cols > .pz-sc-half { flex: 1 1 0; min-width: 0; overflow-x: hidden; }

@@ -56,6 +56,10 @@ class Resources extends BaseController
                 // fail gracefully; leave manpower empty
             }
 
+            // Default: alphabetical by name
+            usort($equipment, fn($a, $b) => strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? '')));
+            usort($tools,     fn($a, $b) => strcasecmp((string)($a['name'] ?? ''), (string)($b['name'] ?? '')));
+
             // â€” Read and apply equipment/tools sort filters â€”
             $eqSort    = trim((string) ($this->request->getGet('eq_sort')    ?? ''));
             $toolsSort = trim((string) ($this->request->getGet('tools_sort') ?? ''));
@@ -671,6 +675,11 @@ class Resources extends BaseController
                 }
             }
 
+            usort($items, fn($a, $b) => strnatcasecmp(
+                (string)($a['serial_number'] ?? ''),
+                (string)($b['serial_number'] ?? '')
+            ));
+
             return view('resources/resources_show', [
                 'pageTitle' => 'Resource Detail',
                 'resource'  => $resource,
@@ -730,6 +739,12 @@ class Resources extends BaseController
                 $items = array_values(array_filter($items, fn($i) =>
                     strcasecmp((string) ($i['location']['type'] ?? ''), $filterLocType) === 0));
             }
+
+            // Always sort units by serial number in ascending natural order
+            usort($items, fn($a, $b) => strnatcasecmp(
+                (string)($a['serial_number'] ?? ''),
+                (string)($b['serial_number'] ?? '')
+            ));
 
             $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
             $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
@@ -820,11 +835,13 @@ class Resources extends BaseController
     private function _deriveSerial(string $base, int $offset): string
     {
         if ($base === '') return '';
-        if ($offset === 0) return $base;
         if (preg_match('/^(.*-)(\d+)$/', $base, $m)) {
+            // base ends with -NNN: keep first item as-is, increment from there
+            if ($offset === 0) return $base;
             $n = (int)$m[2] + $offset;
             return $m[1] . str_pad($n, strlen($m[2]), '0', STR_PAD_LEFT);
         }
+        // base has no trailing number: append -001, -002, … for all items
         return $base . '-' . str_pad($offset + 1, 3, '0', STR_PAD_LEFT);
     }
 

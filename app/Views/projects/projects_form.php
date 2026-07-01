@@ -223,14 +223,6 @@
                 </div>
 
                 <div class="pz-form-group">
-                    <label for="delay_ping_days">Ping if Delayed by (Days)</label>
-                    <input type="number" id="delay_ping_days" name="delay_ping_days"
-                           min="0" step="1" placeholder="e.g. 3"
-                           value="<?= esc(old('delay_ping_days', $project['delay_ping_days'] ?? '')) ?>">
-                    <small class="pz-field-hint">Notify admins and PM when ML predicts a delay ≥ this many days. Leave 0 to ping on any predicted delay.</small>
-                </div>
-
-                <div class="pz-form-group">
                     <label for="attachments">Attachments</label>
                     <label class="file-upload-label" for="attachments">
                         <span class="material-symbols-outlined file-upload-icon">upload_file</span>
@@ -1031,8 +1023,6 @@ if (window.location.hostname === 'localhost') {
                 var weightInp  = card.querySelector('.phase-weight-inp');
                 var weightGrp  = card.querySelector('.phase-weight-group');
                 var qtyInp     = card.querySelector('.phase-card-inp');
-                var dateDisp   = card.querySelector('.phase-card-date-picker .date-display');
-                var dateHid    = card.querySelector('input[type="hidden"][name$="[site_date]"]');
                 var mileName   = nameInp && nameInp.value.trim() ? nameInp.value.trim() : 'Milestone ' + (idx + 1);
                 var missing    = [];
 
@@ -1050,10 +1040,6 @@ if (window.location.hostname === 'localhost') {
                 if (!qtyInp || qtyInp.value === '' || isNaN(qVal)) {
                     missing.push('Qty');
                     if (qtyInp) qtyInp.classList.add('pz-field-error');
-                }
-                if (!dateHid || !dateHid.value) {
-                    missing.push('Target Date');
-                    if (dateDisp) dateDisp.classList.add('pz-field-error');
                 }
 
                 if (missing.length > 0) {
