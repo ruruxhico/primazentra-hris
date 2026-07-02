@@ -48,10 +48,9 @@ class Projects extends BaseController
                 }
             }
 
-            // PM: show only their own projects by default; toggle via ?view_all=1
-            $uid       = (string) session()->get('userId');
-            $isViewAll = trim((string)($this->request->getGet('view_all') ?? '')) === '1';
-            if (pz_is('Project Manager') && !$isViewAll) {
+            // PM: always show only their own assigned projects
+            $uid = (string) session()->get('userId');
+            if (pz_is('Project Manager')) {
                 $projects = array_values(array_filter($projects, fn($p) =>
                     ($p['pm_id_normalized'] ?? '') === $uid));
             }
@@ -176,7 +175,6 @@ class Projects extends BaseController
                 'userName'        => session()->get('userName') ?? 'User',
                 'role'            => session()->get('role') ?? 'Staff',
                 'isPm'            => pz_is('Project Manager'),
-                'isViewAll'       => $isViewAll,
             ];
 
             return view('projects/projects_view', $data);

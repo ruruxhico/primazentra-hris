@@ -224,24 +224,64 @@ class Dashboard extends BaseController
                         }
                         $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
 
+                        // Compute days from actual project dates — stored fields may be
+                        // stale or negative (past-deadline), which blows up the ML base calc.
+                        $mlNow         = time();
+                        $startTs       = $this->toTimestamp($p['start_date'] ?? null);
+                        $endTs         = $this->toTimestamp($p['end_date']   ?? null);
+                        $totalDuration = ($startTs && $endTs && $endTs > $startTs)
+                            ? max(1, (int)(($endTs - $startTs) / 86400))
+                            : 0;
+                        $daysElapsed   = $startTs
+                            ? max(0, (int)(($mlNow - $startTs) / 86400))
+                            : max(0, (int)($p['days_elapsed'] ?? 0));
+                        // Cap to planned duration: ML was trained on in-timeline projects.
+                        // Stale/abandoned projects with 5000+ elapsed days return nonsense.
+                        if ($totalDuration > 0) {
+                            $daysElapsed = min($daysElapsed, $totalDuration);
+                        }
+                        $daysRemaining = $endTs
+                            ? max(0, (int)(($endTs - $mlNow) / 86400))   // clamp — never negative
+                            : max(0, (int)($p['days_remaining'] ?? 0));
+
+                        $progress = (float)($p['_progress'] ?? 0);
+
+                        // Skip new/uninitialised projects — ML predictions would be noise
+                        if ($daysElapsed === 0 && $progress === 0.0) {
+                            $mlBlockers[] = [
+                                'project_id'               => (string)($p['id'] ?? ''),
+                                'project_name'             => $p['project_name'] ?? 'Unknown Project',
+                                'predicted'                => 'No Blocker',
+                                'estimated_delay_days'     => 0,
+                                'estimated_completion_date'=> null,
+                                'delay_predicted'          => false,
+                                'risk_level'               => 'low',
+                                'reason'                   => '',
+                            ];
+                            continue;
+                        }
+
                         $features = [
-                            'project_id'              => (string)($p['id'] ?? ''),
-                            'progress_percent'        => (float)($p['_progress'] ?? 0),
-                            'planned_progress_percent'=> (float)($p['planned_progress'] ?? 50),
-                            'days_elapsed'            => (int)($p['days_elapsed'] ?? 0),
-                            'days_remaining'          => (int)($p['days_remaining'] ?? 0),
-                            'workers_present'         => (int)($p['workers_present'] ?? 0),
-                            'workers_planned'         => (int)($p['workers_planned'] ?? 1),
-                            'equipment_utilization'   => $eqUtil,
-                            'weather_severity'        => (int)($p['weather_severity'] ?? 0),
-                            'site_access_issues'      => (int)($p['site_access_issues'] ?? 0),
-                            'avg_progress_3d'         => (float)($p['avg_progress_3d'] ?? 0),
-                            'progress_trend_3d'       => (float)($p['progress_trend_3d'] ?? 0),
-                            'consecutive_low_days'    => (int)($p['consecutive_low_days'] ?? 0),
-                            'budget_utilization'      => (float)($p['budget_utilization'] ?? 0),
-                            'cost_variance_ratio'     => (float)($p['cost_variance_ratio'] ?? 0),
-                            'active_blocker_count'    => (int)($p['active_blocker_count'] ?? 0),
-                            'days_since_last_blocker' => (int)($p['days_since_last_blocker'] ?? 999),
+                            'project_id'                    => (string)($p['id'] ?? ''),
+                            'progress_percent'              => $progress,
+                            'planned_progress_percent'      => (float)($p['planned_progress'] ?? 50),
+                            'days_elapsed'                  => $daysElapsed,
+                            'days_remaining'                => $daysRemaining,
+                            'workers_present'               => (int)($p['workers_present'] ?? 0),
+                            'workers_planned'               => (int)($p['workers_planned'] ?? 1),
+                            'equipment_utilization'         => $eqUtil,
+                            'weather_severity'              => (int)($p['weather_severity'] ?? 0),
+                            'site_access_issues'            => (int)($p['site_access_issues'] ?? 0),
+                            'avg_progress_3d'               => (float)($p['avg_progress_3d'] ?? 0),
+                            'progress_trend_3d'             => (float)($p['progress_trend_3d'] ?? 0),
+                            'consecutive_low_days'          => (int)($p['consecutive_low_days'] ?? 0),
+                            'budget_utilization'            => (float)($p['budget_utilization'] ?? 0),
+                            'cost_variance_ratio'           => (float)($p['cost_variance_ratio'] ?? 0),
+                            'active_blocker_count'          => (int)($p['active_blocker_count'] ?? 0),
+                            'days_since_last_blocker'       => (int)($p['days_since_last_blocker'] ?? 999),
+                            'emergency_material_shortage'   => (int)($p['emergency_material_shortage'] ?? 0),
+                            'emergency_labor_shortage'      => (int)($p['emergency_labor_shortage'] ?? 0),
+                            'emergency_onsite_accidents'    => (int)($p['emergency_onsite_accidents'] ?? 0),
                         ];
 
                         $blockerPrediction = $mlService->predictBlockers($features);
@@ -261,16 +301,33 @@ class Dashboard extends BaseController
 
                         $estimatedDelay = 0;
                         if ($delayPrediction && !isset($delayPrediction['error'])) {
-                            $estimatedDelay = $delayPrediction['predicted_delay_days'] ?? $delayPrediction['delay_days'] ?? $delayPrediction['prediction'] ?? 0;
+                            $estimatedDelay = $delayPrediction['estimated_delay_days']
+                                           ?? $delayPrediction['predicted_delay_days']
+                                           ?? $delayPrediction['delay_days']
+                                           ?? $delayPrediction['prediction']
+                                           ?? 0;
                         } elseif ($blockerPrediction) {
-                            $estimatedDelay = $blockerPrediction['predicted_delay_days'] ?? $blockerPrediction['delay_days'] ?? 0;
+                            $estimatedDelay = $blockerPrediction['estimated_delay_days']
+                                           ?? $blockerPrediction['predicted_delay_days']
+                                           ?? $blockerPrediction['delay_days']
+                                           ?? 0;
                         }
 
+                        // Cap: a delay larger than the whole project duration is not actionable.
+                        $maxDelay       = $totalDuration > 0 ? $totalDuration : 730;
+                        $estimatedDelay = min((float)$estimatedDelay, (float)$maxDelay);
+
+                        $seReason = $this->_fetchBlockerReason((string)($p['id'] ?? ''), $predictedBlocker, $features);
+
                         $mlBlockers[] = [
-                            'project_id'           => (string)($p['id'] ?? ''),
-                            'project_name'         => $p['project_name'] ?? 'Unknown Project',
-                            'predicted'            => $predictedBlocker,
-                            'estimated_delay_days' => (int) round((float) $estimatedDelay),
+                            'project_id'               => (string)($p['id'] ?? ''),
+                            'project_name'             => $p['project_name'] ?? 'Unknown Project',
+                            'predicted'                => $predictedBlocker,
+                            'estimated_delay_days'     => (int) round((float) $estimatedDelay),
+                            'estimated_completion_date'=> $delayPrediction['estimated_completion_date'] ?? $blockerPrediction['estimated_completion_date'] ?? null,
+                            'delay_predicted'          => (bool)($delayPrediction['delay_predicted'] ?? $blockerPrediction['delay_predicted'] ?? ($estimatedDelay > 0)),
+                            'risk_level'               => $delayPrediction['risk_level'] ?? $blockerPrediction['risk_level'] ?? 'low',
+                            'reason'                   => $seReason,
                         ];
                     } catch (\Throwable $e) {
                         // First failure means service is down — abort all remaining calls
@@ -674,6 +731,127 @@ class Dashboard extends BaseController
         return is_array($geopoint) ? $geopoint : [];
     }
 
+    private function _fetchBlockerReason(string $projectId, string $blockerType, array $features = []): string
+    {
+        // ── Low Progress: "X% C  Y% Behind [— SE note]" ────────────────────────
+        if ($blockerType === 'Low Progress') {
+            $actual = round((float)($features['progress_percent'] ?? 0), 1);
+            $behind = round(max(0, (float)($features['planned_progress_percent'] ?? 0) - $actual), 1);
+            $msg    = "{$actual}% Done";
+            if ($behind > 0) $msg .= "  {$behind}% Behind";
+
+            // Append latest SE daily-report description if available
+            if ($projectId !== '') {
+                try {
+                    $docs = $this->firestore->getDb()
+                        ->collection('project')->document($projectId)
+                        ->collection('daily_progress_reports')
+                        ->orderBy('report_date', 'DESC')
+                        ->limit(1)->documents();
+                    foreach ($docs as $doc) {
+                        if (!$doc->exists()) break;
+                        $desc = trim((string)($doc->data()['description'] ?? $doc->data()['notes'] ?? ''));
+                        if ($desc !== '') $msg .= ' — ' . $desc;
+                        break;
+                    }
+                } catch (\Throwable $e) {}
+            }
+            return $msg;
+        }
+
+        if ($projectId === '') return '';
+
+        $parts = [];
+
+        try {
+            $db = $this->firestore->getDb();
+
+            // ── Labor Shortage: worker headcount from features ─────────────────
+            if ($blockerType === 'Labor Shortage') {
+                $present   = (int)($features['workers_present'] ?? 0);
+                $needed    = (int)($features['workers_planned']  ?? 0);
+                $shortfall = max(0, $needed - $present);
+                if ($needed > 0) {
+                    $parts[] = "Workers: {$present} present of {$needed} needed"
+                             . ($shortfall > 0 ? " ({$shortfall} short)" : '');
+                }
+            }
+
+            // ── Emergency-type blockers: pull latest emergency report ────────────
+            $emergTypes = ['Material Shortage', 'Labor Shortage', 'Resource Shortage',
+                           'Onsite Accident', 'Project Halted'];
+            if (in_array($blockerType, $emergTypes)) {
+                try {
+                    $emergDocs = $db->collection('project')->document($projectId)
+                        ->collection('emergency_reports')
+                        ->orderBy('created_at', 'DESC')
+                        ->limit(1)->documents();
+
+                    foreach ($emergDocs as $doc) {
+                        if (!$doc->exists()) break;
+                        $d = $doc->data();
+
+                        // Shortage-specific item list (equipment / materials / manpower named)
+                        $items = (array)($d['affected_resources'] ?? $d['missing_materials']
+                                      ?? $d['shortage_items']    ?? $d['items'] ?? []);
+                        if (!empty($items)) {
+                            $itemList = [];
+                            foreach ($items as $item) {
+                                if (is_string($item) && $item !== '') {
+                                    $itemList[] = $item;
+                                } elseif (is_array($item)) {
+                                    $iName = trim((string)($item['name'] ?? $item['item'] ?? ''));
+                                    $iQty  = $item['quantity'] ?? $item['qty'] ?? null;
+                                    if ($iName !== '') {
+                                        $itemList[] = $iName . ($iQty !== null ? " (×{$iQty})" : '');
+                                    }
+                                }
+                            }
+                            if (!empty($itemList)) $parts[] = implode(', ', $itemList);
+                        }
+
+                        $causes = (array)($d['causes'] ?? $d['cause'] ?? []);
+                        $notes  = trim((string)($d['notes'] ?? $d['description'] ?? ''));
+                        $other  = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
+                        if (!empty($causes)) $parts[] = implode(', ', $causes);
+                        if ($other !== '')   $parts[] = $other;
+                        if ($notes !== '')   $parts[] = $notes;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', '_fetchBlockerReason: emergency - ' . $e->getMessage());
+                }
+            }
+
+            // ── Weather Delay + fallback: use latest daily SE report ─────────────
+            $needsDaily = $blockerType === 'Weather Delay'
+                       || (empty($parts) && $blockerType !== 'Labor Shortage');
+            if ($needsDaily) {
+                try {
+                    $dailyDocs = $db->collection('project')->document($projectId)
+                        ->collection('daily_progress_reports')
+                        ->orderBy('report_date', 'DESC')
+                        ->limit(1)->documents();
+
+                    foreach ($dailyDocs as $doc) {
+                        if (!$doc->exists()) break;
+                        $d    = $doc->data();
+                        $desc = trim((string)($d['description'] ?? $d['notes'] ?? ''));
+                        if ($desc !== '') $parts[] = $desc;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', '_fetchBlockerReason: daily report - ' . $e->getMessage());
+                }
+            }
+
+        } catch (\Throwable $e) {
+            log_message('warning', '_fetchBlockerReason: ' . $e->getMessage());
+        }
+
+        return implode(' | ', array_filter($parts));
+    }
+
     private function extractLatLng(array $p): array
     {
         $geopoint = $p['location']['geopoint'] ?? [];
@@ -702,6 +880,17 @@ class Dashboard extends BaseController
         }
 
         return 'LUZON';
+    }
+
+    private function toTimestamp($val): ?int
+    {
+        if (!$val) return null;
+        if ($val instanceof \Google\Cloud\Core\Timestamp) {
+            try { return $val->get()->getTimestamp(); } catch (\Throwable $e) { return null; }
+        }
+        if (is_numeric($val)) return (int)$val;
+        $ts = strtotime((string)$val);
+        return $ts ?: null;
     }
 
     private function fmtDate($val): string

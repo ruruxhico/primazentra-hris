@@ -558,12 +558,10 @@ function auGeneratePrefix(name) {
     if (words.length === 2) return words[0].substring(0, 3) + '_' + words[1];
     return words[0].substring(0, 3) + '_' + words[1] + words[2];
 }
-function auGenerateSerial(name, idx, qty) {
+function auGenerateSerial(name, idx) {
     var prefix = auGeneratePrefix(name);
     if (!prefix) return '';
-    var start = String(idx).padStart(3, '0');
-    if ((qty || 1) <= 1) return prefix + '-' + start;
-    return prefix + '-' + start + '-' + String(idx + qty - 1).padStart(3, '0');
+    return prefix + '-' + String(idx).padStart(3, '0');
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -602,7 +600,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function refreshAutoSerial() {
         var serialEl = document.getElementById('addSerial');
         if (serialEl && serialEl.dataset.autoSerial === 'true') {
-            var auto = auGenerateSerial(_auResourceName, _auNextSerial, getQty());
+            var auto = auGenerateSerial(_auResourceName, _auNextSerial);
             serialEl.value = auto;
         }
     }
@@ -616,7 +614,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (addQtyEl)   addQtyEl.value   = '1';
         var serialEl = document.getElementById('addSerial');
         if (serialEl) {
-            var auto = auGenerateSerial(_auResourceName, _auNextSerial, 1);
+            var auto = auGenerateSerial(_auResourceName, _auNextSerial);
             serialEl.value = auto;
             serialEl.dataset.autoSerial = auto ? 'true' : '';
         }

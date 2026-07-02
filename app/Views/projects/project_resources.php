@@ -207,6 +207,22 @@
 <!-- ── Toast ──────────────────────────────────────────────────── -->
 <div class="pres-toast" id="presToast"></div>
 
+<!-- ── Confirm dialog (must be in DOM before the script runs) ─── -->
+<div id="presConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
+    <div class="confirm-backdrop"></div>
+    <div class="confirm-box">
+        <div class="confirm-hdr">
+            <span class="material-symbols-outlined confirm-hdr-icon" id="presConfirmIcon">delete_forever</span>
+            <p class="confirm-hdr-title" id="presConfirmTitle">Delete</p>
+        </div>
+        <div class="confirm-content"><p id="presConfirmMessage"></p></div>
+        <div class="confirm-actions">
+            <button id="presConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
+            <button id="presConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <!-- ── Bulk Assign Manpower modal ─────────────────────────────── -->
 <div class="pres-modal-overlay" id="modalBulkManpower">
     <div class="pres-modal">
@@ -960,20 +976,5 @@
     });
 }());
 </script>
-
-<div id="presConfirmDialog" class="confirm-dialog" role="dialog" aria-modal="true">
-    <div class="confirm-backdrop"></div>
-    <div class="confirm-box">
-        <div class="confirm-hdr">
-            <span class="material-symbols-outlined confirm-hdr-icon" id="presConfirmIcon">delete_forever</span>
-            <p class="confirm-hdr-title" id="presConfirmTitle">Delete</p>
-        </div>
-        <div class="confirm-content"><p id="presConfirmMessage"></p></div>
-        <div class="confirm-actions">
-            <button id="presConfirmOk"     class="confirm-btn confirm-btn-action">OK</button>
-            <button id="presConfirmCancel" class="confirm-btn confirm-btn-cancel">Cancel</button>
-        </div>
-    </div>
-</div>
 
 <?= $this->endSection() ?>

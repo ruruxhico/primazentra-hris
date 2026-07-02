@@ -56,7 +56,7 @@
     <!-- Name + status card (full width) -->
     <div class="pd-project-card">
         <div class="pd-project-card-top">
-            <div class="pd-project-name"><?= esc((string)($resource['name'] ?? 'Resource')) ?></div>
+            <div class="pd-project-name"><?= esc(strtoupper((string)($resource['name'] ?? 'Resource'))) ?></div>
             <span class="pd-status-badge"
                   style="background:<?= $stStyle['bg'] ?>;color:<?= $stStyle['color'] ?>;border-color:<?= $stStyle['border'] ?>">
                 <?= esc((string)($resource['status'] ?? '—')) ?>
@@ -75,18 +75,6 @@
                 <div class="pd-row">
                     <span class="pd-row-label">Category</span>
                     <span class="pd-row-value"><?= esc($category ?: '—') ?></span>
-                </div>
-                <div class="pd-row">
-                    <span class="pd-row-label">Next Availability</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['next_availability_value'] ?? $resource['next_availability'] ?? '—')) ?></span>
-                </div>
-                <div class="pd-row">
-                    <span class="pd-row-label">Location</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['location']['address'] ?? '—')) ?></span>
-                </div>
-                <div class="pd-row">
-                    <span class="pd-row-label">Location Type</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['location']['type'] ?? '—')) ?></span>
                 </div>
             </div>
         </div>

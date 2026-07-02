@@ -112,9 +112,9 @@ $count = count($items);
                 <td><?= esc($data['resource_category'] ?? $data['category'] ?? '—') ?></td>
                 <?php endif; ?>
 
-                <td><?= esc($item['deleted_by'] ?? 'System') ?></td>
-                <td><?= $deletedAt ? date('d M Y, h:i A', $deletedAt) : '—' ?></td>
-                <td>
+                <td style="white-space:nowrap"><?= esc($item['deleted_by'] ?? 'System') ?></td>
+                <td style="white-space:nowrap"><?= $deletedAt ? date('d M Y, h:i A', $deletedAt) : '—' ?></td>
+                <td style="white-space:nowrap">
                     <span class="del-expiry <?= $expClass ?>">
                         <?= $daysLeft ?> day<?= $daysLeft !== 1 ? 's' : '' ?>
                     </span>

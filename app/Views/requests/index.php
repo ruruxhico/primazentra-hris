@@ -118,23 +118,23 @@ $canBulk    = $canArchive || $canDelete;
 <?php endif; ?>
 
 <!-- Table -->
-<div class="pz-table-wrap">
-    <table class="pz-table" id="rrTable">
+<div class="table-container">
+    <table class="resource-table" id="rrTable">
         <thead>
             <tr>
                 <?php if ($canBulk): ?>
-                <th style="width:36px;padding-right:0">
+                <th class="pz-col-check">
                     <input type="checkbox" id="rrSelectAll" title="Select all">
                 </th>
                 <?php endif; ?>
                 <th>ID</th>
                 <th>Source</th>
                 <th>Destination</th>
-                <th>Status</th>
+                <th class="text-center">Status</th>
                 <th class="rr-col-sm">Category</th>
-                <th class="rr-col-md">Qty</th>
+                <th class="rr-col-md text-center">Qty</th>
                 <th class="rr-col-md">Created</th>
-                <th class="center">Actions</th>
+                <th class="text-center">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -153,28 +153,28 @@ $canBulk    = $canArchive || $canDelete;
                 data-req-status="<?= esc(strtolower($r['status'] ?? 'pending')) ?>"
                 data-req-category="<?= esc(strtolower($r['resource_category'] ?? '')) ?>">
                 <?php if ($canBulk): ?>
-                <td style="padding-right:0">
+                <td class="pz-col-check">
                     <input type="checkbox" class="rr-row-cb" value="<?= esc($r['id']) ?>">
                 </td>
                 <?php endif; ?>
                 <td style="font-family:monospace;letter-spacing:.05em"><?= esc(strtoupper(substr($r['id'], 0, 6))) ?></td>
-                <td class="pz-row-muted" title="<?= esc($r['source_site_name'] ?? '—') ?>"><?= esc($r['source_site_name'] ?? '—') ?></td>
-                <td class="pz-row-muted" title="<?= esc($r['destination_site_name'] ?? '—') ?>"><?= esc($r['destination_site_name'] ?? '—') ?></td>
-                <td data-req-status><?= rr_badge($r['status'] ?? 'Pending') ?></td>
+                <td title="<?= esc($r['source_site_name'] ?? '—') ?>"><?= esc($r['source_site_name'] ?? '—') ?></td>
+                <td title="<?= esc($r['destination_site_name'] ?? '—') ?>"><?= esc($r['destination_site_name'] ?? '—') ?></td>
+                <td class="text-center" data-req-status><?= rr_badge($r['status'] ?? 'Pending') ?></td>
                 <td class="rr-col-sm"><?= esc($r['resource_category'] ?? '—') ?></td>
-                <td class="rr-col-md"><?= esc($r['requested_quantity'] ?? $r['quantity'] ?? 1) ?></td>
-                <td class="pz-row-muted rr-col-md" style="white-space:nowrap"><?= esc($r['created_at_fmt'] ?? '—') ?></td>
-                <td class="actions" style="white-space:nowrap">
-                    <a href="<?= base_url('requests/' . $r['id']) ?>" class="pz-btn-icon" title="View details">
+                <td class="rr-col-md text-center"><?= esc($r['requested_quantity'] ?? $r['quantity'] ?? 1) ?></td>
+                <td class="rr-col-md" style="white-space:nowrap"><?= esc($r['created_at_fmt'] ?? '—') ?></td>
+                <td class="text-center" style="white-space:nowrap">
+                    <a href="<?= base_url('requests/' . $r['id']) ?>" class="action-btn" title="View details">
                         <span class="material-symbols-outlined">visibility</span>
                     </a>
                     <?php if ($canArchive): ?>
-                    <button type="button" class="pz-btn-icon rr-archive-btn" data-id="<?= esc($r['id']) ?>" title="Archive">
+                    <button type="button" class="action-btn rr-archive-btn" data-id="<?= esc($r['id']) ?>" title="Archive">
                         <span class="material-symbols-outlined" style="color:#c07000">inventory_2</span>
                     </button>
                     <?php endif; ?>
                     <?php if ($canDelete): ?>
-                    <button type="button" class="pz-btn-icon rr-delete-btn" data-id="<?= esc($r['id']) ?>" title="Delete">
+                    <button type="button" class="action-btn rr-delete-btn" data-id="<?= esc($r['id']) ?>" title="Delete">
                         <span class="material-symbols-outlined" style="color:#c0392b">delete</span>
                     </button>
                     <?php endif; ?>
@@ -473,19 +473,19 @@ document.addEventListener('click', async function (e) {
     var shortId = id.substring(0, 6).toUpperCase();
     var src     = (data.source_site_name      || '—').replace(/</g,'&lt;');
     var dst     = (data.destination_site_name || '—').replace(/</g,'&lt;');
-    var cbCol   = (CAN_ARCHIVE || CAN_DELETE) ? '<td style="padding-right:0"><input type="checkbox" class="rr-row-cb" value="' + id + '"></td>' : '';
-    var archBtn = CAN_ARCHIVE ? '<button type="button" class="pz-btn-icon rr-archive-btn" data-id="' + id + '" title="Archive"><span class="material-symbols-outlined" style="color:#c07000">inventory_2</span></button>' : '';
-    var delBtn  = CAN_DELETE  ? '<button type="button" class="pz-btn-icon rr-delete-btn"  data-id="' + id + '" title="Delete"><span class="material-symbols-outlined" style="color:#c0392b">delete</span></button>' : '';
+    var cbCol   = (CAN_ARCHIVE || CAN_DELETE) ? '<td class="pz-col-check"><input type="checkbox" class="rr-row-cb" value="' + id + '"></td>' : '';
+    var archBtn = CAN_ARCHIVE ? '<button type="button" class="action-btn rr-archive-btn" data-id="' + id + '" title="Archive"><span class="material-symbols-outlined" style="color:#c07000">inventory_2</span></button>' : '';
+    var delBtn  = CAN_DELETE  ? '<button type="button" class="action-btn rr-delete-btn"  data-id="' + id + '" title="Delete"><span class="material-symbols-outlined" style="color:#c0392b">delete</span></button>' : '';
     return '<tr data-req-id="' + id + '" class="pz-row-new">'
          + cbCol
          + '<td style="font-family:monospace;letter-spacing:.05em">' + shortId + '</td>'
-         + '<td class="pz-row-muted" title="' + src + '">' + src + '</td>'
-         + '<td class="pz-row-muted" title="' + dst + '">' + dst + '</td>'
-         + '<td data-req-status><span class="pz-badge ' + cls + '">' + status.toUpperCase() + '</span></td>'
+         + '<td title="' + src + '">' + src + '</td>'
+         + '<td title="' + dst + '">' + dst + '</td>'
+         + '<td class="text-center" data-req-status><span class="pz-badge ' + cls + '">' + status.toUpperCase() + '</span></td>'
          + '<td class="rr-col-sm">' + cat + '</td>'
-         + '<td class="rr-col-md">' + (data.requested_quantity || data.quantity || 1) + '</td>'
-         + '<td class="pz-row-muted rr-col-md" style="white-space:nowrap">' + fmtDate(data.created_at) + '</td>'
-         + '<td class="actions" style="white-space:nowrap"><a href="' + _base + 'requests/' + id + '" class="pz-btn-icon" title="View details">'
+         + '<td class="rr-col-md text-center">' + (data.requested_quantity || data.quantity || 1) + '</td>'
+         + '<td class="rr-col-md" style="white-space:nowrap">' + fmtDate(data.created_at) + '</td>'
+         + '<td class="text-center" style="white-space:nowrap"><a href="' + _base + 'requests/' + id + '" class="action-btn" title="View details">'
          + '<span class="material-symbols-outlined">visibility</span></a>'
          + archBtn + delBtn + '</td>'
          + '</tr>';

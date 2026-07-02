@@ -24,32 +24,6 @@
 
 <div class="resource-header">
     <h1>Projects</h1>
-    <?php if (($isPm ?? false)): ?>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:.75rem;">
-        <?php if (!($isViewAll ?? false)): ?>
-            <span style="font-size:.8rem;color:#888;font-style:italic;">Showing your assigned projects</span>
-            <a href="<?= base_url('projects?view_all=1') ?>"
-               style="display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:20px;
-                      background:#f0f4ff;color:#3a5bbf;border:1.5px solid #3a5bbf;
-                      font-size:.8rem;font-weight:600;text-decoration:none;letter-spacing:.3px;
-                      transition:background .15s;">
-                <span class="material-symbols-outlined" style="font-size:15px;">public</span>
-                View All Projects
-            </a>
-        <?php else: ?>
-            <span style="font-size:.8rem;color:#888;font-style:italic;">Showing all projects</span>
-            <a href="<?= base_url('projects') ?>"
-               style="display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border-radius:20px;
-                      background:#8C701C;color:#fff;border:1.5px solid #8C701C;
-                      font-size:.8rem;font-weight:700;text-decoration:none;letter-spacing:.3px;
-                      box-shadow:0 2px 8px rgba(140,112,28,.35);
-                      transition:background .15s;">
-                <span class="material-symbols-outlined" style="font-size:15px;">person</span>
-                My Projects Only
-            </a>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
 </div>
 
 <?php if (session()->getFlashdata('success')): ?>

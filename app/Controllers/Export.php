@@ -8,6 +8,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
