@@ -45,6 +45,21 @@ class MLServiceClient
         }
     }
 
+    public function predictNextAvailableTools(array $payload): array
+    {
+        try {
+            $response = Services::curlrequest()->post($this->baseUrl . '/predict/next-available-tools', [
+                'json'            => $payload,
+                'headers'         => ['Accept' => 'application/json', 'Content-Type' => 'application/json'],
+                'timeout'         => $this->timeout,
+                'connect_timeout' => 5,
+            ]);
+            return json_decode($response->getBody(), true) ?? [];
+        } catch (\Throwable $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
     public function predictToolAvailability(array $sourcingData): array
     {
         try {

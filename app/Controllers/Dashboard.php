@@ -246,6 +246,10 @@ class Dashboard extends BaseController
 
                         $progress = (float)($p['_progress'] ?? 0);
 
+                        // Linear expected-progress-by-now, mirrors ProjectDelayPredictor::buildFeatures().
+                        $totalDays  = $totalDuration > 0 ? $totalDuration : max(1, $daysElapsed + $daysRemaining);
+                        $plannedPct = min(100.0, round(($daysElapsed / $totalDays) * 100, 2));
+
                         // Skip new/uninitialised projects — ML predictions would be noise
                         if ($daysElapsed === 0 && $progress === 0.0) {
                             $mlBlockers[] = [
@@ -261,16 +265,20 @@ class Dashboard extends BaseController
                             continue;
                         }
 
+                        // Active emergency flags — derived from unresolved emergency_reports
+                        // causes (SE-filed), not stored on the project doc itself.
+                        $emergFlags = $this->_computeEmergencyFlags((string)($p['id'] ?? ''));
+
                         $features = [
                             'project_id'                    => (string)($p['id'] ?? ''),
                             'progress_percent'              => $progress,
-                            'planned_progress_percent'      => (float)($p['planned_progress'] ?? 50),
+                            'planned_progress_percent'      => $plannedPct,
                             'days_elapsed'                  => $daysElapsed,
                             'days_remaining'                => $daysRemaining,
                             'workers_present'               => (int)($p['workers_present'] ?? 0),
                             'workers_planned'               => (int)($p['workers_planned'] ?? 1),
                             'equipment_utilization'         => $eqUtil,
-                            'weather_severity'              => (int)($p['weather_severity'] ?? 0),
+                            'weather_severity'              => $emergFlags['weather'],
                             'site_access_issues'            => (int)($p['site_access_issues'] ?? 0),
                             'avg_progress_3d'               => (float)($p['avg_progress_3d'] ?? 0),
                             'progress_trend_3d'             => (float)($p['progress_trend_3d'] ?? 0),
@@ -279,9 +287,9 @@ class Dashboard extends BaseController
                             'cost_variance_ratio'           => (float)($p['cost_variance_ratio'] ?? 0),
                             'active_blocker_count'          => (int)($p['active_blocker_count'] ?? 0),
                             'days_since_last_blocker'       => (int)($p['days_since_last_blocker'] ?? 999),
-                            'emergency_material_shortage'   => (int)($p['emergency_material_shortage'] ?? 0),
-                            'emergency_labor_shortage'      => (int)($p['emergency_labor_shortage'] ?? 0),
-                            'emergency_onsite_accidents'    => (int)($p['emergency_onsite_accidents'] ?? 0),
+                            'emergency_equipment_shortage'  => $emergFlags['equipment'],
+                            'emergency_labor_shortage'      => $emergFlags['labor'],
+                            'emergency_onsite_accidents'    => $emergFlags['onsite'],
                         ];
 
                         $blockerPrediction = $mlService->predictBlockers($features);
@@ -731,6 +739,44 @@ class Dashboard extends BaseController
         return is_array($geopoint) ? $geopoint : [];
     }
 
+    /**
+     * Checks a project's unresolved emergency_reports for specific cause labels and
+     * returns the 0/1 flags the ML service expects. "Material Shortage" and
+     * "Equipment/Tool Breakdown" both set emergency_equipment_shortage — the ML schema
+     * has no separate slot for material shortages.
+     */
+    private function _computeEmergencyFlags(string $projectId): array
+    {
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0];
+        if ($projectId === '') return $flags;
+
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($projectId)
+                ->collection('emergency_reports')->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $d = $doc->data();
+                if (!empty($d['resolved'])) continue;
+
+                $causes = array_map('strval', (array)($d['causes'] ?? []));
+                if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
+                    $flags['equipment'] = 1;
+                }
+                if (in_array('Labor Shortage', $causes, true))    $flags['labor']  = 1;
+                if (in_array('Onsite Accidents', $causes, true))  $flags['onsite'] = 1;
+                // Escalated to an emergency report — treat as top severity (typhoon/storm tier),
+                // distinct from routine daily-report weather notes.
+                if (in_array('Adverse Weather', $causes, true))   $flags['weather'] = 2;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', '_computeEmergencyFlags: ' . $e->getMessage());
+        }
+
+        return $flags;
+    }
+
     private function _fetchBlockerReason(string $projectId, string $blockerType, array $features = []): string
     {
         // ── Low Progress: "X% C  Y% Behind [— SE note]" ────────────────────────
@@ -777,49 +823,72 @@ class Dashboard extends BaseController
                 }
             }
 
-            // ── Emergency-type blockers: pull latest emergency report ────────────
-            $emergTypes = ['Material Shortage', 'Labor Shortage', 'Resource Shortage',
-                           'Onsite Accident', 'Project Halted'];
-            if (in_array($blockerType, $emergTypes)) {
+            // ── Emergency-type blockers: pull latest UNRESOLVED matching report ──
+            // Cause labels match the SE's checkbox list — must stay in sync with
+            // _computeEmergencyFlags(). Types with no dedicated checkbox (e.g.
+            // Project Halted) fall back to accepting any unresolved report.
+            $emergCauseMap = [
+                'Labor Shortage'    => ['Labor Shortage'],
+                'Onsite Accident'   => ['Onsite Accidents'],
+                'Material Shortage' => ['Material Shortage', 'Equipment/Tool Breakdown'],
+                'Resource Shortage' => ['Material Shortage', 'Equipment/Tool Breakdown'],
+                'Weather Delay'     => ['Adverse Weather'],
+                'Project Halted'    => [],
+            ];
+            if (array_key_exists($blockerType, $emergCauseMap)) {
+                $wantedCauses = $emergCauseMap[$blockerType];
                 try {
                     $emergDocs = $db->collection('project')->document($projectId)
                         ->collection('emergency_reports')
                         ->orderBy('created_at', 'DESC')
-                        ->limit(1)->documents();
+                        ->documents();
 
                     foreach ($emergDocs as $doc) {
-                        if (!$doc->exists()) break;
+                        if (!$doc->exists()) continue;
                         $d = $doc->data();
+                        if (!empty($d['resolved'])) continue;
 
-                        // Shortage-specific item list (equipment / materials / manpower named)
-                        $items = (array)($d['affected_resources'] ?? $d['missing_materials']
-                                      ?? $d['shortage_items']    ?? $d['items'] ?? []);
-                        if (!empty($items)) {
-                            $itemList = [];
-                            foreach ($items as $item) {
-                                if (is_string($item) && $item !== '') {
-                                    $itemList[] = $item;
-                                } elseif (is_array($item)) {
-                                    $iName = trim((string)($item['name'] ?? $item['item'] ?? ''));
-                                    $iQty  = $item['quantity'] ?? $item['qty'] ?? null;
-                                    if ($iName !== '') {
-                                        $itemList[] = $iName . ($iQty !== null ? " (×{$iQty})" : '');
-                                    }
-                                }
-                            }
-                            if (!empty($itemList)) $parts[] = implode(', ', $itemList);
-                        }
+                        $causes = array_map('strval', (array)($d['causes'] ?? []));
+                        if (!empty($wantedCauses) && !array_intersect($wantedCauses, $causes)) continue;
 
-                        $causes = (array)($d['causes'] ?? $d['cause'] ?? []);
-                        $notes  = trim((string)($d['notes'] ?? $d['description'] ?? ''));
-                        $other  = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
-                        if (!empty($causes)) $parts[] = implode(', ', $causes);
-                        if ($other !== '')   $parts[] = $other;
-                        if ($notes !== '')   $parts[] = $notes;
+                        // Cause label (e.g. "Onsite Accidents") is already shown in the Status
+                        // column — only append the SE's own free-text description here.
+                        $notes = trim((string)($d['notes'] ?? $d['description'] ?? ''));
+                        $other = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
+                        if ($notes !== '')      $parts[] = $notes;
+                        elseif ($other !== '')  $parts[] = $other;
                         break;
                     }
                 } catch (\Throwable $e) {
                     log_message('warning', '_fetchBlockerReason: emergency - ' . $e->getMessage());
+                }
+            }
+
+            // ── "Other" cause: no ML feature slot to influence classification, but
+            // still surface the SE's note if nothing else has been found yet ────────
+            if (empty($parts)) {
+                try {
+                    $otherDocs = $db->collection('project')->document($projectId)
+                        ->collection('emergency_reports')
+                        ->orderBy('created_at', 'DESC')
+                        ->documents();
+
+                    foreach ($otherDocs as $doc) {
+                        if (!$doc->exists()) continue;
+                        $d = $doc->data();
+                        if (!empty($d['resolved'])) continue;
+
+                        $causes = array_map('strval', (array)($d['causes'] ?? []));
+                        if (!in_array('Other', $causes, true)) continue;
+
+                        $notes = trim((string)($d['notes'] ?? $d['description'] ?? ''));
+                        $other = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
+                        if ($notes !== '')      $parts[] = $notes;
+                        elseif ($other !== '')  $parts[] = $other;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', '_fetchBlockerReason: other-cause - ' . $e->getMessage());
                 }
             }
 

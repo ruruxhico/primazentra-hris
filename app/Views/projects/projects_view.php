@@ -73,9 +73,6 @@
 
     <?php if (pz_can('delete_project')): ?>
     <div class="rv-btn-group-view">
-        <a href="<?= base_url('projects/deleted') ?>" class="rv-btn-trash">
-            <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-        </a>
         <a href="<?= base_url('projects/archived') ?>" class="rv-btn-archive">
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
@@ -225,7 +222,6 @@
                             <?php if (pz_can('edit_project')): ?>
                             <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
                             <button type="button" class="action-btn action-archive" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
-                            <a href="#" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -820,7 +816,6 @@ document.addEventListener('DOMContentLoaded', function () {
          + '<a href="' + _base + 'projects/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
          + (CAN_EDIT_PROJECT ? '<a href="' + _base + 'projects/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '')
          + (CAN_EDIT_PROJECT ? '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '')
-         + (CAN_EDIT_PROJECT ? '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>' : '')
          + '</td></tr>';
   }
 

@@ -238,6 +238,22 @@
                                 </div>
                                 <?php endif; ?>
                             </div>
+                        <?php elseif (isset($item['_predicted_days_free'])): ?>
+                            <?php $daysFree = (int)$item['_predicted_days_free']; ?>
+                            <span class="pz-badge <?= !empty($item['_predicted_near_completion']) ? 'pz-badge-available' : 'pz-badge-pending' ?>"
+                                  title="ML-predicted, based on host project's progress">
+                                <span class="material-symbols-outlined" style="font-size:.9rem;vertical-align:middle">schedule</span>
+                                <?= $daysFree <= 0 ? 'Soon' : '~' . $daysFree . 'd' ?>
+                            </span>
+                            <div style="font-size:.73rem;color:#555;margin-top:.25rem;line-height:1.3">
+                                Est. <?= esc((string)$item['_predicted_available_date']) ?>
+                            </div>
+                            <?php if (!empty($item['_predicted_has_blocker'])): ?>
+                            <div style="font-size:.73rem;color:#b3261e;margin-top:.15rem;line-height:1.3" title="Host project has an unresolved emergency report — this estimate doesn't account for it">
+                                <span class="material-symbols-outlined" style="font-size:.85rem;vertical-align:middle">warning</span>
+                                At risk — active blocker
+                            </div>
+                            <?php endif; ?>
                         <?php else: ?>
                             <span style="color:#bbb">—</span>
                         <?php endif; ?>

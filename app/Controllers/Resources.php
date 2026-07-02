@@ -6,6 +6,7 @@ use App\Libraries\ArchiveService;
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
 use App\Libraries\FirestoreService;
+use App\Libraries\MLServiceClient;
 use App\Libraries\TrashService;
 use Config\GoogleMaps;
 
@@ -754,6 +755,8 @@ class Resources extends BaseController
             $pagerOffset = ($itemsPage - 1) * $perPage;
             $items       = array_slice($items, $pagerOffset, $perPage);
 
+            $items = $this->attachNextAvailablePredictions($items, (string)($resource['name'] ?? 'Resource'), (string)($resource['category'] ?? ''));
+
             return view('resources/resource_items', [
                 'pageTitle'               => 'Resource Items',
                 'resource'                => $resource,
@@ -1252,6 +1255,269 @@ class Resources extends BaseController
         }
         unset($item);
         return $items;
+    }
+
+    /**
+     * Predicts when currently in-use items will free up, via the ML service's
+     * /predict/next-available-tools endpoint. Skips items already released or
+     * in transit (those already have a definitive availability state). Fails
+     * silently (items keep their default "—" availability) if the ML call errors.
+     */
+    private function attachNextAvailablePredictions(array $items, string $resourceName, string $resourceCategory): array
+    {
+        $db = $this->firestore->getDb();
+
+        // Collect in-use items that still need a prediction
+        $candidates = [];
+        foreach ($items as $idx => $item) {
+            $status = strtolower(str_replace(['-', ' '], '', (string)($item['status'] ?? '')));
+            if ($status !== 'inuse') continue;
+            if (!empty($item['transfer_locked'])) continue;
+            if (($item['released_at'] ?? null) !== null) continue;
+
+            $apid = $item['assigned_project_id'] ?? null;
+            $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference ? $apid->id() : trim((string)($apid ?? ''));
+            if ($pid === '') continue;
+
+            $candidates[$idx] = $pid;
+        }
+        if (empty($candidates)) return $items;
+
+        try {
+            // Real project data: progress + linear expected-progress-by-now, same
+            // formula used on the dashboard (ProjectDelayPredictor::buildFeatures()).
+            $now             = time();
+            $projectsPayload = [];
+            $projectCache    = [];
+            $activeCount     = 0;
+
+            foreach ($db->collection('project')->documents() as $doc) {
+                if (!$doc->exists()) continue;
+                $d      = $doc->data();
+                $status = strtoupper(trim((string)($d['status'] ?? '')));
+                if (!in_array($status, ['COMPLETED', 'DONE'], true)) $activeCount++;
+            }
+
+            $hasActiveBlocker = [];
+            foreach (array_unique($candidates) as $pid) {
+                $snap = $db->collection('project')->document($pid)->snapshot();
+                if (!$snap->exists()) continue;
+                $d = $snap->data();
+
+                $startTs       = $this->toTimestamp($d['start_date'] ?? null);
+                $endTs         = $this->toTimestamp($d['end_date']   ?? null);
+                $totalDuration = ($startTs && $endTs && $endTs > $startTs) ? max(1, (int)(($endTs - $startTs) / 86400)) : 0;
+                $daysElapsed   = $startTs ? max(0, (int)(($now - $startTs) / 86400)) : 0;
+                if ($totalDuration > 0) $daysElapsed = min($daysElapsed, $totalDuration);
+                $daysRemaining = $endTs ? max(0, (int)(($endTs - $now) / 86400)) : 30;
+                $totalDays     = $totalDuration > 0 ? $totalDuration : max(1, $daysElapsed + $daysRemaining);
+                $plannedPct    = min(100.0, round(($daysElapsed / $totalDays) * 100, 2));
+
+                // Prefer the latest SE daily report over the project doc's overall_progress —
+                // that field is only touched by manual project edits, not by report submissions,
+                // so relying on it means this prediction would never move when an SE files a report.
+                $progress = null;
+                try {
+                    $latestReport = $db->collection('project')->document($pid)
+                        ->collection('daily_progress_reports')
+                        ->orderBy('report_date', 'DESC')->limit(1)->documents();
+                    foreach ($latestReport as $rDoc) {
+                        if (!$rDoc->exists()) break;
+                        $rp = $rDoc->data()['total_completion_percent'] ?? null;
+                        if ($rp !== null) $progress = (float)$rp;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Resources::attachNextAvailablePredictions daily report - ' . $e->getMessage());
+                }
+                if ($progress === null) {
+                    $progress = (float)($d['overall_progress'] ?? $d['completion_percent'] ?? 0);
+                }
+                $progress = min(100, max(0, $progress));
+
+                $projectCache[$pid]    = ['name' => (string)($d['project_name'] ?? $pid), 'progress' => $progress];
+                $projectsPayload[$pid] = [
+                    'id'                  => $pid,
+                    'name'                => (string)($d['project_name'] ?? $pid),
+                    'progress_percent'    => $progress,
+                    'planned_progress'    => $plannedPct,
+                    'days_remaining'      => $daysRemaining,
+                    'concurrent_projects' => $activeCount,
+                ];
+
+                // Ground-truth check (unresolved emergency report) OR the ML's own
+                // blocker classification (e.g. "Low Progress" needs no filed report at all).
+                $hasActiveBlocker[$pid] = $this->_projectHasActiveBlocker($pid)
+                    || $this->_projectHasPredictedBlocker($pid, $progress, $plannedPct, $daysElapsed, $daysRemaining, $d);
+            }
+            if (empty($projectsPayload)) return $items;
+
+            $toolsPayload = [];
+            foreach ($candidates as $idx => $pid) {
+                if (!isset($projectsPayload[$pid])) continue;
+                $item = $items[$idx];
+                $toolsPayload[] = [
+                    'id'                  => (string)($item['id'] ?? ''),
+                    'name'                => $resourceName . ' — ' . (string)($item['serial_number'] ?? ''),
+                    'tool_type'           => strtolower($resourceCategory) ?: 'equipment',
+                    'assigned_project_id' => $pid,
+                ];
+            }
+            if (empty($toolsPayload)) return $items;
+
+            $mlService = new MLServiceClient();
+            $result    = $mlService->predictNextAvailableTools([
+                'projects' => array_values($projectsPayload),
+                'tools'    => $toolsPayload,
+                'season'   => (int)date('n'),
+            ]);
+            if (isset($result['error']) || empty($result['tools'])) return $items;
+
+            $byToolId = [];
+            foreach ($result['tools'] as $t) {
+                $byToolId[(string)($t['tool_id'] ?? '')] = $t;
+            }
+
+            foreach ($candidates as $idx => $pid) {
+                $toolId = (string)($items[$idx]['id'] ?? '');
+                if (!isset($byToolId[$toolId])) continue;
+                $t = $byToolId[$toolId];
+                $daysFree = (int)($t['estimated_days_free'] ?? 0);
+                // A tool can't still be "in use" past its own project's deadline — cap the
+                // raw model output to the project's real remaining timeline (same rationale
+                // as the Dashboard's delay-days cap: the model doesn't self-limit to this).
+                $daysRemainingForProject = (int)($projectsPayload[$pid]['days_remaining'] ?? $daysFree);
+                $daysFree = min($daysFree, $daysRemainingForProject);
+                $items[$idx]['_predicted_days_free']       = $daysFree;
+                $items[$idx]['_predicted_near_completion'] = !empty($t['near_completion']);
+                $items[$idx]['_predicted_available_date']  = date('m/d/Y', $now + ($daysFree * 86400));
+                // The ML model has no concept of blockers — it only reasons about progress
+                // vs. timeline. Flag separately so the view can warn the estimate may slip.
+                $items[$idx]['_predicted_has_blocker']     = $hasActiveBlocker[$pid] ?? false;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::attachNextAvailablePredictions - ' . $e->getMessage());
+        }
+
+        return $items;
+    }
+
+    /** True if the project has any unresolved emergency_reports entry (material/labor/onsite/weather/etc). */
+    private function _projectHasActiveBlocker(string $pid): bool
+    {
+        if ($pid === '') return false;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('emergency_reports')->documents();
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                if (empty($doc->data()['resolved'])) return true;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_projectHasActiveBlocker - ' . $e->getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Checks a project's unresolved emergency_reports for specific cause labels and
+     * returns the 0/1 flags the ML service expects. Mirrors Dashboard.php's version —
+     * kept in sync manually since the two controllers don't share a base class for this.
+     */
+    private function _computeEmergencyFlags(string $pid): array
+    {
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0];
+        if ($pid === '') return $flags;
+
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('emergency_reports')->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $d = $doc->data();
+                if (!empty($d['resolved'])) continue;
+
+                $causes = array_map('strval', (array)($d['causes'] ?? []));
+                if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
+                    $flags['equipment'] = 1;
+                }
+                if (in_array('Labor Shortage', $causes, true))   $flags['labor']   = 1;
+                if (in_array('Onsite Accidents', $causes, true)) $flags['onsite']  = 1;
+                if (in_array('Adverse Weather', $causes, true))  $flags['weather'] = 2;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_computeEmergencyFlags - ' . $e->getMessage());
+        }
+
+        return $flags;
+    }
+
+    /**
+     * Calls the ML /predict/blockers classification for the project — catches cases
+     * like "Low Progress" that have no filed emergency report at all, unlike
+     * _projectHasActiveBlocker() which only sees confirmed SE-reported incidents.
+     * Same feature shape as Dashboard.php's ML loop, built from data already on hand.
+     */
+    private function _projectHasPredictedBlocker(string $pid, float $progress, float $plannedPct, int $daysElapsed, int $daysRemaining, array $projectDoc): bool
+    {
+        if ($pid === '') return false;
+        try {
+            $eqTotal = 0; $eqActive = 0;
+            foreach ((array)($projectDoc['resources'] ?? []) as $r) {
+                if (strtolower((string)($r['category'] ?? '')) === 'manpower') continue;
+                $eqTotal++;
+                if (empty($r['transit'])) $eqActive++;
+            }
+            $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
+
+            $emergFlags = $this->_computeEmergencyFlags($pid);
+
+            $features = [
+                'project_id'                    => $pid,
+                'progress_percent'              => $progress,
+                'planned_progress_percent'      => $plannedPct,
+                'days_elapsed'                  => $daysElapsed,
+                'days_remaining'                => $daysRemaining,
+                'workers_present'               => (int)($projectDoc['workers_present'] ?? 0),
+                'workers_planned'               => (int)($projectDoc['workers_planned'] ?? 1),
+                'equipment_utilization'         => $eqUtil,
+                'weather_severity'              => $emergFlags['weather'],
+                'site_access_issues'            => (int)($projectDoc['site_access_issues'] ?? 0),
+                'avg_progress_3d'               => $progress,
+                'progress_trend_3d'             => 0.0,
+                'consecutive_low_days'          => 0,
+                'budget_utilization'            => 0.0,
+                'cost_variance_ratio'           => 0.0,
+                'active_blocker_count'          => (int)($projectDoc['active_blocker_count'] ?? 0),
+                'days_since_last_blocker'       => (int)($projectDoc['days_since_last_blocker'] ?? 999),
+                'emergency_equipment_shortage'  => $emergFlags['equipment'],
+                'emergency_labor_shortage'      => $emergFlags['labor'],
+                'emergency_onsite_accidents'    => $emergFlags['onsite'],
+            ];
+
+            $result = (new MLServiceClient())->predictBlockers($features);
+            if (isset($result['error'])) return false;
+
+            $raw = $result['blocker_type'] ?? $result['predicted_blocker'] ?? $result['prediction'] ?? 'No Blocker';
+            return !in_array(strtolower((string)$raw), ['no blocker', 'unknown', ''], true);
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_projectHasPredictedBlocker - ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function toTimestamp($val): ?int
+    {
+        if (!$val) return null;
+        if ($val instanceof \Google\Cloud\Core\Timestamp) {
+            try { return $val->get()->getTimestamp(); } catch (\Throwable $e) { return null; }
+        }
+        if (is_numeric($val)) return (int)$val;
+        $ts = strtotime((string)$val);
+        return $ts ?: null;
     }
 
     private function buildConditionSummary(array $items): array

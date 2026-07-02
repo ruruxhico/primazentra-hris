@@ -68,9 +68,6 @@
 
     <?php if (pz_can('edit_staff')): ?>
     <div class="rv-btn-group-view">
-        <a href="<?= base_url('staff/deleted') ?>" class="rv-btn-trash">
-            <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-        </a>
         <a href="<?= base_url('staff/archived') ?>" class="rv-btn-archive">
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
@@ -186,7 +183,6 @@
                                 <?php if (pz_can('edit_staff')): ?>
                                 <a href="<?= base_url('staff/update/' . $person['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
                                 <button type="button" class="action-btn action-archive" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
-                                <a href="#" data-id="<?= esc((string)$person['id']) ?>" data-name="<?= esc((string)(($person['first_name'] ?? '') . ' ' . ($person['last_name'] ?? ''))) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                                 <?php endif; ?>
                             </div>
                         </td>
@@ -713,7 +709,6 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
          + '<a href="' + _base + 'staff/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
          + (CAN_EDIT_STAFF ? '<a href="' + _base + 'staff/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '')
          + (CAN_EDIT_STAFF ? '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + fullName + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '')
-         + (CAN_EDIT_STAFF ? '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + fullName + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>' : '')
          + '</div></td>'
          + '</tr>';
   }
