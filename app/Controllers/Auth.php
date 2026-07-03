@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Libraries\BrevoMailer;
 use App\Libraries\FirestoreService;
 use Google\Cloud\Core\Timestamp;
 
@@ -81,41 +82,12 @@ class Auth extends BaseController {
 
     private function sendAppPasswordResetEmail(string $email, string $resetLink): void
     {
-        $mailer = service('email');
-        $emailConfig = config('Email');
-
-        $mailer->initialize([
-            'protocol' => (string) env('EMAIL_PROTOCOL', $emailConfig->protocol),
-            'mailPath' => (string) env('EMAIL_MAIL_PATH', $emailConfig->mailPath),
-            'SMTPHost' => (string) env('EMAIL_SMTP_HOST', $emailConfig->SMTPHost),
-            'SMTPUser' => (string) env('EMAIL_SMTP_USER', $emailConfig->SMTPUser),
-            'SMTPPass' => (string) env('EMAIL_SMTP_PASS', $emailConfig->SMTPPass),
-            'SMTPPort' => (int) env('EMAIL_SMTP_PORT', $emailConfig->SMTPPort),
-            'SMTPCrypto' => (string) env('EMAIL_SMTP_CRYPTO', $emailConfig->SMTPCrypto),
-            'SMTPAuthMethod' => (string) env('EMAIL_SMTP_AUTH_METHOD', $emailConfig->SMTPAuthMethod),
-            'SMTPTimeout' => (int) env('EMAIL_SMTP_TIMEOUT', $emailConfig->SMTPTimeout),
-            'mailType' => 'html',
-            'charset' => (string) env('EMAIL_CHARSET', $emailConfig->charset),
-            'wordWrap' => true,
-            'validate' => false,
-            'CRLF' => (string) env('EMAIL_CRLF', $emailConfig->CRLF),
-            'newline' => (string) env('EMAIL_NEWLINE', $emailConfig->newline),
-        ]);
-
-        $fromEmail = $emailConfig->fromEmail ?: (string) env('EMAIL_FROM', 'no-reply@primazentra.local');
-        $fromName = $emailConfig->fromName ?: (string) env('EMAIL_FROM_NAME', 'PrimaZentra');
-
-        $mailer->setFrom($fromEmail, $fromName);
-        $mailer->setTo($email);
-        $mailer->setSubject('PrimaZentra password reset');
-        $mailer->setMessage(view('emails/password_reset', [
+        $html = view('emails/password_reset', [
             'email' => $email,
             'resetLink' => $resetLink,
-        ]));
+        ]);
 
-        if (! $mailer->send(false)) {
-            throw new \RuntimeException($mailer->printDebugger(['headers']));
-        }
+        (new BrevoMailer())->send($email, 'PrimaZentra password reset', $html);
     }
 
     /**
