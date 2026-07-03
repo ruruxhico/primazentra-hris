@@ -64,8 +64,11 @@ class Dashboard extends BaseController
             // ── Resources — single fetch, derive everything in PHP ───
             $allResources       = $this->resourceModel->getAllResources();
             $totalResources     = count($allResources);
-            $availableResources = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Available'));
-            $deployedResources  = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Deployed'));
+            // The resource doc's own 'status' label is unreliable — many resources
+            // (e.g. items added via a different flow) never had it set, even though
+            // they have real available units. available_quantity is always accurate.
+            $availableResources = array_values(array_filter($allResources, fn($r) => (int)($r['available_quantity'] ?? 0) > 0));
+            $deployedResources  = array_values(array_filter($allResources, fn($r) => (int)($r['total_quantity'] ?? 0) - (int)($r['available_quantity'] ?? 0) > 0));
             $availableTools     = $availableResources; // same data, no extra call
 
             // ── Utilization stats (equipment + tools) ────────────────
@@ -269,6 +272,8 @@ class Dashboard extends BaseController
                         // causes (SE-filed), not stored on the project doc itself.
                         $emergFlags = $this->_computeEmergencyFlags((string)($p['id'] ?? ''));
 
+                        $consecutiveLowDays = $this->_computeConsecutiveLowDays((string)($p['id'] ?? ''), $startTs, $totalDuration);
+
                         $features = [
                             'project_id'                    => (string)($p['id'] ?? ''),
                             'progress_percent'              => $progress,
@@ -282,10 +287,10 @@ class Dashboard extends BaseController
                             'site_access_issues'            => (int)($p['site_access_issues'] ?? 0),
                             'avg_progress_3d'               => (float)($p['avg_progress_3d'] ?? 0),
                             'progress_trend_3d'             => (float)($p['progress_trend_3d'] ?? 0),
-                            'consecutive_low_days'          => (int)($p['consecutive_low_days'] ?? 0),
+                            'consecutive_low_days'          => $consecutiveLowDays,
                             'budget_utilization'            => (float)($p['budget_utilization'] ?? 0),
                             'cost_variance_ratio'           => (float)($p['cost_variance_ratio'] ?? 0),
-                            'active_blocker_count'          => (int)($p['active_blocker_count'] ?? 0),
+                            'active_blocker_count'          => $emergFlags['active_count'],
                             'days_since_last_blocker'       => (int)($p['days_since_last_blocker'] ?? 999),
                             'emergency_equipment_shortage'  => $emergFlags['equipment'],
                             'emergency_labor_shortage'      => $emergFlags['labor'],
@@ -321,8 +326,16 @@ class Dashboard extends BaseController
                                            ?? 0;
                         }
 
-                        // Cap: a delay larger than the whole project duration is not actionable.
-                        $maxDelay       = $totalDuration > 0 ? $totalDuration : 730;
+                        // Cap: last-line-of-defense ceiling against out-of-distribution garbage —
+                        // the ML service applies its own calibrated cap too (rule_days floor,
+                        // rule_days*2 ceiling). With a genuine active blocker (injury, accident,
+                        // shortage, weather), trust the model's severity far more loosely — a
+                        // real incident shouldn't be flattened just because the project is short.
+                        // With no blocker signal at all, keep a tight duration-based sanity cap.
+                        $hasActiveBlockerSignal = $emergFlags['active_count'] > 0;
+                        $maxDelay = $hasActiveBlockerSignal
+                            ? max(180, ($totalDuration > 0 ? $totalDuration : 365) * 10)
+                            : ($totalDuration > 0 ? $totalDuration : 365) * 3;
                         $estimatedDelay = min((float)$estimatedDelay, (float)$maxDelay);
 
                         $seReason = $this->_fetchBlockerReason((string)($p['id'] ?? ''), $predictedBlocker, $features);
@@ -747,7 +760,7 @@ class Dashboard extends BaseController
      */
     private function _computeEmergencyFlags(string $projectId): array
     {
-        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0];
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0, 'active_count' => 0];
         if ($projectId === '') return $flags;
 
         try {
@@ -759,6 +772,8 @@ class Dashboard extends BaseController
                 if (!$doc->exists()) continue;
                 $d = $doc->data();
                 if (!empty($d['resolved'])) continue;
+
+                $flags['active_count']++;
 
                 $causes = array_map('strval', (array)($d['causes'] ?? []));
                 if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
@@ -775,6 +790,47 @@ class Dashboard extends BaseController
         }
 
         return $flags;
+    }
+
+    /**
+     * Counts consecutive daily_progress_reports (most recent first) where the
+     * reported progress was behind the linear expected-progress-by-that-date.
+     * Streak breaks at the first report that was on-plan or ahead.
+     */
+    private function _computeConsecutiveLowDays(string $projectId, ?int $startTs, int $totalDuration): int
+    {
+        if ($projectId === '' || !$startTs || $totalDuration <= 0) return 0;
+
+        $count = 0;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($projectId)
+                ->collection('daily_progress_reports')
+                ->orderBy('report_date', 'DESC')
+                ->limit(30)->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) break;
+                $d = $doc->data();
+
+                $reportTs = $this->toTimestamp($d['report_date'] ?? null);
+                $actual   = $d['total_completion_percent'] ?? null;
+                if ($reportTs === null || $actual === null) break;
+
+                $daysElapsedAtReport = min($totalDuration, max(0, (int)(($reportTs - $startTs) / 86400)));
+                $plannedAtReport     = min(100.0, round(($daysElapsedAtReport / $totalDuration) * 100, 2));
+
+                if ((float)$actual < $plannedAtReport) {
+                    $count++;
+                } else {
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', '_computeConsecutiveLowDays: ' . $e->getMessage());
+        }
+
+        return $count;
     }
 
     private function _fetchBlockerReason(string $projectId, string $blockerType, array $features = []): string

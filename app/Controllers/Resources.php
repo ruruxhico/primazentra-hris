@@ -1348,7 +1348,7 @@ class Resources extends BaseController
                 // Ground-truth check (unresolved emergency report) OR the ML's own
                 // blocker classification (e.g. "Low Progress" needs no filed report at all).
                 $hasActiveBlocker[$pid] = $this->_projectHasActiveBlocker($pid)
-                    || $this->_projectHasPredictedBlocker($pid, $progress, $plannedPct, $daysElapsed, $daysRemaining, $d);
+                    || $this->_projectHasPredictedBlocker($pid, $progress, $plannedPct, $daysElapsed, $daysRemaining, $d, $startTs, $totalDuration);
             }
             if (empty($projectsPayload)) return $items;
 
@@ -1427,7 +1427,7 @@ class Resources extends BaseController
      */
     private function _computeEmergencyFlags(string $pid): array
     {
-        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0];
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0, 'active_count' => 0];
         if ($pid === '') return $flags;
 
         try {
@@ -1439,6 +1439,8 @@ class Resources extends BaseController
                 if (!$doc->exists()) continue;
                 $d = $doc->data();
                 if (!empty($d['resolved'])) continue;
+
+                $flags['active_count']++;
 
                 $causes = array_map('strval', (array)($d['causes'] ?? []));
                 if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
@@ -1456,12 +1458,53 @@ class Resources extends BaseController
     }
 
     /**
+     * Counts consecutive daily_progress_reports (most recent first) where the
+     * reported progress was behind the linear expected-progress-by-that-date.
+     * Mirrors Dashboard.php's version — kept in sync manually.
+     */
+    private function _computeConsecutiveLowDays(string $pid, ?int $startTs, int $totalDuration): int
+    {
+        if ($pid === '' || !$startTs || $totalDuration <= 0) return 0;
+
+        $count = 0;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('daily_progress_reports')
+                ->orderBy('report_date', 'DESC')
+                ->limit(30)->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) break;
+                $d = $doc->data();
+
+                $reportTs = $this->toTimestamp($d['report_date'] ?? null);
+                $actual   = $d['total_completion_percent'] ?? null;
+                if ($reportTs === null || $actual === null) break;
+
+                $daysElapsedAtReport = min($totalDuration, max(0, (int)(($reportTs - $startTs) / 86400)));
+                $plannedAtReport     = min(100.0, round(($daysElapsedAtReport / $totalDuration) * 100, 2));
+
+                if ((float)$actual < $plannedAtReport) {
+                    $count++;
+                } else {
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_computeConsecutiveLowDays - ' . $e->getMessage());
+        }
+
+        return $count;
+    }
+
+    /**
      * Calls the ML /predict/blockers classification for the project — catches cases
      * like "Low Progress" that have no filed emergency report at all, unlike
      * _projectHasActiveBlocker() which only sees confirmed SE-reported incidents.
      * Same feature shape as Dashboard.php's ML loop, built from data already on hand.
      */
-    private function _projectHasPredictedBlocker(string $pid, float $progress, float $plannedPct, int $daysElapsed, int $daysRemaining, array $projectDoc): bool
+    private function _projectHasPredictedBlocker(string $pid, float $progress, float $plannedPct, int $daysElapsed, int $daysRemaining, array $projectDoc, ?int $startTs = null, int $totalDuration = 0): bool
     {
         if ($pid === '') return false;
         try {
@@ -1473,7 +1516,8 @@ class Resources extends BaseController
             }
             $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
 
-            $emergFlags = $this->_computeEmergencyFlags($pid);
+            $emergFlags         = $this->_computeEmergencyFlags($pid);
+            $consecutiveLowDays = $this->_computeConsecutiveLowDays($pid, $startTs, $totalDuration);
 
             $features = [
                 'project_id'                    => $pid,
@@ -1488,10 +1532,10 @@ class Resources extends BaseController
                 'site_access_issues'            => (int)($projectDoc['site_access_issues'] ?? 0),
                 'avg_progress_3d'               => $progress,
                 'progress_trend_3d'             => 0.0,
-                'consecutive_low_days'          => 0,
+                'consecutive_low_days'          => $consecutiveLowDays,
                 'budget_utilization'            => 0.0,
                 'cost_variance_ratio'           => 0.0,
-                'active_blocker_count'          => (int)($projectDoc['active_blocker_count'] ?? 0),
+                'active_blocker_count'          => $emergFlags['active_count'],
                 'days_since_last_blocker'       => (int)($projectDoc['days_since_last_blocker'] ?? 999),
                 'emergency_equipment_shortage'  => $emergFlags['equipment'],
                 'emergency_labor_shortage'      => $emergFlags['labor'],
