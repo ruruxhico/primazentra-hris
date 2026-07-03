@@ -16,24 +16,24 @@ class Import extends BaseController
     // Maps module → [headers, notes row values]
     private const TEMPLATES = [
         'projects' => [
-            'headers' => ['Project Name*', 'Site Address', 'Latitude', 'Longitude', 'Region', 'Client', 'Project Type*', 'Budget', 'Project Manager', 'Site Engineer', 'Status', 'Start Date (MM/DD/YYYY)', 'End Date (MM/DD/YYYY)'],
-            'notes'   => ['e.g. Tower A', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Luzon / Visayas / Mindanao (auto if blank)', 'e.g. DITO Telecommunity', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Numeric, e.g. 500000', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'Planned / On-going / Completed / Past Deadline / Archived (defaults to Planned)', 'e.g. 01/01/2025', 'e.g. 12/31/2025'],
+            'headers' => ['Project Name*', 'Project Type*', 'Client', 'Status', 'Overall Progress (%)', 'Budget (PHP)', 'Region', 'Site Address', 'Latitude', 'Longitude', 'Project Manager', 'Site Engineer', 'Start Date (MM/DD/YYYY)', 'End Date (MM/DD/YYYY)', 'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)'],
+            'notes'   => ['e.g. Tower A', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'e.g. DITO Telecommunity', 'Planned / On-going / Completed / Past Deadline / Archived (defaults to Planned)', 'Numeric 0-100, e.g. 25 (defaults to 0)', 'Numeric, e.g. 500000', 'Luzon / Visayas / Mindanao (auto if blank)', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'e.g. 01/01/2025', 'e.g. 12/31/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025'],
         ],
         'equipment' => [
-            'headers' => ['Name*', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
-            'notes'   => ['e.g. Concrete Mixer', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 5', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
+            'headers' => ['Model Name*', 'Total Quantity*', 'Available Quantity', 'Condition: New', 'Condition: Functional', 'Condition: Worn', 'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)'],
+            'notes'   => ['e.g. Concrete Mixer', 'Numeric, e.g. 10', 'Numeric, defaults to Total Quantity if blank', 'Count of new-condition units, e.g. 3', 'Count of functional-condition units, e.g. 5', 'Count of worn-condition units, e.g. 2', 'Optional — defaults to import time if blank, e.g. 01/01/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025'],
         ],
         'tools' => [
-            'headers' => ['Name*', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
-            'notes'   => ['e.g. Drill Machine', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 10', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
+            'headers' => ['Model Name*', 'Total Quantity*', 'Available Quantity', 'Condition: New', 'Condition: Functional', 'Condition: Worn', 'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)'],
+            'notes'   => ['e.g. Drill Machine', 'Numeric, e.g. 10', 'Numeric, defaults to Total Quantity if blank', 'Count of new-condition units, e.g. 4', 'Count of functional-condition units, e.g. 6', 'Count of worn-condition units, e.g. 0', 'Optional — defaults to import time if blank, e.g. 01/01/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025'],
         ],
         'manpower' => [
-            'headers' => ['First Name*', 'Middle Name', 'Last Name*', 'Role*', 'Specialization', 'Skills (semicolon-separated)', 'Status*'],
-            'notes'   => ['e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'FIELD WORKER / FOREMAN', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'e.g. Welding; Masonry', 'AVAILABLE / DEPLOYED / ON-LEAVE'],
+            'headers' => ['Employee ID', 'First Name*', 'Middle Name', 'Last Name', 'Full Name', 'Role*', 'Specialization', 'Skills', 'Status', 'Assigned Project', 'Location Address', 'Location Type', 'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)'],
+            'notes'   => ['Optional — auto-generated if blank, e.g. MP-A1B2C3D4', 'e.g. Juan', 'e.g. Reyes (optional)', 'e.g. dela Cruz', 'Optional — auto-built from First/Middle/Last if blank', 'FIELD WORKER / FOREMAN', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Semicolon-separated, e.g. Welding; Masonry', 'AVAILABLE / DEPLOYED / ON-LEAVE (defaults to AVAILABLE)', 'Optional — exact project name to assign, e.g. Tower A', 'Full address (optional)', 'Warehouse / Project Site / Other (optional)', 'Optional — defaults to import time if blank, e.g. 01/01/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025'],
         ],
         'resource_units' => [
-            'headers' => ['Serial Number', 'Brand', 'Condition'],
-            'notes'   => ['Optional — auto-generated if blank', 'Optional, e.g. Makita', 'New / Functional / Worn / Broken (defaults to New if blank)'],
+            'headers' => ['Serial Number', 'Condition', 'Status', 'Brand', 'Location Address', 'Location Type', 'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)'],
+            'notes'   => ['Optional — auto-generated if blank', 'New / Functional / Worn / Broken (defaults to New if blank)', 'In-Storage / In-Use / Repair / Transfer Pending (defaults to In-Storage)', 'Optional, e.g. Makita', 'Full address (optional)', 'Warehouse / Project Site / Other (optional)', 'Optional — defaults to import time if blank, e.g. 01/01/2025', 'Optional — defaults to import time if blank, e.g. 01/01/2025'],
         ],
     ];
 
@@ -108,17 +108,22 @@ class Import extends BaseController
 
         // Sample row 4 — mark date columns as text so Excel won't reformat them
         $sheet->setCellValue('A4', '-- sample, delete this row --');
-        if ($module === 'projects') {
-            // Force date columns (L=12, M=13) to text format so MM/DD/YYYY stays intact
-            foreach ([12, 13] as $dateCol) {
-                $sheet->getStyle($coord($dateCol, 4))
-                    ->getNumberFormat()
-                    ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
-                $sheet->getCell($coord($dateCol, 4))->setValueExplicit(
-                    'e.g. 01/15/2025',
-                    \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
-                );
-            }
+        // 1-indexed column positions of MM/DD/YYYY fields, per module
+        $dateColumns = [
+            'projects'  => [13, 14, 15, 16], // Start Date, End Date, Created At, Updated At
+            'equipment' => [7, 8],           // Created At, Updated At
+            'tools'     => [7, 8],           // Created At, Updated At
+            'manpower'  => [13, 14],         // Created At, Updated At
+            'resource_units' => [7, 8],      // Created At, Updated At
+        ];
+        foreach ($dateColumns[$module] ?? [] as $dateCol) {
+            $sheet->getStyle($coord($dateCol, 4))
+                ->getNumberFormat()
+                ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
+            $sheet->getCell($coord($dateCol, 4))->setValueExplicit(
+                'e.g. 01/15/2025',
+                \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+            );
         }
 
         for ($c = 1; $c <= $colCount; $c++) {
@@ -139,6 +144,9 @@ class Import extends BaseController
     public function process()
     {
         $module = strtolower(trim((string) ($this->request->getPost('module') ?? '')));
+        if (!isset(self::TEMPLATES[$module])) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Unknown module for import.']);
+        }
         $file = $this->request->getFile('import_file');
 
         if (!$file || !$file->isValid() || $file->hasMoved()) {
@@ -162,18 +170,21 @@ class Import extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Could not read file: ' . $e->getMessage()]);
         }
 
-        // Find header row: first row where at least 2 cells contain '*'.
-        // This skips the single-cell instruction row ("* Required fields…") at the top
-        // of the XLSX template which also contains a '*' but is not the header row.
+        // Find header row: the first row whose cells match this module's known
+        // template headers exactly (case-insensitive, '*' stripped). Matching
+        // against the actual expected headers — rather than counting '*' markers —
+        // works regardless of how many fields a given template marks as required.
+        $expectedHeaders = array_map(
+            static fn($h) => strtolower(trim(rtrim((string) $h, '*'))),
+            self::TEMPLATES[$module]['headers']
+        );
         $headerRowIdx = null;
         foreach ($rows as $i => $row) {
-            $starCount = 0;
-            foreach ($row as $cell) {
-                if (str_contains((string) ($cell ?? ''), '*')) {
-                    $starCount++;
-                }
-            }
-            if ($starCount >= 2) {
+            $rowNormalized = array_map(
+                static fn($cell) => strtolower(trim(rtrim((string) ($cell ?? ''), '*'))),
+                array_slice(array_values($row), 0, count($expectedHeaders))
+            );
+            if ($rowNormalized === $expectedHeaders) {
                 $headerRowIdx = $i;
                 break;
             }
@@ -223,9 +234,10 @@ class Import extends BaseController
 
     // ── Importers ────────────────────────────────────────────────────────────
 
-    // Columns (0-indexed): 0:Project Name* | 1:Site Address | 2:Lat | 3:Lng | 4:Region
-    // 5:Client | 6:Project Type* | 7:Budget | 8:Project Manager | 9:Site Engineer
-    // 10:Status | 11:Start Date | 12:End Date
+    // Columns (0-indexed): 0:Project Name* | 1:Project Type* | 2:Client | 3:Status
+    // 4:Overall Progress (%) | 5:Budget (PHP) | 6:Region | 7:Site Address | 8:Lat | 9:Lng
+    // 10:Project Manager | 11:Site Engineer | 12:Start Date | 13:End Date
+    // 14:Created At (optional) | 15:Updated At (optional)
     private function importProjects(array $rows): array
     {
         $db = $this->firestore->getDb();
@@ -244,21 +256,29 @@ class Import extends BaseController
 
         foreach ($rows as $row) {
             $name = trim((string) ($row[0] ?? ''));
-            $type = strtoupper(trim((string) ($row[6] ?? '')));
+            $type = strtoupper(trim((string) ($row[1] ?? '')));
             if ($name === '' || $type === '') { $skipped++; continue; }
 
-            $address = trim((string) ($row[1] ?? ''));
-            $lat     = is_numeric($row[2] ?? '') ? (float) $row[2] : null;
-            $lng     = is_numeric($row[3] ?? '') ? (float) $row[3] : null;
-            $region  = trim((string) ($row[4] ?? ''));
-            $client  = trim((string) ($row[5] ?? ''));
-            $budget  = is_numeric($row[7] ?? '') ? (float) $row[7] : 0;
-            $pmName  = strtolower(trim((string) ($row[8] ?? '')));
-            $seName  = strtolower(trim((string) ($row[9] ?? '')));
-            $status  = trim((string) ($row[10] ?? '')) ?: 'Planned';
+            $client   = trim((string) ($row[2] ?? ''));
+            $status   = trim((string) ($row[3] ?? '')) ?: 'Planned';
+            $progress = is_numeric($row[4] ?? '') ? min(100, max(0, (float) $row[4])) : 0;
+            $budget   = is_numeric($row[5] ?? '') ? (float) $row[5] : 0;
+            $region   = trim((string) ($row[6] ?? ''));
+            $address  = trim((string) ($row[7] ?? ''));
+            $lat      = is_numeric($row[8] ?? '') ? (float) $row[8] : null;
+            $lng      = is_numeric($row[9] ?? '') ? (float) $row[9] : null;
+            $pmName   = strtolower(trim((string) ($row[10] ?? '')));
+            $seName   = strtolower(trim((string) ($row[11] ?? '')));
 
             $pmId = !empty($pmName) ? ($usersMap[$pmName] ?? null) : null;
             $seId = !empty($seName) ? ($usersMap[$seName] ?? null) : null;
+
+            // Optional: preserve original created/updated timestamps (e.g. data migration).
+            // Falls back to import time if the cell is blank or unparseable.
+            $createdAt = $this->parseDateCell($row[14] ?? '');
+            $updatedAt = $this->parseDateCell($row[15] ?? '');
+            $createdTs = $createdAt !== '' ? (strtotime($createdAt) ?: $now) : $now;
+            $updatedTs = $updatedAt !== '' ? (strtotime($updatedAt) ?: $now) : $now;
 
             // Build a real Firestore GeoPoint (matches web-created projects)
             $geopoint = ($lat !== null && $lng !== null)
@@ -271,10 +291,10 @@ class Import extends BaseController
                 'client_name'        => $client,
                 'status'             => $status,
                 'budget'             => $budget,
-                'start_date'         => $this->parseDateCell($row[11] ?? ''),
-                'end_date'           => $this->parseDateCell($row[12] ?? ''),
-                'overall_progress'   => 0,
-                'completion_percent' => 0,
+                'start_date'         => $this->parseDateCell($row[12] ?? ''),
+                'end_date'           => $this->parseDateCell($row[13] ?? ''),
+                'overall_progress'   => $progress,
+                'completion_percent' => $progress,
                 'project_manager_id' => $pmId,
                 'site_engineer_id'   => $seId,
                 'personnel'          => ['project_manager_id' => $pmId, 'site_engineer_id' => $seId],
@@ -283,8 +303,8 @@ class Import extends BaseController
                     'geopoint' => $geopoint,
                 ],
                 'region'     => $region,
-                'created_at' => $now,
-                'updated_at' => $now,
+                'created_at' => $createdTs,
+                'updated_at' => $updatedTs,
             ]);
             $imported++;
         }
@@ -293,6 +313,8 @@ class Import extends BaseController
     }
 
     // Columns (0-indexed): 0:Serial Number | 1:Brand | 2:Condition
+    // Columns: Serial Number, Condition, Status, Brand, Location Address,
+    // Location Type, Created At (optional), Updated At (optional)
     private function importResourceUnits(array $rows, string $resourceId): array
     {
         if ($resourceId === '') return [0, 0, 'No resource ID provided.'];
@@ -308,10 +330,13 @@ class Import extends BaseController
 
         foreach ($rows as $row) {
             $serial    = trim((string)($row[0] ?? ''));
-            $brand     = trim((string)($row[1] ?? ''));
-            $condition = trim((string)($row[2] ?? ''));
+            $condition = trim((string)($row[1] ?? ''));
+            $status    = trim((string)($row[2] ?? ''));
+            $brand     = trim((string)($row[3] ?? ''));
+            $locAddr   = trim((string)($row[4] ?? ''));
+            $locType   = trim((string)($row[5] ?? ''));
 
-            if ($serial === '' && $brand === '' && $condition === '') {
+            if ($serial === '' && $condition === '' && $status === '' && $brand === '') {
                 $skipped++;
                 continue;
             }
@@ -329,14 +354,25 @@ class Import extends BaseController
                 $condition = 'New';
             }
 
+            $validStatuses = ['In-Storage', 'In-Use', 'Repair', 'Transfer Pending'];
+            if ($status === '' || !in_array($status, $validStatuses, true)) {
+                $status = 'In-Storage';
+            }
+
+            // Optional: preserve original created/updated timestamps (e.g. data migration).
+            $createdAt = $this->parseDateCell($row[6] ?? '');
+            $updatedAt = $this->parseDateCell($row[7] ?? '');
+            $createdTs = $createdAt !== '' ? (strtotime($createdAt) ?: $now) : $now;
+            $updatedTs = $updatedAt !== '' ? (strtotime($updatedAt) ?: $now) : $now;
+
             $db->collection('resource')->document($resourceId)->collection('items')->newDocument()->set([
                 'serial_number' => $serial,
                 'brand'         => $brand,
                 'condition'     => $condition,
-                'status'        => 'In-Storage',
-                'location'      => ['type' => '', 'address' => ''],
-                'created_at'    => $now,
-                'updated_at'    => $now,
+                'status'        => $status,
+                'location'      => ['type' => $locType, 'address' => $locAddr],
+                'created_at'    => $createdTs,
+                'updated_at'    => $updatedTs,
             ]);
             $imported++;
         }
@@ -391,82 +427,131 @@ class Import extends BaseController
         return $str;
     }
 
+    // Columns: Model Name, Total Quantity, Available Quantity, Condition: New,
+    // Condition: Functional, Condition: Worn, Created At (optional), Updated At (optional)
     private function importResources(array $rows, string $category): array
     {
-        // Columns: Name, Status, TotalUnits, LocType, LocAddress, NextAvail
         $db = $this->firestore->getDb();
         $imported = 0;
         $skipped  = 0;
         $now = time();
 
+        $conditionCols = [3 => 'New', 4 => 'Functional', 5 => 'Worn'];
+
         foreach ($rows as $row) {
-            $name = trim((string) ($row[0] ?? ''));
+            $name  = trim((string) ($row[0] ?? ''));
+            $total = is_numeric($row[1] ?? '') ? max(0, (int) $row[1]) : 0;
             if ($name === '') { $skipped++; continue; }
 
-            $total = is_numeric($row[2] ?? '') ? (int) $row[2] : 0;
+            $available = is_numeric($row[2] ?? '') ? max(0, (int) $row[2]) : $total;
+
+            $counts = [];
+            foreach ($conditionCols as $col => $label) {
+                $counts[$label] = is_numeric($row[$col] ?? '') ? max(0, (int) $row[$col]) : 0;
+            }
+
+            // Optional: preserve original created/updated timestamps (e.g. data migration).
+            $createdAt = $this->parseDateCell($row[6] ?? '');
+            $updatedAt = $this->parseDateCell($row[7] ?? '');
+            $createdTs = $createdAt !== '' ? (strtotime($createdAt) ?: $now) : $now;
+            $updatedTs = $updatedAt !== '' ? (strtotime($updatedAt) ?: $now) : $now;
+
             $db->collection('resource')->newDocument()->set([
-                'name'             => $name,
-                'category'         => $category,
-                'status'           => trim((string) ($row[1] ?? '')) ?: 'Available',
-                'location'         => [
-                    'type'    => trim((string) ($row[3] ?? '')),
-                    'address' => trim((string) ($row[4] ?? '')),
-                ],
-                'next_availability' => trim((string) ($row[5] ?? '')),
-                'asset_details'    => [
+                'name'              => $name,
+                'category'          => $category,
+                'status'            => $available > 0 ? 'Available' : 'Unavailable',
+                'location'          => ['type' => '', 'address' => ''],
+                'next_availability' => '',
+                'asset_details'     => [
                     'total_quantity'     => $total,
-                    'available_quantity' => $total,
-                    'condition_summary'  => [],
+                    'available_quantity' => $available,
+                    'condition_summary'  => $counts,
                 ],
-                'created_at' => $now,
-                'updated_at' => $now,
+                'created_at' => $createdTs,
+                'updated_at' => $updatedTs,
             ]);
+
             $imported++;
         }
 
         return [$imported, $skipped, null];
     }
 
+    // Columns: Employee ID, First Name, Middle Name, Last Name, Full Name, Role,
+    // Specialization, Skills, Status, Assigned Project, Location Address,
+    // Location Type, Created At (optional), Updated At (optional)
     private function importManpower(array $rows): array
     {
-        // Columns: FirstName, MiddleName, LastName, Role, Specialization, Skills, Status
         $db = $this->firestore->getDb();
         $imported = 0;
         $skipped  = 0;
         $now = time();
 
+        // Pre-load projects for "Assigned Project" name resolution
+        $projectsMap = [];
+        foreach ($db->collection('project')->documents() as $pdoc) {
+            if (!$pdoc->exists()) continue;
+            $pname = strtolower(trim((string) ($pdoc->data()['project_name'] ?? '')));
+            if ($pname !== '') $projectsMap[$pname] = $pdoc->id();
+        }
+
         foreach ($rows as $row) {
-            $firstName  = trim((string) ($row[0] ?? ''));
-            $middleName = trim((string) ($row[1] ?? ''));
-            $lastName   = trim((string) ($row[2] ?? ''));
-            $role       = trim((string) ($row[3] ?? ''));
+            $empIdInput  = trim((string) ($row[0] ?? ''));
+            $firstName   = trim((string) ($row[1] ?? ''));
+            $middleName  = trim((string) ($row[2] ?? ''));
+            $lastName    = trim((string) ($row[3] ?? ''));
+            $fullNameIn  = trim((string) ($row[4] ?? ''));
+            $role        = trim((string) ($row[5] ?? ''));
             if ($firstName === '' || $role === '') { $skipped++; continue; }
 
-            $fullName  = trim($firstName . ($middleName !== '' ? ' ' . $middleName : '') . ' ' . $lastName);
-            $skillsRaw = trim((string) ($row[5] ?? ''));
+            $fullName  = $fullNameIn !== ''
+                ? $fullNameIn
+                : trim($firstName . ($middleName !== '' ? ' ' . $middleName : '') . ' ' . $lastName);
+
+            $skillsRaw = trim((string) ($row[7] ?? ''));
             $skills    = $skillsRaw !== ''
                 ? array_values(array_filter(array_map('trim', explode(';', $skillsRaw))))
                 : [];
 
-            try {
-                $empId = 'MP-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
-            } catch (\Exception $e) {
-                $empId = 'MP-' . strtoupper(substr(md5(uniqid()), 0, 8));
+            if ($empIdInput !== '') {
+                $empId = $empIdInput;
+            } else {
+                try {
+                    $empId = 'MP-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+                } catch (\Exception $e) {
+                    $empId = 'MP-' . strtoupper(substr(md5(uniqid()), 0, 8));
+                }
             }
 
+            $assignedProjectName = strtolower(trim((string) ($row[9] ?? '')));
+            $assignedProjectId   = $assignedProjectName !== ''
+                ? ($projectsMap[$assignedProjectName] ?? null)
+                : null;
+
+            // Optional: preserve original created/updated timestamps (e.g. data migration).
+            $createdAt = $this->parseDateCell($row[12] ?? '');
+            $updatedAt = $this->parseDateCell($row[13] ?? '');
+            $createdTs = $createdAt !== '' ? (strtotime($createdAt) ?: $now) : $now;
+            $updatedTs = $updatedAt !== '' ? (strtotime($updatedAt) ?: $now) : $now;
+
             $db->collection('manpower')->newDocument()->set([
-                'name'           => $fullName,
-                'employee_id'    => $empId,
-                'first_name'     => $firstName,
-                'middle_name'    => $middleName !== '' ? $middleName : null,
-                'last_name'      => $lastName,
-                'role'           => $role,
-                'specialization' => trim((string) ($row[4] ?? '')),
-                'skills'         => $skills,
-                'status'         => trim((string) ($row[6] ?? '')) ?: 'AVAILABLE',
-                'category'       => 'Manpower',
-                'created_at'     => $now,
-                'updated_at'     => $now,
+                'name'                => $fullName,
+                'employee_id'         => $empId,
+                'first_name'          => $firstName,
+                'middle_name'         => $middleName !== '' ? $middleName : null,
+                'last_name'           => $lastName,
+                'role'                => $role,
+                'specialization'      => trim((string) ($row[6] ?? '')),
+                'skills'              => $skills,
+                'status'              => trim((string) ($row[8] ?? '')) ?: 'AVAILABLE',
+                'category'            => 'Manpower',
+                'assigned_project_id' => $assignedProjectId,
+                'location'            => [
+                    'address' => trim((string) ($row[10] ?? '')),
+                    'type'    => trim((string) ($row[11] ?? '')),
+                ],
+                'created_at' => $createdTs,
+                'updated_at' => $updatedTs,
             ]);
             $imported++;
         }

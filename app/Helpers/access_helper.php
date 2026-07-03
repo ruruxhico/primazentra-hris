@@ -75,7 +75,7 @@ if (!function_exists('pz_can')) {
             'delete_request'          => in_array($r, [$admin, $ops], true),
 
             // ── Legacy alias ──────────────────────────────────────────────
-            'edit_progress_report'    => in_array($r, [$admin, $se], true),
+            'edit_progress_report'    => $r === $se,
 
             default => false,
         };

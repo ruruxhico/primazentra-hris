@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
+use App\Libraries\StorageService;
 use App\Models\Model_Users;
 use App\Services\ChatService;
 use App\Services\NotificationService;
@@ -385,25 +386,27 @@ class Messages extends BaseController
         if (!$mimeType) $mimeType = (string)$file->getMimeType();
         $type = str_starts_with($mimeType, 'image/') ? 'image' : 'file';
 
-        // Ensure the destination directory exists (Windows-safe)
-        $dir = rtrim(FCPATH, '/\\')
-             . DIRECTORY_SEPARATOR . 'uploads'
-             . DIRECTORY_SEPARATOR . 'messages'
-             . DIRECTORY_SEPARATOR . $chatId
-             . DIRECTORY_SEPARATOR;
+        // Stage in WRITEPATH (guaranteed-writable temp dir), push to Firebase Storage
+        // for permanent hosting, then discard the local copy — mirrors Staff.php's
+        // profile-picture upload pattern.
+        $tmpDir = WRITEPATH . 'uploads/';
+        if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+        $file->move($tmpDir, $safeName);
 
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true) && !is_dir($dir)) {
-                throw new \RuntimeException("Cannot create upload directory: {$dir}");
-            }
+        try {
+            $fileUrl = (new StorageService())->upload(
+                $tmpDir . $safeName,
+                'messages/' . $chatId . '/' . $safeName,
+                $mimeType
+            );
+        } finally {
+            @unlink($tmpDir . $safeName);
         }
-
-        $file->move($dir, $safeName);
 
         return [
             'type'      => $type,
             'file_name' => $originalName,
-            'file_url'  => base_url('uploads/messages/' . $chatId . '/' . $safeName),
+            'file_url'  => $fileUrl,
         ];
     }
 
