@@ -20,12 +20,12 @@ class Import extends BaseController
             'notes'   => ['e.g. Tower A', 'Full address', 'e.g. 14.5995', 'e.g. 120.9842', 'Luzon / Visayas / Mindanao (auto if blank)', 'e.g. DITO Telecommunity', 'BUILD-TO-SUIT / RETROFITTING / COLOCATION / CONVERSION', 'Numeric, e.g. 500000', 'Full name, e.g. Juan dela Cruz', 'Full name, e.g. Maria Santos', 'Planned / On-going / Completed / Past Deadline / Archived (defaults to Planned)', 'e.g. 01/01/2025', 'e.g. 12/31/2025'],
         ],
         'equipment' => [
-            'headers' => ['Name*', 'Model/Code', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
-            'notes'   => ['e.g. Concrete Mixer', 'e.g. CM-2000', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 5', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
+            'headers' => ['Name*', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
+            'notes'   => ['e.g. Concrete Mixer', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 5', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
         ],
         'tools' => [
-            'headers' => ['Name*', 'Model/Code', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
-            'notes'   => ['e.g. Drill Machine', 'e.g. DR-100', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 10', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
+            'headers' => ['Name*', 'Status*', 'Total Units*', 'Location Type', 'Location Address', 'Next Availability (YYYY-MM-DD)'],
+            'notes'   => ['e.g. Drill Machine', 'Available / In Use / Under Maintenance / Unavailable', 'Numeric, e.g. 10', 'Warehouse / Project Site / Other', 'Full address', 'e.g. 2025-06-01'],
         ],
         'manpower' => [
             'headers' => ['First Name*', 'Middle Name', 'Last Name*', 'Role*', 'Specialization', 'Skills (semicolon-separated)', 'Status*'],
@@ -82,10 +82,13 @@ class Import extends BaseController
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF3CD']],
         ]);
 
+        $coord = fn(int $c, int $r): string =>
+            \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c) . $r;
+
         // Notes row 2
         $col = 1;
         foreach ($tpl['notes'] as $note) {
-            $sheet->setCellValueByColumnAndRow($col++, 2, $note);
+            $sheet->setCellValue($coord($col++, 2), $note);
         }
         $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
             'font' => ['italic' => true, 'color' => ['argb' => 'FF888888']],
@@ -95,7 +98,7 @@ class Import extends BaseController
         // Header row 3
         $col = 1;
         foreach ($tpl['headers'] as $h) {
-            $sheet->setCellValueByColumnAndRow($col++, 3, $h);
+            $sheet->setCellValue($coord($col++, 3), $h);
         }
         $sheet->getStyle("A3:{$lastCol}3")->applyFromArray([
             'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
@@ -108,10 +111,10 @@ class Import extends BaseController
         if ($module === 'projects') {
             // Force date columns (L=12, M=13) to text format so MM/DD/YYYY stays intact
             foreach ([12, 13] as $dateCol) {
-                $sheet->getStyleByColumnAndRow($dateCol, 4)
+                $sheet->getStyle($coord($dateCol, 4))
                     ->getNumberFormat()
                     ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
-                $sheet->getCellByColumnAndRow($dateCol, 4)->setValueExplicit(
+                $sheet->getCell($coord($dateCol, 4))->setValueExplicit(
                     'e.g. 01/15/2025',
                     \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
                 );
@@ -119,7 +122,9 @@ class Import extends BaseController
         }
 
         for ($c = 1; $c <= $colCount; $c++) {
-            $sheet->getColumnDimensionByColumn($c)->setAutoSize(true);
+            $sheet->getColumnDimension(
+                \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c)
+            )->setAutoSize(true);
         }
 
         $writer = new XlsxWriter($spreadsheet);
@@ -178,7 +183,19 @@ class Import extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Could not find header row. Ensure columns match the template.']);
         }
 
-        $dataRows = array_slice($rows, $headerRowIdx + 1);
+        $dataRows = array_values(array_filter(
+            array_slice($rows, $headerRowIdx + 1),
+            static function (array $row): bool {
+                $first = trim((string)($row[0] ?? ''));
+                // Drop the template sample row (starts with '--')
+                if (str_starts_with($first, '--')) return false;
+                // Drop fully-empty rows (Excel trailing blank rows, etc.)
+                foreach ($row as $cell) {
+                    if (trim((string)($cell ?? '')) !== '') return true;
+                }
+                return false;
+            }
+        ));
 
         [$imported, $skipped, $error] = match ($module) {
             'projects'       => $this->importProjects($dataRows),
@@ -376,7 +393,7 @@ class Import extends BaseController
 
     private function importResources(array $rows, string $category): array
     {
-        // Columns: Name, ModelCode, Status, TotalUnits, LocType, LocAddress, NextAvail
+        // Columns: Name, Status, TotalUnits, LocType, LocAddress, NextAvail
         $db = $this->firestore->getDb();
         $imported = 0;
         $skipped  = 0;
@@ -386,17 +403,16 @@ class Import extends BaseController
             $name = trim((string) ($row[0] ?? ''));
             if ($name === '') { $skipped++; continue; }
 
-            $total = is_numeric($row[3] ?? '') ? (int) $row[3] : 0;
+            $total = is_numeric($row[2] ?? '') ? (int) $row[2] : 0;
             $db->collection('resource')->newDocument()->set([
                 'name'             => $name,
                 'category'         => $category,
-                'model_code'       => trim((string) ($row[1] ?? '')),
-                'status'           => trim((string) ($row[2] ?? '')) ?: 'Available',
+                'status'           => trim((string) ($row[1] ?? '')) ?: 'Available',
                 'location'         => [
-                    'type'    => trim((string) ($row[4] ?? '')),
-                    'address' => trim((string) ($row[5] ?? '')),
+                    'type'    => trim((string) ($row[3] ?? '')),
+                    'address' => trim((string) ($row[4] ?? '')),
                 ],
-                'next_availability' => trim((string) ($row[6] ?? '')),
+                'next_availability' => trim((string) ($row[5] ?? '')),
                 'asset_details'    => [
                     'total_quantity'     => $total,
                     'available_quantity' => $total,

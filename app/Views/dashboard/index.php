@@ -34,17 +34,6 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <div class="dnd-modal-project" id="dndSrcLabel"></div>
             <div class="dnd-modal-label">to</div>
             <div class="dnd-modal-project" id="dndDestLabel"></div>
-            <div id="dndManpowerTypeGroup" style="display:none;margin-top:.9rem;">
-                <label style="display:block;font-size:.78rem;font-weight:600;color:#5a4020;margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em;">Manpower Type</label>
-                <div class="mp-type-chips" id="dndManpowerTypeChips" data-target="dndManpowerType">
-                    <button type="button" class="mp-type-chip" data-value="Foreman">Foreman</button>
-                    <button type="button" class="mp-type-chip" data-value="Mason">Mason</button>
-                    <button type="button" class="mp-type-chip" data-value="Electrician">Electrician</button>
-                    <button type="button" class="mp-type-chip" data-value="Labor/Helper">Labor/Helper</button>
-                </div>
-                <input type="hidden" id="dndManpowerType" value="">
-                <div id="dndManpowerTypeErr" style="display:none;margin-top:.3rem;font-size:.8rem;color:#991b1b;"></div>
-            </div>
         </div>
         <div class="dnd-modal-actions">
             <button class="dnd-modal-cancel" id="dndCancelBtn">Cancel</button>
@@ -262,51 +251,125 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     <div class="pz-sc-row">
 
         <!-- Available Tools -->
+        <?php
+            $tPageSize = 3;
+            $tTotal    = count($toolsDisplay);
+            $tPages    = $tTotal > 0 ? (int)ceil($tTotal / $tPageSize) : 1;
+            $tChunks   = array_chunk($toolsDisplay, $tPageSize);
+        ?>
         <div class="pz-sc">
             <div class="pz-sc-head">
-                Available Tools<?php if ($usingMcdaTools): ?> <span style="font-size:.6rem;color:#1e6b45;font-weight:700;">AI</span><?php endif; ?>
+                Available Resources<?php if ($usingMcdaTools): ?> <span style="font-size:.6rem;color:#1e6b45;font-weight:700;">AI</span><?php endif; ?>
             </div>
             <?php if (empty($toolsDisplay)): ?>
-                <p class="pz-sc-empty">No tools available.</p>
+                <p class="pz-sc-empty">No resources available.</p>
             <?php else: ?>
-            <table class="pz-sc-tbl">
-                <thead><tr>
-                    <th>Name</th>
-                    <th style="width:3rem;text-align:center">Qty</th>
-                    <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
-                </tr></thead>
-                <tbody>
-                <?php foreach ($toolsDisplay as $t): ?>
-                <tr>
-                    <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
-                    <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
-                    <?php if ($usingMcdaTools): ?>
-                    <td style="color:#777;font-size:.75rem"><?= esc($t['next_deployment'] ?? '—') ?></td>
-                    <?php endif; ?>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+
+            <?php foreach ($tChunks as $pi => $chunk): ?>
+            <div class="pz-tools-page" data-tpage="<?= $pi ?>" <?= $pi > 0 ? 'style="display:none"' : '' ?>>
+                <table class="pz-sc-tbl">
+                    <thead><tr>
+                        <th>Name</th>
+                        <th style="width:3rem;text-align:center">Qty</th>
+                        <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($chunk as $t): ?>
+                    <tr>
+                        <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
+                        <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['available_quantity'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                        <?php if ($usingMcdaTools): ?>
+                        <td style="color:#777;font-size:.75rem"><?= esc($t['next_deployment'] ?? '—') ?></td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+
+            <?php if ($tPages > 1): ?>
+            <div class="pz-sc-nav">
+                <button class="pz-sc-nav-btn" id="tPrev" onclick="tNav(-1)" disabled>
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span class="pz-sc-nav-label" id="tLabel">1 / <?= $tPages ?></span>
+                <button class="pz-sc-nav-btn" id="tNext" onclick="tNav(1)">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+            <script>
+            (function(){
+                var cur=0, total=<?= $tPages ?>;
+                window.tNav = function(d){
+                    document.querySelectorAll('.pz-tools-page[data-tpage="'+cur+'"]').forEach(function(el){ el.style.display='none'; });
+                    cur = Math.max(0, Math.min(total-1, cur+d));
+                    document.querySelectorAll('.pz-tools-page[data-tpage="'+cur+'"]').forEach(function(el){ el.style.display=''; });
+                    document.getElementById('tLabel').textContent = (cur+1)+' / '+total;
+                    document.getElementById('tPrev').disabled = cur===0;
+                    document.getElementById('tNext').disabled = cur===total-1;
+                };
+            })();
+            </script>
+            <?php endif; ?>
+
             <?php endif; ?>
         </div>
 
         <!-- Available to Deploy -->
+        <?php
+            $dPageSize = 3;
+            $dTotal    = count($availableManpower);
+            $dPages    = $dTotal > 0 ? (int)ceil($dTotal / $dPageSize) : 1;
+            $dChunks   = array_chunk($availableManpower, $dPageSize);
+        ?>
         <div class="pz-sc">
             <div class="pz-sc-head">Available to Deploy</div>
             <?php if (empty($availableManpower)): ?>
                 <p class="pz-sc-empty">No manpower available.</p>
             <?php else: ?>
-            <table class="pz-sc-tbl">
-                <thead><tr><th>Name</th><th>Role</th></tr></thead>
-                <tbody>
-                <?php foreach ($availableManpower as $mp): ?>
-                <tr>
-                    <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
-                    <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+
+            <?php foreach ($dChunks as $pi => $chunk): ?>
+            <div class="pz-deploy-page" data-dpage="<?= $pi ?>" <?= $pi > 0 ? 'style="display:none"' : '' ?>>
+                <table class="pz-sc-tbl">
+                    <thead><tr><th>Name</th><th>Role</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($chunk as $mp): ?>
+                    <tr>
+                        <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
+                        <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+
+            <?php if ($dPages > 1): ?>
+            <div class="pz-sc-nav">
+                <button class="pz-sc-nav-btn" id="dPrev" onclick="dNav(-1)" disabled>
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span class="pz-sc-nav-label" id="dLabel">1 / <?= $dPages ?></span>
+                <button class="pz-sc-nav-btn" id="dNext" onclick="dNav(1)">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+            <script>
+            (function(){
+                var cur=0, total=<?= $dPages ?>;
+                window.dNav = function(d){
+                    document.querySelectorAll('.pz-deploy-page[data-dpage="'+cur+'"]').forEach(function(el){ el.style.display='none'; });
+                    cur = Math.max(0, Math.min(total-1, cur+d));
+                    document.querySelectorAll('.pz-deploy-page[data-dpage="'+cur+'"]').forEach(function(el){ el.style.display=''; });
+                    document.getElementById('dLabel').textContent = (cur+1)+' / '+total;
+                    document.getElementById('dPrev').disabled = cur===0;
+                    document.getElementById('dNext').disabled = cur===total-1;
+                };
+            })();
+            </script>
+            <?php endif; ?>
+
             <?php endif; ?>
         </div>
 
@@ -483,9 +546,6 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
                     <span class="rpt-legend-item"><span class="rpt-dot outline"></span>Today</span>
                 </div>
                 <div id="rptSummaryBtns" style="display:none;margin-top:1rem;display:flex;flex-direction:column;gap:.5rem;">
-                    <button class="rpt-summary-btn" onclick="showProgressSummary('weekly')">
-                        <span class="material-symbols-outlined">bar_chart</span> Weekly Summary
-                    </button>
                     <button class="rpt-summary-btn" onclick="showProgressSummary('overall')">
                         <span class="material-symbols-outlined">table_chart</span> Overall Progress Summary
                     </button>
@@ -1031,13 +1091,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<hr class="rpt-daily-divider">';
                 html += '<div class="rpt-daily-section-title">Milestone Progress</div>';
                 ms.forEach(function (m) {
-                    var label = h(m.name) + (m.unit ? ' (' + h(m.unit) + ')' : '');
+                    var label    = h(m.name) + (m.unit ? ' (' + h(m.unit) + ')' : '');
                     var todayVal = (m.today >= 0 ? '+' : '') + m.today;
+                    var pct      = Math.min(100, Math.max(0, parseFloat(m.percent) || 0));
                     html += '<div class="rpt-daily-milestone">';
                     html += '<div class="rpt-daily-ms-name">' + label + '</div>';
                     html += '<div class="rpt-daily-ms-meta">Today: ' + todayVal +
                             ' &bull; Total: ' + m.total +
                             ' &bull; ' + m.percent + '%</div>';
+                    html += '<div class="rpt-daily-ms-bar-wrap"><div class="rpt-daily-ms-bar" style="width:' + pct + '%"></div></div>';
+                    var imgs = m.image_urls || [];
+                    if (imgs.length) {
+                        html += '<div class="rpt-ms-photos">';
+                        imgs.forEach(function (url, idx) {
+                            html += '<img src="' + h(url) + '" class="rpt-ms-thumb" loading="lazy"' +
+                                    ' data-imgs=\'' + JSON.stringify(imgs).replace(/'/g, '&#39;') + '\'' +
+                                    ' data-idx="' + idx + '">';
+                        });
+                        html += '</div>';
+                    }
                     html += '</div>';
                 });
             }
@@ -1048,9 +1120,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<div class="rpt-daily-row">' + h(d.description) + '</div>';
             }
 
+            // Remarks (mobile field)
+            if (d.remarks) {
+                html += '<div class="rpt-daily-section-title" style="margin-top:.8rem">Remarks</div>';
+                html += '<div class="rpt-daily-row">' + h(d.remarks) + '</div>';
+            }
+
             if (d.filed_by) html += '<div class="rpt-detail-meta" style="margin-top:.6rem">Filed by: ' + h(d.filed_by) + '</div>';
         }
         document.getElementById('rptDetailEl').innerHTML = html;
+
+        // Wire up photo thumbnails (lightbox)
+        document.getElementById('rptDetailEl').querySelectorAll('.rpt-ms-thumb').forEach(function (img) {
+            img.addEventListener('click', function () {
+                try {
+                    pzOpenLightbox(JSON.parse(img.getAttribute('data-imgs')), parseInt(img.getAttribute('data-idx'), 10) || 0);
+                } catch (e) {}
+            });
+        });
 
         // Wire up resolve button if present
         var resolveBtn = document.getElementById('rptResolveBtn');
@@ -1216,6 +1303,43 @@ document.addEventListener('DOMContentLoaded', function () {
                 setState('summary');
             });
     };
+
+    function pzOpenLightbox(urls, startIdx) {
+        if (!urls || !urls.length) return;
+        var idx = startIdx || 0;
+        var lb  = document.getElementById('pzLightboxOverlay');
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.id = 'pzLightboxOverlay';
+            lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            lb.innerHTML =
+                '<button id="pzLbPrev" style="position:absolute;left:1rem;font-size:2.5rem;color:#fff;background:none;border:none;cursor:pointer;padding:.5rem;">&#8249;</button>' +
+                '<img id="pzLbImg" style="max-width:90vw;max-height:86vh;border-radius:6px;box-shadow:0 4px 32px rgba(0,0,0,.6);">' +
+                '<button id="pzLbNext" style="position:absolute;right:1rem;font-size:2.5rem;color:#fff;background:none;border:none;cursor:pointer;padding:.5rem;">&#8250;</button>' +
+                '<button id="pzLbClose" style="position:absolute;top:.8rem;right:1.2rem;font-size:1.8rem;color:#fff;background:none;border:none;cursor:pointer;line-height:1;">&#215;</button>' +
+                '<div id="pzLbCount" style="position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);color:#ccc;font-size:.82rem;"></div>';
+            document.body.appendChild(lb);
+            document.getElementById('pzLbClose').addEventListener('click', function () { lb.style.display = 'none'; });
+            lb.addEventListener('click', function (e) { if (e.target === lb) lb.style.display = 'none'; });
+            document.getElementById('pzLbPrev').addEventListener('click', function () { show(idx - 1); });
+            document.getElementById('pzLbNext').addEventListener('click', function () { show(idx + 1); });
+            document.addEventListener('keydown', function (e) {
+                if (lb.style.display === 'none') return;
+                if (e.key === 'ArrowLeft')  show(idx - 1);
+                if (e.key === 'ArrowRight') show(idx + 1);
+                if (e.key === 'Escape')     lb.style.display = 'none';
+            });
+        }
+        function show(i) {
+            idx = ((i % urls.length) + urls.length) % urls.length;
+            document.getElementById('pzLbImg').src = urls[idx];
+            document.getElementById('pzLbCount').textContent = (idx + 1) + ' / ' + urls.length;
+            document.getElementById('pzLbPrev').style.display = urls.length > 1 ? '' : 'none';
+            document.getElementById('pzLbNext').style.display = urls.length > 1 ? '' : 'none';
+        }
+        lb.style.display = 'flex';
+        show(idx);
+    }
 
     function _dateDiffDays(a, b) {
         return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
@@ -1791,18 +1915,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!pendingTransfer) return;
         var t = pendingTransfer;
 
-        // Validate manpower type if category is manpower
-        var dndMpSel = document.getElementById('dndManpowerType');
-        var dndMpErr = document.getElementById('dndManpowerTypeErr');
-        if (t.cat === 'manpower') {
-            var mpType = dndMpSel ? dndMpSel.value : '';
-            if (!mpType) {
-                if (dndMpErr) { dndMpErr.textContent = 'Please select a manpower type.'; dndMpErr.style.display = ''; }
-                return;
-            }
-            t.manpowerType = mpType;
-        }
-        if (dndMpErr) dndMpErr.style.display = 'none';
 
         pendingTransfer = null;
 
@@ -2022,15 +2134,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.getElementById('dndResLabel').textContent  = resName.trim();
                     document.getElementById('dndSrcLabel').textContent  = srcPname  || '—';
                     document.getElementById('dndDestLabel').textContent = destPname || '—';
-                    var dndMpGroup = document.getElementById('dndManpowerTypeGroup');
-                    var dndMpSel   = document.getElementById('dndManpowerType');
-                    var dndMpErr   = document.getElementById('dndManpowerTypeErr');
-                    if (dndMpGroup) {
-                        dndMpGroup.style.display = (cat === 'manpower') ? '' : 'none';
-                        if (dndMpSel) dndMpSel.value = '';
-                        document.querySelectorAll('#dndManpowerTypeChips .mp-type-chip').forEach(function(c){c.classList.remove('selected');});
-                        if (dndMpErr) dndMpErr.style.display = 'none';
-                    }
                     overlay.classList.add('open');
                 },
             });
@@ -2151,6 +2254,15 @@ document.addEventListener('click', function(e) {
 
     // ── Resource pills ────────────────────────────────────────────────────
     var resources = Array.isArray(data.resources) ? data.resources : [];
+    // Deduplicate by ref_id+unit_id — mobile may write without unit_id while
+    // the web writes unit_id:'', causing arrayUnion to keep both entries.
+    var _resSeen = {};
+    resources = resources.filter(function (r) {
+      var k = (r.ref_id || '') + '|' + (r.unit_id || '');
+      if (_resSeen[k]) return false;
+      _resSeen[k] = true;
+      return true;
+    });
     var grps = { equipment: [], tools: [], manpower: [] };
     resources.forEach(function (r) {
       var cat = (r.category || '').toLowerCase();
@@ -2315,15 +2427,58 @@ document.addEventListener('click', function(e) {
       });
     }, function (err) { console.warn('[PZ] Dashboard project listener:', err.message); });
 
+    // Refresh resource pills for one project card by fetching fresh server data.
+    function pzRefreshCard(pid) {
+      if (!pid) return;
+      var card = document.querySelector('.db-project-card[data-pid="' + pid + '"]');
+      if (!card) return;
+      var base = window.pzBaseUrl || '';
+      fetch(base + '/dashboard/card-refresh/' + encodeURIComponent(pid), { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          var changed = false;
+          ['equipment', 'tools', 'manpower'].forEach(function (cat) {
+            var zone  = card.querySelector('.db-res-drop-zone[data-cat="' + cat + '"]');
+            var grpEl = card.querySelector('.db-res-group[data-cat="' + cat + '"]');
+            var cnt   = grpEl ? grpEl.querySelector('.db-res-group-count') : null;
+            var items = data[cat] || [];
+            if (cnt) cnt.textContent = items.length;
+            var icon = cat === 'equipment' ? 'construction' : cat === 'tools' ? 'handyman' : 'engineering';
+            var newHtml = items.length === 0
+              ? '<p class="db-empty" style="font-size:0.8rem;padding:0.25rem 0;margin:0;">None assigned</p>'
+              : items.map(function (r) { return buildPill(r, cat); }).join('');
+            if (zone && zone.innerHTML.trim() !== newHtml.trim()) {
+              zone.innerHTML = newHtml;
+              changed = true;
+            }
+          });
+          if (changed) flashCard(card);
+        })
+        .catch(function (e) { console.warn('[PZ] cardRefresh error for ' + pid, e); });
+    }
+
     var _reqInit = false;
     db.collection('resource_requests').onSnapshot(function (snap) {
       if (!_reqInit) { _reqInit = true; return; }
       snap.docChanges().forEach(function (chg) {
         if (chg.type !== 'modified') return;
-        var s  = chg.doc.data().status || '';
+        var d  = chg.doc.data();
+        var s  = d.status || '';
+
+        // Update inline badge (e.g. on Requests page if open)
         var el = document.querySelector('[data-req-id="' + chg.doc.id + '"][data-req-status]');
         if (el && window.pzBadgeClass) {
           el.innerHTML = '<span class="pz-badge ' + window.pzBadgeClass(s) + '">' + s.toUpperCase() + '</span>';
+        }
+
+        // When a transfer is resolved, refresh both affected project cards immediately
+        var resolved = ['completed', 'rejected', 'cancelled'];
+        if (resolved.indexOf(s.toLowerCase()) !== -1) {
+          var srcPid  = d.source_project_id      || d.from_project_id || '';
+          var dstPid  = d.destination_project_id || d.to_project_id   || '';
+          if (srcPid) pzRefreshCard(srcPid);
+          if (dstPid && dstPid !== srcPid) pzRefreshCard(dstPid);
         }
       });
     }, function (err) { console.warn('[PZ] Dashboard request listener:', err.message); });

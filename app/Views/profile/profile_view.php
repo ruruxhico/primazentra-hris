@@ -24,7 +24,8 @@
         <div class="profile-avatar-wrap" id="avatarWrap" onclick="document.getElementById('avatarFileInput').click()" title="Click to change photo">
             <div class="profile-avatar-circle" id="avatarCircle">
                 <?php if (!empty($profilePicture)): ?>
-                    <img src="<?= base_url($profilePicture) ?>?v=<?= time() ?>" alt="Profile photo" id="avatarImg">
+                    <?php $pvSrc = str_starts_with($profilePicture, 'http') ? $profilePicture : base_url($profilePicture) . '?v=' . time(); ?>
+                    <img src="<?= esc($pvSrc) ?>" alt="Profile photo" id="avatarImg">
                 <?php else: ?>
                     <span id="avatarInitial"><?= strtoupper(substr((string)($user['first_name'] ?? $userName), 0, 1)) ?></span>
                 <?php endif; ?>

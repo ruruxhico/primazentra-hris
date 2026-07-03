@@ -64,9 +64,23 @@ class Dashboard extends BaseController
             // ── Resources — single fetch, derive everything in PHP ───
             $allResources       = $this->resourceModel->getAllResources();
             $totalResources     = count($allResources);
-            $availableResources = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Available'));
-            $deployedResources  = array_values(array_filter($allResources, fn($r) => ($r['status'] ?? '') === 'Deployed'));
-            $availableTools     = $availableResources; // same data, no extra call
+            // The resource doc's own 'status' label is unreliable — many resources
+            // (e.g. items added via a different flow) never had it set, even though
+            // they have real available units. available_quantity is always accurate.
+            $availableResources = array_values(array_filter($allResources, fn($r) => (int)($r['available_quantity'] ?? 0) > 0));
+            $deployedResources  = array_values(array_filter($allResources, fn($r) => (int)($r['total_quantity'] ?? 0) - (int)($r['available_quantity'] ?? 0) > 0));
+
+            // Build availableTools: all Equipment + Tools resources (both categories).
+            // Case-insensitive match so mobile-created docs (e.g. 'tools','equipment') are included.
+            $availableTools = [];
+            foreach ($allResources as $r) {
+                $cat = strtolower(trim((string)($r['category'] ?? '')));
+                if ($cat !== 'equipment' && $cat !== 'tools') continue;
+                $avail = (int)($r['available_quantity'] ?? $r['asset_details']['available_quantity'] ?? 0);
+                $r['qty'] = $avail;
+                $availableTools[] = $r;
+            }
+            usort($availableTools, fn($a, $b) => strcasecmp($a['name'] ?? '', $b['name'] ?? ''));
 
             // ── Utilization stats (equipment + tools) ────────────────
             // Uses asset_details on the model doc: deployed = total − available (no subcollection query needed)
@@ -246,6 +260,10 @@ class Dashboard extends BaseController
 
                         $progress = (float)($p['_progress'] ?? 0);
 
+                        // Linear expected-progress-by-now, mirrors ProjectDelayPredictor::buildFeatures().
+                        $totalDays  = $totalDuration > 0 ? $totalDuration : max(1, $daysElapsed + $daysRemaining);
+                        $plannedPct = min(100.0, round(($daysElapsed / $totalDays) * 100, 2));
+
                         // Skip new/uninitialised projects — ML predictions would be noise
                         if ($daysElapsed === 0 && $progress === 0.0) {
                             $mlBlockers[] = [
@@ -261,27 +279,33 @@ class Dashboard extends BaseController
                             continue;
                         }
 
+                        // Active emergency flags — derived from unresolved emergency_reports
+                        // causes (SE-filed), not stored on the project doc itself.
+                        $emergFlags = $this->_computeEmergencyFlags((string)($p['id'] ?? ''));
+
+                        $consecutiveLowDays = $this->_computeConsecutiveLowDays((string)($p['id'] ?? ''), $startTs, $totalDuration);
+
                         $features = [
                             'project_id'                    => (string)($p['id'] ?? ''),
                             'progress_percent'              => $progress,
-                            'planned_progress_percent'      => (float)($p['planned_progress'] ?? 50),
+                            'planned_progress_percent'      => $plannedPct,
                             'days_elapsed'                  => $daysElapsed,
                             'days_remaining'                => $daysRemaining,
                             'workers_present'               => (int)($p['workers_present'] ?? 0),
                             'workers_planned'               => (int)($p['workers_planned'] ?? 1),
                             'equipment_utilization'         => $eqUtil,
-                            'weather_severity'              => (int)($p['weather_severity'] ?? 0),
+                            'weather_severity'              => $emergFlags['weather'],
                             'site_access_issues'            => (int)($p['site_access_issues'] ?? 0),
                             'avg_progress_3d'               => (float)($p['avg_progress_3d'] ?? 0),
                             'progress_trend_3d'             => (float)($p['progress_trend_3d'] ?? 0),
-                            'consecutive_low_days'          => (int)($p['consecutive_low_days'] ?? 0),
+                            'consecutive_low_days'          => $consecutiveLowDays,
                             'budget_utilization'            => (float)($p['budget_utilization'] ?? 0),
                             'cost_variance_ratio'           => (float)($p['cost_variance_ratio'] ?? 0),
-                            'active_blocker_count'          => (int)($p['active_blocker_count'] ?? 0),
+                            'active_blocker_count'          => $emergFlags['active_count'],
                             'days_since_last_blocker'       => (int)($p['days_since_last_blocker'] ?? 999),
-                            'emergency_material_shortage'   => (int)($p['emergency_material_shortage'] ?? 0),
-                            'emergency_labor_shortage'      => (int)($p['emergency_labor_shortage'] ?? 0),
-                            'emergency_onsite_accidents'    => (int)($p['emergency_onsite_accidents'] ?? 0),
+                            'emergency_equipment_shortage'  => $emergFlags['equipment'],
+                            'emergency_labor_shortage'      => $emergFlags['labor'],
+                            'emergency_onsite_accidents'    => $emergFlags['onsite'],
                         ];
 
                         $blockerPrediction = $mlService->predictBlockers($features);
@@ -313,8 +337,16 @@ class Dashboard extends BaseController
                                            ?? 0;
                         }
 
-                        // Cap: a delay larger than the whole project duration is not actionable.
-                        $maxDelay       = $totalDuration > 0 ? $totalDuration : 730;
+                        // Cap: last-line-of-defense ceiling against out-of-distribution garbage —
+                        // the ML service applies its own calibrated cap too (rule_days floor,
+                        // rule_days*2 ceiling). With a genuine active blocker (injury, accident,
+                        // shortage, weather), trust the model's severity far more loosely — a
+                        // real incident shouldn't be flattened just because the project is short.
+                        // With no blocker signal at all, keep a tight duration-based sanity cap.
+                        $hasActiveBlockerSignal = $emergFlags['active_count'] > 0;
+                        $maxDelay = $hasActiveBlockerSignal
+                            ? max(180, ($totalDuration > 0 ? $totalDuration : 365) * 10)
+                            : ($totalDuration > 0 ? $totalDuration : 365) * 3;
                         $estimatedDelay = min((float)$estimatedDelay, (float)$maxDelay);
 
                         $seReason = $this->_fetchBlockerReason((string)($p['id'] ?? ''), $predictedBlocker, $features);
@@ -339,7 +371,7 @@ class Dashboard extends BaseController
                 log_message('warning', 'Dashboard: ML service init failed - ' . $e->getMessage());
             }
 
-            // ── Annotate projects with ML delay data; notify if threshold met ──────
+            // ── Annotate projects with ML delay data ─────────────────────────────
             $mlDelayById = [];
             foreach ($mlBlockers as $bl) {
                 $pid = $bl['project_id'] ?? '';
@@ -348,61 +380,11 @@ class Dashboard extends BaseController
                 }
             }
 
-            // Also treat past-deadline projects as needing notification
-            $notifSvc = new \App\Services\NotificationService();
-            $db       = $this->firestore->getDb();
-            $nowTs    = time();
-
             foreach ($activeProjects as &$ap) {
-                $pid       = (string)($ap['id'] ?? '');
-                $mlDelay   = $mlDelayById[$pid] ?? 0;
-                $threshold = max(0, (int)($ap['delay_ping_days'] ?? 0));
-
-                // Mark delayed if ML says so and meets threshold
-                $isDelayed       = ($mlDelay > 0) && ($threshold === 0 || $mlDelay >= $threshold);
-                $isPastDeadline  = $ap['_past_deadline'] ?? false;
-
-                if ($isDelayed) {
+                $mlDelay = $mlDelayById[(string)($ap['id'] ?? '')] ?? 0;
+                if ($mlDelay > 0) {
                     $ap['_ml_delay_days'] = $mlDelay;
                     $ap['_status']        = 'DELAYED';
-                }
-
-                // Send ping notification (max once every 24h per project)
-                if ($isDelayed || $isPastDeadline) {
-                    try {
-                        $snap     = $db->collection('project')->document($pid)->snapshot();
-                        $lastPing = $snap->exists() ? (int)($snap->data()['delay_last_notified_at'] ?? 0) : 0;
-
-                        if (($nowTs - $lastPing) >= 86400) {
-                            $title  = $isPastDeadline ? 'Project Past Deadline' : 'Project Delay Alert';
-                            $msgTxt = $isPastDeadline
-                                ? ($ap['project_name'] ?? 'A project') . ' has passed its deadline.'
-                                : ($ap['project_name'] ?? 'A project') . " is predicted to be delayed by {$mlDelay} day(s).";
-
-                            // Notify admins and OMs
-                            $targets = (new \App\Models\Model_Users())
-                                ->getUsersByRole(['Administrator', 'Operations Manager']);
-                            foreach ($targets as $t) {
-                                $uid = (string)($t['id'] ?? '');
-                                if ($uid) {
-                                    $notifSvc->send($uid, 'projectDelay', $title, $msgTxt, ['project_id' => $pid]);
-                                }
-                            }
-
-                            // Notify the assigned PM
-                            $pmUid = (string)($ap['_pm_uid'] ?? '');
-                            if ($pmUid) {
-                                $notifSvc->send($pmUid, 'projectDelay', $title, $msgTxt, ['project_id' => $pid]);
-                            }
-
-                            // Stamp the project so we don't re-ping for 24h
-                            $db->collection('project')->document($pid)->update([
-                                ['path' => 'delay_last_notified_at', 'value' => $nowTs],
-                            ]);
-                        }
-                    } catch (\Throwable $e) {
-                        log_message('error', 'Dashboard: delay notification failed for ' . $pid . ' - ' . $e->getMessage());
-                    }
                 }
             }
             unset($ap);
@@ -597,6 +579,120 @@ class Dashboard extends BaseController
         }
     }
 
+    /**
+     * AJAX: return fresh resource pills for a single project card.
+     * Called by the dashboard when a resource_request transitions to COMPLETED/REJECTED.
+     */
+    public function cardRefresh(string $projectId = ''): object
+    {
+        if (!session()->get('isLoggedIn')) {
+            return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthorized']);
+        }
+        if ($projectId === '') {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'Missing project ID']);
+        }
+        try {
+            $project = $this->projectModel->getProjectById($projectId);
+            if (!$project) {
+                return $this->response->setStatusCode(404)->setJSON(['error' => 'Not found']);
+            }
+
+            // Manpower assigned to this project
+            $manpowerPills = [];
+            foreach ($this->manpowerModel->getAllManpower() as $m) {
+                $rawApid = $m['assigned_project_id'] ?? '';
+                $apid = $rawApid instanceof \Google\Cloud\Firestore\DocumentReference
+                    ? $rawApid->id()
+                    : trim((string)$rawApid);
+                if ($apid !== $projectId) continue;
+                $fn   = trim((string)($m['first_name'] ?? ''));
+                $ln   = trim((string)($m['last_name']  ?? ''));
+                $name = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper($m['name'] ?? '');
+                if ($name === '') continue;
+                $mpStatus  = strtolower(trim((string)($m['status'] ?? '')));
+                $manpowerPills[] = [
+                    'name'    => $name,
+                    'id'      => $m['id'],
+                    'unit_id' => '',
+                    'transit' => in_array($mpStatus, ['in-transit', 'transfer pending']),
+                    'pending' => false,
+                    'req_id'  => '',
+                ];
+            }
+
+            // Equipment + Tools items assigned to this project
+            $equipmentPills = [];
+            $toolsPills     = [];
+            foreach ($this->resourceModel->getAllResources() as $res) {
+                $cat    = strtolower(trim((string)($res['category'] ?? '')));
+                if (!in_array($cat, ['equipment', 'tools'], true)) continue;
+                $resId  = $res['id'];
+                $resName = strtoupper(trim((string)($res['name'] ?? '')));
+                foreach ($this->resourceModel->getResourceItems($resId) as $item) {
+                    $apid = $item['assigned_project_id'] ?? null;
+                    $itemPid = $apid instanceof \Google\Cloud\Firestore\DocumentReference
+                        ? $apid->id()
+                        : trim((string)($apid ?? ''));
+                    if ($itemPid !== $projectId) continue;
+                    $unitId     = $item['__id'] ?? $item['id'] ?? '';
+                    $itemStatus = strtolower(trim((string)($item['status'] ?? '')));
+                    $pill = [
+                        'name'    => $resName,
+                        'id'      => $resId,
+                        'unit_id' => $unitId,
+                        'transit' => in_array($itemStatus, ['in-transit', 'transfer pending']),
+                        'pending' => false,
+                        'req_id'  => '',
+                    ];
+                    if ($cat === 'tools') $toolsPills[]     = $pill;
+                    else                  $equipmentPills[] = $pill;
+                }
+            }
+
+            // Merge Source 1 (project.resources embedded array)
+            $seen = [];
+            $mergePills = function (array &$target, array $source) use (&$seen): void {
+                foreach ($source as $pill) {
+                    $key = ($pill['id'] ?? '') . '|' . ($pill['unit_id'] ?? '');
+                    if ($key === '|' || isset($seen[$key])) continue;
+                    $seen[$key] = true;
+                    $target[] = $pill;
+                }
+            };
+            foreach ($equipmentPills as $p) $seen[($p['id']??'').'|'.($p['unit_id']??'')] = true;
+            foreach ($toolsPills     as $p) $seen[($p['id']??'').'|'.($p['unit_id']??'')] = true;
+            foreach ($manpowerPills  as $p) $seen[($p['id']??'').'|'.($p['unit_id']??'')] = true;
+
+            if (!empty($project['resources']) && is_array($project['resources'])) {
+                foreach ($project['resources'] as $res) {
+                    $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
+                    $name = strtoupper(trim((string)($res['name'] ?? '')));
+                    if ($name === '') continue;
+                    $pill = [
+                        'name'    => $name,
+                        'id'      => (string)($res['ref_id']  ?? ''),
+                        'unit_id' => (string)($res['unit_id'] ?? ''),
+                        'transit' => !empty($res['transit']),
+                        'pending' => false,
+                        'req_id'  => '',
+                    ];
+                    if ($cat === 'manpower')      $mergePills($manpowerPills,  [$pill]);
+                    elseif ($cat === 'equipment') $mergePills($equipmentPills, [$pill]);
+                    else                          $mergePills($toolsPills,     [$pill]);
+                }
+            }
+
+            return $this->response->setJSON([
+                'equipment' => array_values($equipmentPills),
+                'tools'     => array_values($toolsPills),
+                'manpower'  => array_values($manpowerPills),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'Dashboard::cardRefresh(' . $projectId . ') - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Server error']);
+        }
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────
 
     private function enrichProject(array $p, array $assignedResources = []): array
@@ -618,15 +714,24 @@ class Dashboard extends BaseController
         $manpower  = [];
 
         // Source 1: inline resources field (written by mobile drag-and-drop / transfer sync)
+        // Deduplicate within Source 1 by ref_id+unit_id to guard against mobile writing
+        // { ref_id, category } and the web having written { ref_id, unit_id:'', category }
+        // which Firestore arrayUnion treats as distinct objects.
+        $src1Seen = [];
         if (!empty($p['resources']) && is_array($p['resources'])) {
             foreach ($p['resources'] as $res) {
                 $cat  = strtolower(trim((string)($res['category'] ?? 'tools')));
                 $name = strtoupper(trim((string)($res['name'] ?? '')));
                 if ($name === '') continue;
+                $rid  = (string)($res['ref_id']  ?? '');
+                $uid  = (string)($res['unit_id'] ?? '');
+                $s1k  = $rid . '|' . $uid;
+                if (isset($src1Seen[$s1k])) continue;
+                $src1Seen[$s1k] = true;
                 $pill = [
                     'name'    => $name,
-                    'id'      => (string)($res['ref_id']  ?? ''),
-                    'unit_id' => (string)($res['unit_id'] ?? ''),
+                    'id'      => $rid,
+                    'unit_id' => $uid,
                     'transit' => !empty($res['transit']),
                 ];
                 if ($cat === 'manpower')      $manpower[]  = $pill;
@@ -731,6 +836,87 @@ class Dashboard extends BaseController
         return is_array($geopoint) ? $geopoint : [];
     }
 
+    /**
+     * Checks a project's unresolved emergency_reports for specific cause labels and
+     * returns the 0/1 flags the ML service expects. "Material Shortage" and
+     * "Equipment/Tool Breakdown" both set emergency_equipment_shortage — the ML schema
+     * has no separate slot for material shortages.
+     */
+    private function _computeEmergencyFlags(string $projectId): array
+    {
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0, 'active_count' => 0];
+        if ($projectId === '') return $flags;
+
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($projectId)
+                ->collection('emergency_reports')->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $d = $doc->data();
+                if (!empty($d['resolved'])) continue;
+
+                $flags['active_count']++;
+
+                $causes = array_map('strval', (array)($d['causes'] ?? []));
+                if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
+                    $flags['equipment'] = 1;
+                }
+                if (in_array('Labor Shortage', $causes, true))    $flags['labor']  = 1;
+                if (in_array('Onsite Accidents', $causes, true))  $flags['onsite'] = 1;
+                // Escalated to an emergency report — treat as top severity (typhoon/storm tier),
+                // distinct from routine daily-report weather notes.
+                if (in_array('Adverse Weather', $causes, true))   $flags['weather'] = 2;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', '_computeEmergencyFlags: ' . $e->getMessage());
+        }
+
+        return $flags;
+    }
+
+    /**
+     * Counts consecutive daily_progress_reports (most recent first) where the
+     * reported progress was behind the linear expected-progress-by-that-date.
+     * Streak breaks at the first report that was on-plan or ahead.
+     */
+    private function _computeConsecutiveLowDays(string $projectId, ?int $startTs, int $totalDuration): int
+    {
+        if ($projectId === '' || !$startTs || $totalDuration <= 0) return 0;
+
+        $count = 0;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($projectId)
+                ->collection('daily_progress_reports')
+                ->orderBy('report_date', 'DESC')
+                ->limit(30)->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) break;
+                $d = $doc->data();
+
+                $reportTs = $this->toTimestamp($d['report_date'] ?? null);
+                $actual   = $d['total_completion_percent'] ?? null;
+                if ($reportTs === null || $actual === null) break;
+
+                $daysElapsedAtReport = min($totalDuration, max(0, (int)(($reportTs - $startTs) / 86400)));
+                $plannedAtReport     = min(100.0, round(($daysElapsedAtReport / $totalDuration) * 100, 2));
+
+                if ((float)$actual < $plannedAtReport) {
+                    $count++;
+                } else {
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', '_computeConsecutiveLowDays: ' . $e->getMessage());
+        }
+
+        return $count;
+    }
+
     private function _fetchBlockerReason(string $projectId, string $blockerType, array $features = []): string
     {
         // ── Low Progress: "X% C  Y% Behind [— SE note]" ────────────────────────
@@ -777,49 +963,72 @@ class Dashboard extends BaseController
                 }
             }
 
-            // ── Emergency-type blockers: pull latest emergency report ────────────
-            $emergTypes = ['Material Shortage', 'Labor Shortage', 'Resource Shortage',
-                           'Onsite Accident', 'Project Halted'];
-            if (in_array($blockerType, $emergTypes)) {
+            // ── Emergency-type blockers: pull latest UNRESOLVED matching report ──
+            // Cause labels match the SE's checkbox list — must stay in sync with
+            // _computeEmergencyFlags(). Types with no dedicated checkbox (e.g.
+            // Project Halted) fall back to accepting any unresolved report.
+            $emergCauseMap = [
+                'Labor Shortage'    => ['Labor Shortage'],
+                'Onsite Accident'   => ['Onsite Accidents'],
+                'Material Shortage' => ['Material Shortage', 'Equipment/Tool Breakdown'],
+                'Resource Shortage' => ['Material Shortage', 'Equipment/Tool Breakdown'],
+                'Weather Delay'     => ['Adverse Weather'],
+                'Project Halted'    => [],
+            ];
+            if (array_key_exists($blockerType, $emergCauseMap)) {
+                $wantedCauses = $emergCauseMap[$blockerType];
                 try {
                     $emergDocs = $db->collection('project')->document($projectId)
                         ->collection('emergency_reports')
                         ->orderBy('created_at', 'DESC')
-                        ->limit(1)->documents();
+                        ->documents();
 
                     foreach ($emergDocs as $doc) {
-                        if (!$doc->exists()) break;
+                        if (!$doc->exists()) continue;
                         $d = $doc->data();
+                        if (!empty($d['resolved'])) continue;
 
-                        // Shortage-specific item list (equipment / materials / manpower named)
-                        $items = (array)($d['affected_resources'] ?? $d['missing_materials']
-                                      ?? $d['shortage_items']    ?? $d['items'] ?? []);
-                        if (!empty($items)) {
-                            $itemList = [];
-                            foreach ($items as $item) {
-                                if (is_string($item) && $item !== '') {
-                                    $itemList[] = $item;
-                                } elseif (is_array($item)) {
-                                    $iName = trim((string)($item['name'] ?? $item['item'] ?? ''));
-                                    $iQty  = $item['quantity'] ?? $item['qty'] ?? null;
-                                    if ($iName !== '') {
-                                        $itemList[] = $iName . ($iQty !== null ? " (×{$iQty})" : '');
-                                    }
-                                }
-                            }
-                            if (!empty($itemList)) $parts[] = implode(', ', $itemList);
-                        }
+                        $causes = array_map('strval', (array)($d['causes'] ?? []));
+                        if (!empty($wantedCauses) && !array_intersect($wantedCauses, $causes)) continue;
 
-                        $causes = (array)($d['causes'] ?? $d['cause'] ?? []);
-                        $notes  = trim((string)($d['notes'] ?? $d['description'] ?? ''));
-                        $other  = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
-                        if (!empty($causes)) $parts[] = implode(', ', $causes);
-                        if ($other !== '')   $parts[] = $other;
-                        if ($notes !== '')   $parts[] = $notes;
+                        // Cause label (e.g. "Onsite Accidents") is already shown in the Status
+                        // column — only append the SE's own free-text description here.
+                        $notes = trim((string)($d['notes'] ?? $d['description'] ?? ''));
+                        $other = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
+                        if ($notes !== '')      $parts[] = $notes;
+                        elseif ($other !== '')  $parts[] = $other;
                         break;
                     }
                 } catch (\Throwable $e) {
                     log_message('warning', '_fetchBlockerReason: emergency - ' . $e->getMessage());
+                }
+            }
+
+            // ── "Other" cause: no ML feature slot to influence classification, but
+            // still surface the SE's note if nothing else has been found yet ────────
+            if (empty($parts)) {
+                try {
+                    $otherDocs = $db->collection('project')->document($projectId)
+                        ->collection('emergency_reports')
+                        ->orderBy('created_at', 'DESC')
+                        ->documents();
+
+                    foreach ($otherDocs as $doc) {
+                        if (!$doc->exists()) continue;
+                        $d = $doc->data();
+                        if (!empty($d['resolved'])) continue;
+
+                        $causes = array_map('strval', (array)($d['causes'] ?? []));
+                        if (!in_array('Other', $causes, true)) continue;
+
+                        $notes = trim((string)($d['notes'] ?? $d['description'] ?? ''));
+                        $other = trim((string)($d['other_cause'] ?? $d['otherCause'] ?? ''));
+                        if ($notes !== '')      $parts[] = $notes;
+                        elseif ($other !== '')  $parts[] = $other;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', '_fetchBlockerReason: other-cause - ' . $e->getMessage());
                 }
             }
 

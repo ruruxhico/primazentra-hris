@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\FirestoreService;
 use App\Models\Model_Users;
+use App\Services\ChatService;
 use App\Services\NotificationService;
 use Google\Cloud\Core\Timestamp;
 use Google\Cloud\Firestore\FieldValue;
@@ -344,83 +345,10 @@ class Messages extends BaseController
 
     // ── Private helpers ────────────────────────────────────────────────────
 
-    /**
-     * Find the chat for a project (by project_id field) or create it with
-     * auto-computed members: Admins + Ops Managers + project PM + project SE.
-     */
+    /** Find or create the project group chat. Delegates to ChatService. */
     private function createOrGetProjectChat(string $projectId): string
     {
-        // Find existing chat for this project
-        $existing = $this->db->collection('chats')
-            ->where('project_id', '=', $projectId)
-            ->limit(1)
-            ->documents();
-
-        foreach ($existing as $doc) {
-            if ($doc->exists()) return $doc->id();
-        }
-
-        // No chat yet — read project to compute members
-        $pSnap = $this->db->collection('project')->document($projectId)->snapshot();
-        if (!$pSnap->exists()) {
-            throw new \RuntimeException("Project {$projectId} not found");
-        }
-        $pd          = $pSnap->data();
-        $projectName = (string)($pd['project_name'] ?? $projectId);
-
-        ['ids' => $memberIds, 'names' => $memberNames] = $this->computeMembers($projectId, $pd);
-
-        $ref = $this->db->collection('chats')->add([
-            'project_id'   => $projectId,
-            'project_name' => $projectName,
-            'type'         => 'group',
-            'members'      => $memberIds,
-            'member_names' => $memberNames,
-            'created_at'   => new Timestamp(new \DateTime()),
-            'last_message' => null,
-        ]);
-
-        return $ref->id();
-    }
-
-    /**
-     * Compute member IDs and names for a project chat:
-     * all Administrators + Operations Managers + project PM + project SE.
-     */
-    private function computeMembers(string $_projectId, array $pd): array
-    {
-        $ids   = [];
-        $names = [];
-        $uModel = new Model_Users();
-
-        // Role-based: Administrator + Operations Manager
-        $roleUsers = $uModel->getUsersByRole(['Administrator', 'Operations Manager']);
-        foreach ($roleUsers as $u) {
-            $uid = (string)($u['id'] ?? '');
-            if (!$uid || in_array($uid, $ids, true)) continue;
-            $ids[]       = $uid;
-            $names[$uid] = $this->buildFullName($u);
-        }
-
-        // Project manager
-        $pmRaw = $pd['personnel']['project_manager_id'] ?? $pd['project_manager_id'] ?? null;
-        $pmUid = $this->extractUid($pmRaw);
-        if ($pmUid && !in_array($pmUid, $ids, true)) {
-            $ids[] = $pmUid;
-            $u = $uModel->getUserById($pmUid);
-            $names[$pmUid] = $u ? $this->buildFullName($u['data']) : $pmUid;
-        }
-
-        // Site engineer
-        $seRaw = $pd['personnel']['site_engineer_id'] ?? $pd['site_engineer_id'] ?? null;
-        $seUid = $this->extractUid($seRaw);
-        if ($seUid && !in_array($seUid, $ids, true)) {
-            $ids[] = $seUid;
-            $u = $uModel->getUserById($seUid);
-            $names[$seUid] = $u ? $this->buildFullName($u['data']) : $seUid;
-        }
-
-        return ['ids' => $ids, 'names' => $names];
+        return (new ChatService())->createOrGetProjectChat($projectId);
     }
 
     /** Build display name from Firestore user data using first_name / last_name (schema-correct). */

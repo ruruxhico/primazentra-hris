@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
+use App\Services\ChatService;
 use App\Libraries\MilestoneProgressService;
 use App\Libraries\ProjectDelayPredictor;
 use App\Libraries\StorageService;
@@ -138,27 +139,14 @@ class Projects extends BaseController
                 usort($projects, fn($a, $b) => $urgencyWeight($a) <=> $urgencyWeight($b));
             }
 
-            // â€” Paginate â€”
-            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $currentPage = max(1, (int) ($this->request->getGet('page_projects') ?? 1));
-            $total       = count($projects);
-
-            $pager = service('pager');
-            $pager->store('projects', $currentPage, $perPage, $total);
-
-            $offset        = ($currentPage - 1) * $perPage;
-            $pagedProjects = array_slice($projects, $offset, $perPage);
-
             $trashService    = new TrashService($this->firestore);
             $recentlyDeleted = $trashService->getTrashItems('project');
 
             $data = [
                 'pageTitle'       => 'Projects',
                 'activePage'      => 'projects',
-                'projects'        => $pagedProjects,
-                'projectsTotal'   => $total,
-                'perPage'         => $perPage,
-                'pagerOffset'     => $offset,
+                'projects'        => $projects,
+                'projectsTotal'   => count($projects),
                 'pmOptions'       => $pmOptions,
                 'seOptions'       => $seOptions,
                 'clientOptions'   => $clientOptions,
@@ -245,6 +233,13 @@ class Projects extends BaseController
                     $this->docRefId($projectData['project_manager_id'] ?? null),
                     $this->docRefId($projectData['site_engineer_id']   ?? null)
                 );
+
+                // Create project group chat immediately so mobile can see it right away
+                try {
+                    (new ChatService())->createOrGetProjectChat($projectId, $projectData);
+                } catch (\Throwable $chatEx) {
+                    log_message('error', 'Projects::create GC creation - ' . $chatEx->getMessage());
+                }
 
                 // verify write
                 try {
@@ -361,7 +356,28 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
-                    $this->writeMilestonesFlat($id, $this->normalizeToMilestones($rawPhases));
+                    $newMilestones = $this->normalizeToMilestones($rawPhases);
+                    // Preserve per-milestone progress so editing a project never resets completion data.
+                    // Match existing milestones by name (case-insensitive).
+                    $existByName = [];
+                    foreach ($this->firestore->getDb()->collection('project')->document($id)->collection('milestones')->documents() as $doc) {
+                        if ($doc->exists()) {
+                            $d = $doc->data();
+                            $key = strtolower(trim((string)($d['milestone_name'] ?? '')));
+                            if ($key !== '') $existByName[$key] = $d;
+                        }
+                    }
+                    foreach ($newMilestones as &$m) {
+                        $key = strtolower(trim((string)($m['milestone_name'] ?? '')));
+                        if (isset($existByName[$key])) {
+                            $ex = $existByName[$key];
+                            $m['completed_quantity']     = (int)($ex['completed_quantity'] ?? 0);
+                            $m['actual_completion_date'] = $ex['actual_completion_date'] ?? null;
+                            $m['status']                 = $ex['status'] ?? 'Pending';
+                        }
+                    }
+                    unset($m);
+                    $this->writeMilestonesFlat($id, $newMilestones);
                 }
                 // Migrate: remove the legacy tasks subcollection if it still exists
                 $this->deleteProjectTasks($id);
@@ -1071,7 +1087,7 @@ class Projects extends BaseController
                 return redirect()->to('projects')->with('error', 'Project not found.');
             }
 
-            if ($this->request->getMethod() === 'post') {
+            if (strtolower($this->request->getMethod()) === 'post') {
                 // Preserve status / actual_completion_date from existing milestones (matched by order)
                 $existing       = $this->getMilestonesOrdered($id);
                 $existByOrder   = [];
@@ -1083,20 +1099,25 @@ class Projects extends BaseController
                 $milestones = [];
                 $order      = 1;
 
+                $now = new Timestamp(new \DateTime());
                 foreach ($rawMs as $m) {
                     $name = trim((string)($m['name'] ?? ''));
                     if ($name === '') continue;
-                    $ex = $existByOrder[$order] ?? [];
+                    $ex    = $existByOrder[$order] ?? [];
+                    $tdStr = trim((string)($m['target_date'] ?? ''));
                     $milestones[] = [
                         'milestone_name'         => $name,
                         'order'                  => $order,
                         'weight_percent'         => (float)($m['weight'] ?? 0),
-                        'target_quantity'        => max(1, (int)($m['qty'] ?? 1)),
-                        'completed_quantity'     => (int)($ex['completed_quantity'] ?? 0),
+                        'target_quantity'        => (float)max(1, (int)($m['qty'] ?? 1)),
+                        'completed_quantity'     => (float)($ex['completed_quantity'] ?? 0),
+                        'completion_percent'     => (float)($ex['completion_percent'] ?? 0),
                         'unit'                   => trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs',
-                        'target_date'            => trim((string)($m['target_date'] ?? '')) ?: null,
+                        'target_date'            => $tdStr !== '' ? $this->toTimestamp($tdStr) : null,
                         'actual_completion_date' => $ex['actual_completion_date'] ?? null,
-                        'status'                 => $ex['status'] ?? 'Pending',
+                        'status'                 => $ex['status'] ?? 'Not Started',
+                        'created_at'             => $ex['created_at'] ?? $now,
+                        'updated_at'             => $now,
                     ];
                     $order++;
                 }
@@ -1167,6 +1188,17 @@ class Projects extends BaseController
         }
         if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value, $m)) {
             return $m[0];
+        }
+        return null;
+    }
+
+    /** Convert a Y-m-d string or existing Timestamp to a Firestore Timestamp. Returns null for empty/null input. */
+    private function toTimestamp(mixed $value): ?Timestamp
+    {
+        if ($value === null || $value === '') return null;
+        if ($value instanceof Timestamp) return $value;
+        if (is_string($value) && preg_match('/^\d{4}-\d{2}-\d{2}/', $value)) {
+            try { return new Timestamp(new \DateTime($value)); } catch (\Throwable) { return null; }
         }
         return null;
     }
@@ -1293,12 +1325,18 @@ class Projects extends BaseController
         try {
             $db = $this->firestore->getDb();
 
+            // Fetch project location once — used to stamp resource/item location on assign
+            $projSnap = $db->collection('project')->document($id)->snapshot();
+            $projLoc  = $projSnap->exists() ? ($projSnap->data()['location'] ?? []) : [];
+            $projAddr = strtoupper(trim((string)($projLoc['address'] ?? '')));
+
             $retName     = '';
             $retCategory = '';
             if ($type === 'manpower') {
                 $db->collection('manpower')->document($refId)->set([
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
+                    'location'            => ['type' => 'PROJECT SITE', 'address' => $projAddr, 'geopoint' => null],
                 ], ['merge' => true]);
 
                 // Sync to project.resources so mobile sees the assignment
@@ -1319,7 +1357,9 @@ class Projects extends BaseController
                 $db->collection('resource')->document($refId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => $db->collection('project')->document($id),
                     'status'              => 'In-Use',
+                    'location'            => ['type' => 'Project Site', 'address' => $projAddr],
                 ], ['merge' => true]);
+                $this->syncEquipmentCounts($refId);
 
                 // Sync to project.resources so mobile sees the assignment
                 $resData = $db->collection('resource')->document($refId)->snapshot()->data() ?? [];
@@ -1365,6 +1405,7 @@ class Projects extends BaseController
                 $db->collection('manpower')->document($mpId)->set([
                     'assigned_project_id' => null,
                     'status'              => 'Available',
+                    'location'            => ['type' => 'WAREHOUSE', 'address' => '', 'geopoint' => null],
                 ], ['merge' => true]);
                 $this->removeFromProjectResources($db, $id, $mpId, '');
             } elseif (str_starts_with($assignmentId, 'unit:')) {
@@ -1372,7 +1413,9 @@ class Projects extends BaseController
                 $db->collection('resource')->document($resId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => null,
                     'status'              => 'In-Storage',
+                    'location'            => ['type' => 'Warehouse', 'address' => ''],
                 ], ['merge' => true]);
+                $this->syncEquipmentCounts($resId);
                 $this->removeFromProjectResources($db, $id, $resId, $unitId);
             } else {
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid assignment ID']);
@@ -1457,6 +1500,9 @@ class Projects extends BaseController
 
         try {
             $db            = $this->firestore->getDb();
+            $projSnap      = $db->collection('project')->document($id)->snapshot();
+            $projLoc       = $projSnap->exists() ? ($projSnap->data()['location'] ?? []) : [];
+            $projAddr      = strtoupper(trim((string)($projLoc['address'] ?? '')));
             $manpowerModel = new \App\Models\Model_Manpower();
             $candidates    = [];
 
@@ -1507,6 +1553,7 @@ class Projects extends BaseController
                 $db->collection('manpower')->document($cand['id'])->set([
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
+                    'location'            => ['type' => 'PROJECT SITE', 'address' => $projAddr, 'geopoint' => null],
                 ], ['merge' => true]);
                 if ($cand['name'] !== '') {
                     $resourceEntries[] = [
@@ -1549,6 +1596,9 @@ class Projects extends BaseController
 
         try {
             $db            = $this->firestore->getDb();
+            $beProjSnap    = $db->collection('project')->document($id)->snapshot();
+            $beProjLoc     = $beProjSnap->exists() ? ($beProjSnap->data()['location'] ?? []) : [];
+            $beProjAddr    = strtoupper(trim((string)($beProjLoc['address'] ?? '')));
             $resourceModel = new \App\Models\Model_Resources();
             $items         = $resourceModel->getResourceItems($resourceId);
             $assigned      = 0;
@@ -1600,6 +1650,7 @@ class Projects extends BaseController
                 $db->collection('resource')->document($resourceId)->collection('items')->document($unitId)->set([
                     'assigned_project_id' => $db->collection('project')->document($id),
                     'status'              => 'In-Use',
+                    'location'            => ['type' => 'Project Site', 'address' => $beProjAddr],
                 ], ['merge' => true]);
                 $assigned++;
 
@@ -1613,6 +1664,7 @@ class Projects extends BaseController
             if ($assigned === 0) {
                 return $this->response->setJSON(['success' => false, 'message' => 'No units available at warehouse for this model.']);
             }
+            $this->syncEquipmentCounts($resourceId);
 
             if (!empty($resourceEntries)) {
                 $db->collection('project')->document($id)->set(
@@ -1625,6 +1677,34 @@ class Projects extends BaseController
         } catch (\Throwable $e) {
             log_message('error', 'Projects::bulkAssignEquipment - ' . $e->getMessage());
             return $this->response->setJSON(['success' => false, 'message' => 'Failed to bulk-assign equipment']);
+        }
+    }
+
+    private function syncEquipmentCounts(string $resourceId): void
+    {
+        try {
+            $db    = $this->firestore->getDb();
+            $docs  = $db->collection('resource')->document($resourceId)
+                        ->collection('items')->documents();
+            $total = 0;
+            $avail = 0;
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $total++;
+                $d      = $doc->data();
+                $status = strtolower(trim((string)($d['status'] ?? '')));
+                $cond   = strtolower(trim((string)($d['condition'] ?? '')));
+                if (($status === '' && in_array($cond, ['functional', 'new'], true))
+                    || in_array($status, ['in-storage', 'available'], true)) {
+                    $avail++;
+                }
+            }
+            $db->collection('resource')->document($resourceId)->update([
+                ['path' => 'total_quantity',    'value' => $total],
+                ['path' => 'available_quantity', 'value' => $avail],
+            ]);
+        } catch (\Throwable $e) {
+            log_message('warning', 'Projects::syncEquipmentCounts(' . $resourceId . ') - ' . $e->getMessage());
         }
     }
 
@@ -1869,6 +1949,12 @@ class Projects extends BaseController
             ? new \Google\Cloud\Core\GeoPoint((float)$lat, (float)$lng)
             : null;
 
+        $address = trim((string) $this->request->getPost('location_address'));
+        $region  = $this->resolveRegion($address);
+        if ($region === '' && $lat !== null && $lng !== null) {
+            $region = $this->resolveRegionFromCoords((float)$lat, (float)$lng);
+        }
+
         $startTs = $rawStart !== '' ? new \Google\Cloud\Core\Timestamp(new \DateTime($rawStart)) : null;
         $endTs   = $rawEnd   !== '' ? new \Google\Cloud\Core\Timestamp(new \DateTime($rawEnd))   : null;
 
@@ -1885,15 +1971,15 @@ class Projects extends BaseController
             'site_engineer_id'     => $seRef,
             'project_manager_name' => $this->resolveUserName($pmId),
             'site_engineer_name'   => $this->resolveUserName($seId),
-            'delay_ping_days'      => max(0, (int)($this->request->getPost('delay_ping_days') ?: 0)),
             'personnel' => [
                 'project_manager_id' => $pmRef,
                 'site_engineer_id'   => $seRef,
             ],
             'location' => [
-                'address'  => trim((string) $this->request->getPost('location_address')),
+                'address'  => $address,
                 'geopoint' => $geopoint,
             ],
+            'region' => $region,
         ];
     }
 
@@ -1964,15 +2050,16 @@ class Projects extends BaseController
             $targetDate = trim((string) ($phase['site_date'] ?? ''));
 
             $milestones[] = [
-                'milestone_name'       => $name,
-                'order'                => $order++,
-                'weight_percent'       => (float) ($phase['weight'] ?? 0),
-                'target_quantity'      => max(1, (int) ($phase['qty'] ?? 1)),
-                'completed_quantity'   => 0,
-                'unit'                 => trim((string) ($phase['unit'] ?? 'pcs')) ?: 'pcs',
-                'target_date'          => $targetDate !== '' ? $targetDate : null,
+                'milestone_name'         => $name,
+                'order'                  => $order++,
+                'weight_percent'         => (float) ($phase['weight'] ?? 0),
+                'target_quantity'        => (float)max(1, (int) ($phase['qty'] ?? 1)),
+                'completed_quantity'     => 0.0,
+                'completion_percent'     => 0.0,
+                'unit'                   => trim((string) ($phase['unit'] ?? 'pcs')) ?: 'pcs',
+                'target_date'            => $targetDate !== '' ? $targetDate : null,
                 'actual_completion_date' => null,
-                'status'               => 'Pending',
+                'status'                 => 'Not Started',
             ];
         }
 
@@ -2004,18 +2091,22 @@ class Projects extends BaseController
             if ($existing->exists()) $ref->document($existing->id())->delete();
         }
 
+        $now = new Timestamp(new \DateTime());
         foreach ($milestones as $m) {
             $docId = bin2hex(random_bytes(8));
             $ref->document($docId)->set([
                 'milestone_name'         => (string) ($m['milestone_name'] ?? $m['name'] ?? ''),
                 'order'                  => (int)    ($m['order']          ?? 0),
                 'weight_percent'         => (float)  ($m['weight_percent'] ?? $m['weight'] ?? 0),
-                'target_quantity'        => max(1, (int)($m['target_quantity'] ?? 1)),
-                'completed_quantity'     => (int)   ($m['completed_quantity'] ?? 0),
+                'target_quantity'        => (float)max(1, (int)($m['target_quantity'] ?? 1)),
+                'completed_quantity'     => (float)  ($m['completed_quantity'] ?? 0),
+                'completion_percent'     => (float)  ($m['completion_percent'] ?? 0),
                 'unit'                   => (string) ($m['unit'] ?? 'pcs') ?: 'pcs',
-                'target_date'            => $m['target_date'] ?? $m['targetDate'] ?? null,
+                'target_date'            => $this->toTimestamp($m['target_date'] ?? $m['targetDate'] ?? null),
                 'actual_completion_date' => $m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null,
-                'status'                 => (string) ($m['status'] ?? 'Pending'),
+                'status'                 => (string) ($m['status'] ?? 'Not Started'),
+                'created_at'             => $m['created_at'] ?? $now,
+                'updated_at'             => $now,
             ]);
         }
     }
@@ -2514,6 +2605,16 @@ class Projects extends BaseController
         foreach ($mindanao as $kw) { if (str_contains($addr, $kw)) return 'MINDANAO'; }
 
         return '';
+    }
+
+    /** Fallback region detection from geopoint when address keyword matching returns empty. */
+    private function resolveRegionFromCoords(float $lat, float $lng): string
+    {
+        // Rough Philippine bounding box: lat 4.5–21°N, lng 116–128°E
+        if ($lat < 4.5 || $lat > 21.5 || $lng < 116.0 || $lng > 128.0) return '';
+        if ($lat >= 12.0) return 'LUZON';
+        if ($lat >= 8.5)  return 'VISAYAS';
+        return 'MINDANAO';
     }
 
     private function notifyAssigned(string $projectId, string $projectName, string $pmUid, string $seUid): void

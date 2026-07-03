@@ -73,9 +73,6 @@
 
     <?php if (pz_can('delete_project')): ?>
     <div class="rv-btn-group-view">
-        <a href="<?= base_url('projects/deleted') ?>" class="rv-btn-trash">
-            <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-        </a>
         <a href="<?= base_url('projects/archived') ?>" class="rv-btn-archive">
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
@@ -84,7 +81,12 @@
 
     <div class="pager-top">
         <span>Show</span>
-        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <select class="pager-per-page">
+            <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+            <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+            <?php endforeach; ?>
+            <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+        </select>
         <span>records per page</span>
     </div>
 </div>
@@ -225,7 +227,6 @@
                             <?php if (pz_can('edit_project')): ?>
                             <a href="<?= base_url('projects/update/' . $project['id']) ?>" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>
                             <button type="button" class="action-btn action-archive" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>
-                            <a href="#" data-id="<?= esc(view_text($project['id'] ?? '')) ?>" data-name="<?= esc(view_text($project['project_name'] ?? '')) ?>" class="action-btn action-delete" title="Delete"><span class="material-symbols-outlined">delete</span></a>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -236,24 +237,8 @@
 </div>
 
 <div class="pager-wrapper">
-    <?php
-        $projectsTotal = $projectsTotal ?? count($projects ?? []);
-        $perPage       = $perPage ?? 20;
-        $pagerOffset   = $pagerOffset ?? 0;
-        $showingFrom   = $projectsTotal > 0 ? $pagerOffset + 1 : 0;
-        $showingTo     = min($pagerOffset + $perPage, $projectsTotal);
-    ?>
-    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $projectsTotal ?> records</span>
-    <?= service('pager')->links('projects', 'bootstrap_full') ?>
-    <?php $projTotalPages = $projectsTotal > 0 ? (int)ceil($projectsTotal / $perPage) : 1; ?>
-    <?php if ($projTotalPages > 1): ?>
-    <div class="pager-jump">
-        Go to page
-        <input type="number" class="pager-jump-input" min="1" max="<?= $projTotalPages ?>"
-               data-total-pages="<?= $projTotalPages ?>" data-page-param="page_projects" placeholder="—">
-        <span>of <?= $projTotalPages ?></span>
-    </div>
-    <?php endif; ?>
+    <span class="pager-info" id="projectsPagerInfo"></span>
+    <div id="projectsPagerNav"></div>
 </div>
 </div><!-- /.pager-section#projects-section -->
 
@@ -375,6 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             visible.forEach(r => tbody.appendChild(r));
         }
+        if (window._projectsPager) window._projectsPager.render();
     }
 
     if (filterForm) filterForm.querySelectorAll('select').forEach(s => s.addEventListener('change', applyProjectFilters));
@@ -607,6 +593,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     exportBtn.addEventListener('click', () => openExportModal(exportBtn.dataset.module));
     importBtn.addEventListener('click', () => openImportModal(importBtn.dataset.module));
+
+    // ── Client-side pager ────────────────────────────────────────────────────
+    window._projectsPager = new PzClientPager({
+        tableId: 'projectsTable',
+        rowSel:  'tbody tr[data-proj-id]',
+        noCol:   1,
+        infoId:  'projectsPagerInfo',
+        navId:   'projectsPagerNav',
+    });
+    window._projectsPager.render();
 });
 </script>
 
@@ -774,7 +770,6 @@ document.addEventListener('DOMContentLoaded', function () {
   window._pzPageListeners = true;
 
   var _base  = window.pzBaseUrl || '';
-  var _page  = parseInt(new URLSearchParams(window.location.search).get('page_projects') || '1', 10);
   var CAN_EDIT_PROJECT = <?= pz_can('edit_project') ? 'true' : 'false' ?>;
 
   function flashRow(row) {
@@ -820,7 +815,6 @@ document.addEventListener('DOMContentLoaded', function () {
          + '<a href="' + _base + 'projects/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
          + (CAN_EDIT_PROJECT ? '<a href="' + _base + 'projects/update/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '')
          + (CAN_EDIT_PROJECT ? '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '')
-         + (CAN_EDIT_PROJECT ? '<a href="#" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></a>' : '')
          + '</td></tr>';
   }
 
@@ -835,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (chg.type === 'modified') { pzUpdateProjectRow(id, chg.doc.data()); return; }
 
-        if (chg.type === 'added' && _page === 1) {
+        if (chg.type === 'added') {
           if (document.querySelector('tr[data-proj-id="' + id + '"]')) return;
           var tbody = document.querySelector('table tbody');
           if (!tbody) return;
@@ -844,6 +838,7 @@ document.addEventListener('DOMContentLoaded', function () {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildProjectRow(id, chg.doc.data());
           tbody.appendChild(tmp.firstElementChild);
+          if (window._projectsPager) window._projectsPager.render();
           return;
         }
 

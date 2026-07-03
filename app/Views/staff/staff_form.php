@@ -31,8 +31,15 @@
             <p class="pz-form-section-title">Profile Picture</p>
             <div class="avatar-upload-wrap">
                 <div class="avatar-circle" id="avatarCircle">
-                    <?php if (!empty($staff['profile_picture'])): ?>
-                        <img src="<?= asset_url($staff['profile_picture']) ?>?v=<?= time() ?>" alt="Profile" id="avatarImg">
+                    <?php
+                        $sfPic = (string)($staff['profile_photo_url'] ?? '');
+                        if ($sfPic === '') {
+                            $sfPicLocal = (string)($staff['profile_picture'] ?? '');
+                            $sfPic = ($sfPicLocal !== '' && file_exists(FCPATH . $sfPicLocal)) ? asset_url($sfPicLocal) . '?v=' . time() : '';
+                        }
+                    ?>
+                    <?php if ($sfPic !== ''): ?>
+                        <img src="<?= esc($sfPic) ?>" alt="Profile" id="avatarImg">
                     <?php else: ?>
                         <span id="avatarInitial"><?= strtoupper(substr((string)($staff['first_name'] ?? 'S'), 0, 1)) ?></span>
                     <?php endif; ?>

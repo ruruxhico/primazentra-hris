@@ -40,8 +40,7 @@ class Profile extends BaseController
             $user['email'] = (string)(session()->get('userEmail') ?? '');
         }
 
-        $picPath = (string)($user['profile_picture'] ?? '');
-        $profilePicture = ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null;
+        $profilePicture = self::resolveProfilePic($user);
 
         // Keep session in sync so the header shows the photo on other pages too
         if ($profilePicture !== null) {
@@ -171,38 +170,59 @@ class Profile extends BaseController
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Image must be under 5 MB.']);
         }
 
-        $uid      = (string) session()->get('userId');
-        $ext      = strtolower($file->getClientExtension());
-        $filename = $uid . '.' . $ext;
-        $destDir  = FCPATH . 'uploads/profiles/';
+        $uid  = (string) session()->get('userId');
+        $ext  = strtolower($file->getClientExtension()) ?: 'jpg';
+        $mime = $file->getMimeType();
 
-        // Remove any previous photo for this user (different extension)
-        foreach (glob($destDir . $uid . '.*') as $old) {
-            @unlink($old);
+        // Move to a temp location so StorageService can read it
+        $tmpDir  = WRITEPATH . 'uploads/';
+        if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+        $tmpName = 'pfp_' . $uid . '_' . time() . '.' . $ext;
+        if (!$file->move($tmpDir, $tmpName)) {
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed to process image.']);
         }
 
-        if (!$file->move($destDir, $filename)) {
-            return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed to save image.']);
-        }
+        $tmpPath     = $tmpDir . $tmpName;
+        $storagePath = 'profile_pictures/' . $uid;
 
-        $picPath = 'uploads/profiles/' . $filename;
+        try {
+            $storage = new \App\Libraries\StorageService();
+            $photoUrl = $storage->upload($tmpPath, $storagePath, $mime);
+        } catch (\Throwable $e) {
+            @unlink($tmpPath);
+            log_message('error', 'Profile::uploadPhoto Storage - ' . $e->getMessage());
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Failed to upload image.']);
+        } finally {
+            @unlink($tmpPath);
+        }
 
         try {
             $this->firestore->getDb()->collection('users')->document($uid)->set(
-                ['profile_picture' => $picPath, 'updated_at' => new \Google\Cloud\Core\Timestamp(new \DateTime())],
+                ['profile_photo_url' => $photoUrl, 'updated_at' => new \Google\Cloud\Core\Timestamp(new \DateTime())],
                 ['merge' => true]
             );
         } catch (\Throwable $e) {
             log_message('error', 'Profile::uploadPhoto Firestore - ' . $e->getMessage());
-            return $this->response->setStatusCode(500)->setJSON(['error' => 'Saved image but failed to update record.']);
+            return $this->response->setStatusCode(500)->setJSON(['error' => 'Uploaded image but failed to save URL.']);
         }
 
-        // Cache path in session so the header can show it without a Firestore read
-        session()->set('profilePicture', $picPath);
+        // Cache URL in session so the header updates immediately
+        session()->set('profilePicture', $photoUrl);
 
         return $this->response->setJSON([
             'success' => true,
-            'url'     => base_url($picPath) . '?v=' . time(),
+            'url'     => $photoUrl,
         ]);
+    }
+
+    private static function resolveProfilePic(array $user): ?string
+    {
+        $url = (string)($user['profile_photo_url'] ?? '');
+        if ($url !== '') return $url;
+
+        $path = (string)($user['profile_picture'] ?? '');
+        if ($path !== '' && file_exists(FCPATH . $path)) return $path;
+
+        return null;
     }
 }

@@ -10,9 +10,8 @@
     $st = strtolower($resource['status'] ?? '');
     $stColors = [
         'available'   => ['bg' => '#e8f5e9', 'color' => '#2e7d32', 'border' => '#a5d6a7'],
-        'in-use'      => ['bg' => '#fff3e0', 'color' => '#e65100', 'border' => '#ffcc80'],
         'deployed'    => ['bg' => '#fff3e0', 'color' => '#e65100', 'border' => '#ffcc80'],
-        'maintenance' => ['bg' => '#fce4ec', 'color' => '#b71c1c', 'border' => '#ef9a9a'],
+        'on-leave'    => ['bg' => '#fce4ec', 'color' => '#b71c1c', 'border' => '#ef9a9a'],
         'unavailable' => ['bg' => '#f5f5f5', 'color' => '#757575', 'border' => '#e0e0e0'],
     ];
     $stStyle = $stColors[$st] ?? ['bg' => '#f5f5f5', 'color' => '#555', 'border' => '#ccc'];
@@ -53,14 +52,16 @@
         </div>
     </div>
 
-    <!-- Name + status card (full width) -->
+    <!-- Name card (full width) -->
     <div class="pd-project-card">
         <div class="pd-project-card-top">
             <div class="pd-project-name"><?= esc(strtoupper((string)($resource['name'] ?? 'Resource'))) ?></div>
+            <?php if ($isManpower): ?>
             <span class="pd-status-badge"
                   style="background:<?= $stStyle['bg'] ?>;color:<?= $stStyle['color'] ?>;border-color:<?= $stStyle['border'] ?>">
                 <?= esc((string)($resource['status'] ?? '—')) ?>
             </span>
+            <?php endif; ?>
         </div>
         <div class="pd-project-type"><?= esc($category) ?></div>
     </div>
@@ -88,10 +89,6 @@
                     <span class="pd-row-label">Total Quantity</span>
                     <span class="pd-row-value"><?= esc((string)($resource['asset_details']['total_quantity'] ?? '—')) ?></span>
                 </div>
-                <div class="pd-row">
-                    <span class="pd-row-label">Available</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['asset_details']['available_quantity'] ?? '—')) ?></span>
-                </div>
             </div>
         </div>
         <?php endif; ?>
@@ -110,12 +107,15 @@
                     <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['role'] ?? '—')) ?></span>
                 </div>
                 <div class="pd-row">
-                    <span class="pd-row-label">Specialization</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['specialization'] ?? '—')) ?></span>
+                    <span class="pd-row-label">Skills</span>
+                    <span class="pd-row-value"><?php
+                        $viewSkills = is_array($resource['manpower_details']['skills'] ?? null) ? $resource['manpower_details']['skills'] : [];
+                        echo $viewSkills ? esc(implode(', ', $viewSkills)) : '—';
+                    ?></span>
                 </div>
                 <div class="pd-row">
-                    <span class="pd-row-label">Contact</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['contact_number'] ?? '—')) ?></span>
+                    <span class="pd-row-label">Specialization</span>
+                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['specialization'] ?? '—')) ?></span>
                 </div>
                 <div class="pd-row">
                     <span class="pd-row-label">Assigned Project</span>

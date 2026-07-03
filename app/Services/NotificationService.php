@@ -46,7 +46,7 @@ class NotificationService
             ->where('isRead', '=', false)
             ->documents();
 
-        $batch = $this->db->batch();
+        $batch = $this->db->bulkWriter();
         $count = 0;
         foreach ($docs as $doc) {
             if (!$doc->exists()) continue;
@@ -64,7 +64,7 @@ class NotificationService
             ->where('type', '=', $type)
             ->documents();
 
-        $batch = $this->db->batch();
+        $batch = $this->db->bulkWriter();
         $count = 0;
         foreach ($docs as $doc) {
             if (!$doc->exists()) continue;

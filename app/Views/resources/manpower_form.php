@@ -93,17 +93,29 @@
         <!-- Skills -->
         <div class="pz-form-section">
             <p class="pz-form-section-title">Skills</p>
-            <div class="skills-chips">
-                <?php
-                $currentSkills = is_array($manpower['skills'] ?? null) ? $manpower['skills'] : [];
-                foreach (['ELECTRICIAN', 'MASON', 'LABOR/HELPER'] as $skill):
-                    $checked = in_array($skill, $currentSkills, true);
-                ?>
-                <label class="skill-chip-label">
-                    <input type="checkbox" name="skills[]" value="<?= esc($skill) ?>" <?= $checked ? 'checked' : '' ?>>
-                    <span class="skill-chip"><?= esc($skill) ?></span>
-                </label>
-                <?php endforeach; ?>
+
+            <!-- Shown only when role = FOREMAN -->
+            <div id="foremanSkillDisplay" style="display:none">
+                <div class="skills-chips">
+                    <span class="skill-chip" style="opacity:.55;cursor:not-allowed;user-select:none">FOREMAN</span>
+                </div>
+                <p style="margin:.4rem 0 0;font-size:.78rem;color:#999">Role is Foreman — skill is fixed automatically.</p>
+            </div>
+
+            <!-- Shown only when role = FIELD WORKER -->
+            <div id="fieldWorkerSkillDisplay">
+                <div class="skills-chips">
+                    <?php
+                    $currentSkills = is_array($manpower['skills'] ?? null) ? $manpower['skills'] : [];
+                    foreach (['ELECTRICIAN', 'MASON', 'LABOR/HELPER'] as $skill):
+                        $checked = in_array($skill, $currentSkills, true);
+                    ?>
+                    <label class="skill-chip-label">
+                        <input type="checkbox" name="skills[]" value="<?= esc($skill) ?>" <?= $checked ? 'checked' : '' ?>>
+                        <span class="skill-chip"><?= esc($skill) ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </div>
 
@@ -116,6 +128,23 @@
         </div>
     </form>
 </div>
+
+<script>
+(function () {
+    var roleSelect   = document.querySelector('select[name="manpower_role"]');
+    var foremanBlock = document.getElementById('foremanSkillDisplay');
+    var workerBlock  = document.getElementById('fieldWorkerSkillDisplay');
+
+    function syncSkillSection() {
+        var isForeman = roleSelect.value === 'FOREMAN';
+        foremanBlock.style.display = isForeman ? '' : 'none';
+        workerBlock.style.display  = isForeman ? 'none' : '';
+    }
+
+    roleSelect.addEventListener('change', syncSkillSection);
+    syncSkillSection(); // run on load for edit mode
+}());
+</script>
 
 <?= $this->endSection() ?>
 

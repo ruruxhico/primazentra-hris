@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\ArchiveService;
 use App\Libraries\FirestoreService;
+use App\Libraries\StorageService;
 use App\Libraries\TrashService;
 use App\Models\Model_Users;
 use Google\Cloud\Core\Timestamp;
@@ -101,26 +102,14 @@ class Staff extends BaseController
                     strcasecmp((string) ($s['role'] ?? ''), $filterRole) === 0));
             }
 
-            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
-            $total       = count($staff);
-
-            $pager = service('pager');
-            $pager->store('staff', $currentPage, $perPage, $total);
-
-            $offset    = ($currentPage - 1) * $perPage;
-            $pagedStaff = array_slice($staff, $offset, $perPage);
-
             $trashService    = new TrashService($this->firestore);
             $recentlyDeleted = $trashService->getTrashItems('staff');
 
             $data = [
                 'pageTitle'       => 'Staff',
                 'activePage'      => 'staff',
-                'staff'           => $pagedStaff,
-                'staffTotal'      => $total,
-                'perPage'         => $perPage,
-                'pagerOffset'     => $offset,
+                'staff'           => $staff,
+                'staffTotal'      => count($staff),
                 'roleOptions'     => $roleOptions,
                 'activeFilters'   => [
                     'ln_range'    => $filterLnRange,
@@ -195,13 +184,21 @@ class Staff extends BaseController
                 // Handle profile picture upload
                 $pic = $this->request->getFile('profile_picture');
                 if ($pic && $pic->isValid() && !$pic->hasMoved()) {
-                    $ext = strtolower($pic->getClientExtension());
+                    $ext  = strtolower($pic->getClientExtension()) ?: 'jpg';
+                    $mime = $pic->getMimeType();
                     if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
-                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
-                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                        $filename = $newId . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
-                        $pic->move($uploadDir, $filename);
-                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
+                        $tmpDir = WRITEPATH . 'uploads/';
+                        if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+                        $tmpName = 'pfp_' . $newId . '_' . time() . '.' . $ext;
+                        $pic->move($tmpDir, $tmpName);
+                        try {
+                            $photoUrl = (new StorageService())->upload($tmpDir . $tmpName, 'profile_pictures/' . $newId, $mime);
+                            $data['profile_photo_url'] = $photoUrl;
+                        } catch (\Throwable $e) {
+                            log_message('error', 'Staff::create StorageService - ' . $e->getMessage());
+                        } finally {
+                            @unlink($tmpDir . $tmpName);
+                        }
                     }
                 }
 
@@ -284,17 +281,21 @@ class Staff extends BaseController
                 // Handle profile picture upload
                 $pic = $this->request->getFile('profile_picture');
                 if ($pic && $pic->isValid() && !$pic->hasMoved()) {
-                    $ext = strtolower($pic->getClientExtension());
+                    $ext  = strtolower($pic->getClientExtension()) ?: 'jpg';
+                    $mime = $pic->getMimeType();
                     if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) && $pic->getSize() <= 2 * 1024 * 1024) {
-                        $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'profiles';
-                        if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-                        // Remove any previous photo for this user (any extension)
-                        foreach (glob($uploadDir . DIRECTORY_SEPARATOR . $id . '.*') ?: [] as $old) {
-                            @unlink($old);
+                        $tmpDir = WRITEPATH . 'uploads/';
+                        if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+                        $tmpName = 'pfp_' . $id . '_' . time() . '.' . $ext;
+                        $pic->move($tmpDir, $tmpName);
+                        try {
+                            $photoUrl = (new StorageService())->upload($tmpDir . $tmpName, 'profile_pictures/' . $id, $mime);
+                            $data['profile_photo_url'] = $photoUrl;
+                        } catch (\Throwable $e) {
+                            log_message('error', 'Staff::update StorageService - ' . $e->getMessage());
+                        } finally {
+                            @unlink($tmpDir . $tmpName);
                         }
-                        $filename = $id . '.' . ($ext === 'jpeg' ? 'jpg' : $ext);
-                        $pic->move($uploadDir, $filename);
-                        $data['profile_picture'] = 'uploads/profiles/' . $filename;
                     }
                 }
 

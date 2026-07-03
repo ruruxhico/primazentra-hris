@@ -26,6 +26,7 @@ $routes->get('auth/firebase-token', 'Auth::firebaseToken');
 
 $routes->get('dashboard', 'Dashboard::index');
 $routes->get('dashboard/live', 'Dashboard::live');
+$routes->get('dashboard/card-refresh/(:segment)', 'Dashboard::cardRefresh/$1');
 
 // Google Maps API proxy (server-side; keeps API key out of the browser)
 $routes->get('maps/geocode',  'Maps::geocode');
@@ -68,9 +69,10 @@ $routes->get('projects/(:segment)/emergency-reports/json',                    'R
 $routes->get('projects/(:segment)/emergency-reports/(:segment)',              'Reports::emergencyShow/$1/$2');
 $routes->post('projects/(:segment)/emergency-reports',                         'Reports::emergencyCreate/$1');
 $routes->post('projects/(:segment)/emergency-reports/(:segment)/resolve',      'Reports::emergencyResolve/$1/$2');
-$routes->get('projects/(:segment)/daily-reports/json',             'Reports::dailyList/$1');
-$routes->get('projects/(:segment)/daily-reports/(:segment)',       'Reports::dailyShow/$1/$2');
-$routes->post('projects/(:segment)/daily-reports',                 'Reports::dailyCreate/$1');
+$routes->get('projects/(:segment)/daily-reports/json',                    'Reports::dailyList/$1');
+$routes->get('projects/(:segment)/daily-reports/(:segment)/form-data', 'Reports::dailyFormData/$1/$2');
+$routes->get('projects/(:segment)/daily-reports/(:segment)',            'Reports::dailyShow/$1/$2');
+$routes->post('projects/(:segment)/daily-reports',                      'Reports::dailyCreate/$1');
 
 // Profile
 $routes->get('profile',                   'Profile::index');

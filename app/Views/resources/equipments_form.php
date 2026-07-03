@@ -12,6 +12,17 @@
     $formAction = $isEdit ? base_url('resources/update/' . $resource['id']) : base_url('resources/store');
     $hasItems = !empty($items);
     $addSpecificUnitsNow = (bool) ($asset['add_specific_units_now'] ?? $hasItems);
+
+    if (!function_exists('eqDeriveEndSerial')) {
+        function eqDeriveEndSerial(string $base, int $qty): string {
+            if ($qty <= 1 || $base === '') return '';
+            if (preg_match('/^(.*-)(\d+)$/', $base, $m)) {
+                $n = (int)$m[2] + ($qty - 1);
+                return $m[1] . str_pad($n, strlen($m[2]), '0', STR_PAD_LEFT);
+            }
+            return $base . '-' . str_pad($qty, 3, '0', STR_PAD_LEFT);
+        }
+    }
 ?>
 
 <?php $mapsKey = $mapsKey ?? ''; ?>
@@ -37,12 +48,12 @@
     <form method="POST" action="<?= $formAction ?>" id="equipmentForm" data-autosave>
         <?= csrf_field() ?>
         <input type="hidden" name="category" value="Equipment">
-        <input type="hidden" name="status" value="<?= esc((string)($resource['status'] ?? 'Available')) ?>">
         <input type="hidden" name="next_availability" value="<?= esc((string)($resource['next_availability'] ?? '')) ?>">
         <input type="hidden" name="location_address" value="<?= esc((string)($resource['location']['address'] ?? '')) ?>">
         <input type="hidden" name="location_type" value="<?= esc((string)($resource['location']['type'] ?? '')) ?>">
         <input type="hidden" name="asset_status" value="<?= esc((string)($asset['status'] ?? 'In-Storage')) ?>">
         <input type="hidden" name="asset_assigned_project_id" value="<?= esc((string)($asset['assigned_project_id'] ?? '')) ?>">
+        <?php if ($isEdit): ?><input type="hidden" name="preserve_items" value="1"><?php endif; ?>
 
         <div class="pz-form-section">
             <p class="pz-form-section-title">Equipment Details</p>
@@ -50,8 +61,15 @@
                 <label for="name">Equipment Name *</label>
                 <input type="text" id="name" name="name" placeholder="e.g., Tower Crane, Concrete Mixer" value="<?= esc((string)($resource['name'] ?? '')) ?>" required>
             </div>
+            <?php if ($isEdit): ?>
+            <div id="nameChangeDisclaimer" style="display:none;margin-top:.6rem;padding:.6rem .85rem;background:#fff8e1;border:1px solid #f0c040;border-radius:7px;font-size:.82rem;color:#7a5c1e;align-items:center;gap:.5rem">
+                <span class="material-symbols-outlined" style="font-size:1rem;flex-shrink:0">info</span>
+                Renaming this model will not update the serial numbers or records of existing units.
+            </div>
+            <?php endif; ?>
         </div>
 
+        <?php if (!$isEdit): ?>
             <div class="equipment-toggle-card">
                 <label class="equipment-checkbox-label">
                     <input type="checkbox" id="add_specific_units_now" name="add_specific_units_now" value="1" <?= $addSpecificUnitsNow ? 'checked' : '' ?>>
@@ -92,16 +110,28 @@
 
                 <div class="unit-cards-container" id="equipmentItemsContainer">
                     <?php if (!empty($items) && is_array($items)): ?>
+                        <?php $unitCounter = 0; ?>
                         <?php foreach ($items as $index => $item): ?>
                             <?php
                                 $location = is_array($item['location'] ?? null) ? $item['location'] : [];
                                 $locationType = (string) ($location['type'] ?? 'Warehouse');
                                 $currentAddress = (string) ($location['address'] ?? '');
-                                $serialLabel = !empty($item['serial_number']) ? ' — ' . esc((string)$item['serial_number']) : '';
+                                $groupQty = (int)($item['quantity'] ?? 1);
+                                $startSerial = (string)($item['serial_number'] ?? '');
+                                $endSerial = eqDeriveEndSerial($startSerial, $groupQty);
+                                $unitStart = $unitCounter + 1;
+                                $unitEnd   = $unitCounter + $groupQty;
+                                $unitCounter += $groupQty;
+                                $serialLabel = $startSerial !== ''
+                                    ? ' — ' . esc($startSerial) . ($endSerial !== '' ? ' to ' . esc($endSerial) : '')
+                                    : '';
+                                $unitLabel = $groupQty > 1
+                                    ? 'Units #' . $unitStart . '–' . $unitEnd
+                                    : 'Unit #' . $unitStart;
                             ?>
-                            <div class="unit-card" data-warehouse-value="<?= esc($currentAddress) ?>" data-project-value="<?= esc($currentAddress) ?>">
+                            <div class="unit-card collapsed" data-warehouse-value="<?= esc($currentAddress) ?>" data-project-value="<?= esc($currentAddress) ?>">
                                 <div class="unit-card-header" onclick="toggleUnit(this)">
-                                    <span class="unit-card-title">Unit #<?= $index + 1 ?><?= $serialLabel ?></span>
+                                    <span class="unit-card-title"><?= $unitLabel ?><?= $serialLabel ?></span>
                                     <span class="unit-card-chevron material-symbols-outlined">expand_less</span>
                                 </div>
                                 <div class="unit-card-body">
@@ -185,6 +215,7 @@
                     </div>
                 </div>
             </div>
+        <?php endif; ?>
 
         <div class="pz-form-actions">
             <button type="submit" class="pz-btn pz-btn-primary">
@@ -316,7 +347,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var mapUseCurrent = document.getElementById('equipmentMapUseCurrent');
     var mapSearch = document.getElementById('equipmentMapSearch');
 
-    var rowIndex = container.querySelectorAll('.unit-card').length;
+    var rowIndex = container ? container.querySelectorAll('.unit-card').length : 0;
     var nextSerialIndex = rowIndex + 1;
     var activeWarehouseInput = null;
     var mapPendingAddress = '';
@@ -325,8 +356,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var words = name.toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').trim().split(/\s+/).filter(Boolean);
         if (words.length === 0) return '';
         if (words.length === 1) return words[0].substring(0, 3);
-        if (words.length === 2) return words[0].substring(0, 3) + '_' + words[1];
-        return words[0].substring(0, 3) + '_' + words[1] + words[2];
+        return words[0].substring(0, 3) + '_' + words[1];
     }
 
     function generateSerialRange(name, startIdx) {
@@ -364,6 +394,9 @@ document.addEventListener('DOMContentLoaded', function () {
             field.disabled = !visible;
         });
         addBtn.disabled = !visible;
+        if (visible) {
+            container.querySelectorAll('.unit-card').forEach(function (card) { syncLocationFields(card); });
+        }
     }
 
     function reindexCards() {
@@ -657,14 +690,47 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var resourceNameInput = document.getElementById('name');
     if (resourceNameInput) {
+        <?php if ($isEdit): ?>
+        var _originalName = resourceNameInput.value;
+        var _nameDisclaimer = document.getElementById('nameChangeDisclaimer');
+        resourceNameInput.addEventListener('input', function () {
+            if (_nameDisclaimer) {
+                _nameDisclaimer.style.display = this.value.trim() !== _originalName.trim() ? 'flex' : 'none';
+            }
+        });
+        var _eqForm = document.getElementById('equipmentForm');
+        var _eqRenameModal = document.getElementById('renameConfirmModal');
+        var _eqRenameProceed = document.getElementById('renameConfirmProceed');
+        var _eqRenameCancel = document.getElementById('renameConfirmCancel');
+        var _eqPendingSubmit = false;
+        if (_eqForm && _eqRenameModal) {
+            _eqForm.addEventListener('submit', function (e) {
+                if (!_eqPendingSubmit && resourceNameInput.value.trim() !== _originalName.trim()) {
+                    e.preventDefault();
+                    _eqRenameModal.style.display = 'flex';
+                }
+            });
+            _eqRenameProceed.addEventListener('click', function () {
+                _eqRenameModal.style.display = 'none';
+                _eqPendingSubmit = true;
+                _eqForm.submit();
+            });
+            _eqRenameCancel.addEventListener('click', function () {
+                _eqRenameModal.style.display = 'none';
+            });
+        }
+        <?php else: ?>
         resourceNameInput.addEventListener('input', function () {
             recalculateSerialIndices();
         });
+        <?php endif; ?>
     }
 
-    container.querySelectorAll('.unit-card').forEach(bindCard);
-    recalculateSerialIndices();
-    setSectionVisible(checkbox ? checkbox.checked : false);
+    if (container) {
+        container.querySelectorAll('.unit-card').forEach(bindCard);
+        recalculateSerialIndices();
+        setSectionVisible(checkbox ? checkbox.checked : false);
+    }
 
     // After autosave restores the checkbox, re-apply section visibility
     window.pzAsRestore_equipmentForm = function () {
@@ -755,6 +821,22 @@ if (window.location.hostname === 'localhost') {
 }
 </script>
 <div id="formToastEl" class="custom-toast" aria-live="polite"></div>
+<?php endif; ?>
+
+<?php if ($isEdit): ?>
+<div id="renameConfirmModal" class="pz-modal-overlay" style="display:none">
+    <div class="pz-modal-box">
+        <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem">
+            <span class="material-symbols-outlined" style="font-size:1.35rem;color:#8C701C;flex-shrink:0">warning</span>
+            <h3 class="pz-modal-title" style="font-size:1.05rem">Rename Model?</h3>
+        </div>
+        <p class="pz-modal-subtitle" style="margin-bottom:0">Renaming this model will <strong>not</strong> update the serial numbers or records of existing units. This action cannot be undone automatically.</p>
+        <div class="pz-modal-actions">
+            <button type="button" id="renameConfirmCancel" class="pz-btn-modal-cancel">Cancel</button>
+            <button type="button" id="renameConfirmProceed" class="pz-btn pz-btn-primary" style="padding:8px 20px;font-size:.875rem">Proceed</button>
+        </div>
+    </div>
+</div>
 <?php endif; ?>
 
 <?= $this->endSection() ?>

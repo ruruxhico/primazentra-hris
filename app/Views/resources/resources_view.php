@@ -35,7 +35,7 @@
     $equipment   = $equipment ?? [];
     $tools       = $tools     ?? [];
     $manpower    = $manpower  ?? [];
-    $perPage     = $perPage   ?? 20;
+    $perPage     = $perPage   ?? 10;
     $eqOffset    = $eqOffset    ?? 0;
     $toolsOffset = $toolsOffset ?? 0;
     $mpOffset    = $mpOffset    ?? 0;
@@ -82,9 +82,6 @@
 
         <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
-            <a href="<?= base_url('resources/deleted?tab=equipment') ?>" class="rv-btn-trash">
-                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-            </a>
             <a href="<?= base_url('resources/archived?tab=equipment') ?>" class="rv-btn-archive">
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
@@ -93,7 +90,12 @@
 
         <div class="pager-top">
             <span>Show</span>
-            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <select class="pager-per-page">
+                <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+                <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+                <?php endforeach; ?>
+                <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+            </select>
             <span>records per page</span>
         </div>
     </div>
@@ -161,12 +163,6 @@
                                 title="Archive">
                             <span class="material-symbols-outlined">inventory_2</span>
                         </button>
-                        <button type="button" class="action-btn action-delete"
-                                data-id="<?= esc((string)$item['id']) ?>"
-                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
-                                title="Delete">
-                            <span class="material-symbols-outlined">delete</span>
-                        </button>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -177,18 +173,8 @@
         </div>
 
         <div class="pager-wrapper">
-            <?php $eqTotal = $eqTotal ?? count($equipment); $showTo = min($eqOffset + $perPage, $eqTotal); ?>
-            <span class="pager-info">Showing <?= $eqTotal > 0 ? $eqOffset + 1 : 0 ?>–<?= $showTo ?> of <?= $eqTotal ?> records</span>
-            <?= service('pager')->links('equipment', 'bootstrap_full') ?>
-            <?php $eqTotalPages = $eqTotal > 0 ? (int)ceil($eqTotal / $perPage) : 1; ?>
-            <?php if ($eqTotalPages > 1): ?>
-            <div class="pager-jump">
-                Go to page
-                <input type="number" class="pager-jump-input" min="1" max="<?= $eqTotalPages ?>"
-                       data-total-pages="<?= $eqTotalPages ?>" data-page-param="page_equipment" placeholder="—">
-                <span>of <?= $eqTotalPages ?></span>
-            </div>
-            <?php endif; ?>
+            <span class="pager-info" id="eqPagerInfo"></span>
+            <div id="eqPagerNav"></div>
         </div>
     </div>
 
@@ -224,9 +210,6 @@
 
         <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
-            <a href="<?= base_url('resources/deleted?tab=tools') ?>" class="rv-btn-trash">
-                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-            </a>
             <a href="<?= base_url('resources/archived?tab=tools') ?>" class="rv-btn-archive">
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
@@ -235,7 +218,12 @@
 
         <div class="pager-top">
             <span>Show</span>
-            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <select class="pager-per-page">
+                <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+                <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+                <?php endforeach; ?>
+                <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+            </select>
             <span>records per page</span>
         </div>
     </div>
@@ -303,12 +291,6 @@
                                 title="Archive">
                             <span class="material-symbols-outlined">inventory_2</span>
                         </button>
-                        <button type="button" class="action-btn action-delete"
-                                data-id="<?= esc((string)$item['id']) ?>"
-                                data-name="<?= esc((string)($item['name'] ?? 'this resource')) ?>"
-                                title="Delete">
-                            <span class="material-symbols-outlined">delete</span>
-                        </button>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -319,18 +301,8 @@
         </div>
 
         <div class="pager-wrapper">
-            <?php $toolsTotal = $toolsTotal ?? count($tools); $tShowTo = min($toolsOffset + $perPage, $toolsTotal); ?>
-            <span class="pager-info">Showing <?= $toolsTotal > 0 ? $toolsOffset + 1 : 0 ?>–<?= $tShowTo ?> of <?= $toolsTotal ?> records</span>
-            <?= service('pager')->links('tools', 'bootstrap_full') ?>
-            <?php $toolsTotalPages = $toolsTotal > 0 ? (int)ceil($toolsTotal / $perPage) : 1; ?>
-            <?php if ($toolsTotalPages > 1): ?>
-            <div class="pager-jump">
-                Go to page
-                <input type="number" class="pager-jump-input" min="1" max="<?= $toolsTotalPages ?>"
-                       data-total-pages="<?= $toolsTotalPages ?>" data-page-param="page_tools" placeholder="—">
-                <span>of <?= $toolsTotalPages ?></span>
-            </div>
-            <?php endif; ?>
+            <span class="pager-info" id="toolsPagerInfo"></span>
+            <div id="toolsPagerNav"></div>
         </div>
     </div>
 
@@ -366,9 +338,6 @@
 
         <?php if (pz_can('add_edit_resources')): ?>
         <div class="rv-btn-group-view">
-            <a href="<?= base_url('resources/deleted?tab=manpower') ?>" class="rv-btn-trash">
-                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-            </a>
             <a href="<?= base_url('resources/archived?tab=manpower') ?>" class="rv-btn-archive">
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
@@ -377,7 +346,12 @@
 
         <div class="pager-top">
             <span>Show</span>
-            <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+            <select class="pager-per-page">
+                <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+                <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+                <?php endforeach; ?>
+                <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+            </select>
             <span>records per page</span>
         </div>
     </div>
@@ -425,6 +399,7 @@
                         <th>NO.</th>
                         <th>NAME</th>
                         <th>ROLE</th>
+                        <th>SKILLS</th>
                         <th>SPECIALIZATION</th>
                         <th class="text-center">STATUS</th>
                         <th class="text-center">ACTIONS</th>
@@ -432,7 +407,7 @@
                 </thead>
                 <tbody>
                 <?php if (empty($manpower)): ?>
-                    <tr><td colspan="7" class="empty-state">No manpower records found.</td></tr>
+                    <tr><td colspan="8" class="empty-state">No manpower records found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($manpower as $idx => $person):
                     $mpStatusRaw = (string)($person['status'] ?? 'Available');
@@ -443,8 +418,10 @@
                         'onleave'   => 'mp-status-onleave',
                         default     => 'mp-status-other',
                     };
-                    $role = (string)($person['manpower_details']['role']           ?? $person['role']           ?? '');
-                    $spec = (string)($person['manpower_details']['specialization'] ?? $person['specialization'] ?? '');
+                    $role   = (string)($person['manpower_details']['role']           ?? $person['role']           ?? '');
+                    $spec   = (string)($person['manpower_details']['specialization'] ?? $person['specialization'] ?? '');
+                    $skills = is_array($person['manpower_details']['skills'] ?? null) ? $person['manpower_details']['skills']
+                            : (is_array($person['skills'] ?? null) ? $person['skills'] : []);
                 ?>
                 <tr data-mp-id="<?= esc((string)$person['id']) ?>"
                     data-mp-role-val="<?= esc(strtolower($role)) ?>"
@@ -458,6 +435,7 @@
                     <td><?= $mpOffset + $idx + 1 ?></td>
                     <td data-mp-name><strong><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></strong></td>
                     <td data-mp-role><?= esc($role) ?></td>
+                    <td data-mp-skills><?= esc(implode(', ', $skills)) ?></td>
                     <td data-mp-spec><?= esc($spec) ?></td>
                     <td class="text-center">
                         <span class="mp-status-badge <?= $stClass ?>" data-mp-status><?= esc($mpStatusRaw) ?></span>
@@ -470,11 +448,11 @@
                         <a href="<?= base_url('resources/edit/' . $person['id']) ?>" class="action-btn" title="Edit">
                             <span class="material-symbols-outlined">edit</span>
                         </a>
-                        <button type="button" class="action-btn action-delete"
+                        <button type="button" class="action-btn action-archive"
                                 data-id="<?= esc((string)$person['id']) ?>"
                                 data-name="<?= esc((string)($person['name'] ?? 'this resource')) ?>"
-                                title="Delete">
-                            <span class="material-symbols-outlined">delete</span>
+                                title="Archive">
+                            <span class="material-symbols-outlined">inventory_2</span>
                         </button>
                         <?php endif; ?>
                     </td>
@@ -486,18 +464,8 @@
         </div>
 
         <div class="pager-wrapper">
-            <?php $mpTotal = $mpTotal ?? count($manpower); $mShowTo = min($mpOffset + $perPage, $mpTotal); ?>
-            <span class="pager-info">Showing <?= $mpTotal > 0 ? $mpOffset + 1 : 0 ?>–<?= $mShowTo ?> of <?= $mpTotal ?> records</span>
-            <?= service('pager')->links('manpower', 'bootstrap_full') ?>
-            <?php $mpTotalPages = $mpTotal > 0 ? (int)ceil($mpTotal / $perPage) : 1; ?>
-            <?php if ($mpTotalPages > 1): ?>
-            <div class="pager-jump">
-                Go to page
-                <input type="number" class="pager-jump-input" min="1" max="<?= $mpTotalPages ?>"
-                       data-total-pages="<?= $mpTotalPages ?>" data-page-param="page_manpower" placeholder="—">
-                <span>of <?= $mpTotalPages ?></span>
-            </div>
-            <?php endif; ?>
+            <span class="pager-info" id="mpPagerInfo"></span>
+            <div id="mpPagerNav"></div>
         </div>
     </div>
 
@@ -508,9 +476,6 @@
     <span class="rv-bulk-count" id="bulkCount">0 selected</span>
     <button type="button" class="rv-bulk-arch-btn" id="bulkArchiveBtn">
         <span class="material-symbols-outlined">inventory_2</span> Archive Selected
-    </button>
-    <button type="button" class="rv-bulk-del-btn" id="bulkDeleteBtn">
-        <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
 </div>
 
@@ -586,7 +551,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (icon)  icon.textContent  = isArchive ? 'inventory_2' : 'delete_forever';
         if (title) title.textContent = isArchive ? 'Archive' : 'Delete';
     }
-    const DELETE_URL          = '<?= base_url('resources/delete') ?>';
     const BASE_URL            = '<?= base_url() ?>';
     const CAN_EDIT_RESOURCES  = <?= pz_can('add_edit_resources') ? 'true' : 'false' ?>;
 
@@ -653,8 +617,11 @@ document.addEventListener('DOMContentLoaded', function () {
         let cellsHtml;
 
         if (module === 'manpower') {
-            const role   = escHtml((d.manpower_details && d.manpower_details.role)           || d.role           || '');
-            const spec   = escHtml((d.manpower_details && d.manpower_details.specialization) || d.specialization || '');
+            const role   = escHtml((d.manpower_details && d.manpower_details.role) || d.role || '');
+            const _n3    = normalizeMpSpecSkills(d);
+            const spec   = escHtml(_n3.spec);
+            const rawSkills = _n3.rawSkills;
+            const skills = escHtml(rawSkills.join(', '));
             const status = d.status || 'Available';
             const stKey  = status.toLowerCase().replace(/[^a-z]/g,'');
             const stCls  = {available:'mp-status-available',deployed:'mp-status-deployed',onleave:'mp-status-onleave'}[stKey] || 'mp-status-other';
@@ -663,6 +630,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 '<td>—</td>' +
                 '<td><strong>' + nameVal + '</strong></td>' +
                 '<td>' + role + '</td>' +
+                '<td data-mp-skills>' + skills + '</td>' +
                 '<td>' + spec + '</td>' +
                 '<td class="text-center"><span class="mp-status-badge ' + stCls + '">' + escHtml(status) + '</span></td>';
         } else {
@@ -682,7 +650,6 @@ document.addEventListener('DOMContentLoaded', function () {
               '<a href="' + BASE_URL + 'resources/show/' + escHtml(id) + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>' +
               (CAN_EDIT_RESOURCES ? '<a href="' + BASE_URL + 'resources/edit/' + escHtml(id) + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>' : '') +
               (CAN_EDIT_RESOURCES ? '<button type="button" class="action-btn action-archive" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>' : '') +
-              (CAN_EDIT_RESOURCES ? '<button type="button" class="action-btn action-delete" data-id="' + escHtml(id) + '" data-name="' + escHtml(d.name||'') + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>' : '') +
             '</td>';
 
         const row = document.createElement('tr');
@@ -713,7 +680,7 @@ document.addEventListener('DOMContentLoaded', function () {
     wireFilterToggle('mpFilterToggle',    'mpFilterPanel',    <?= $mpActiveCount > 0 ? 'true' : 'false' ?>);
 
     /* ── Sort chips (equipment & tools) — live DOM sort ── */
-    function wireSortChips(formId, tableId) {
+    function wireSortChips(formId, tableId, onSort) {
         const form  = document.getElementById(formId);
         const table = document.getElementById(tableId);
         if (!form || !table) return;
@@ -734,11 +701,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     rows.sort((a, b) => (parseInt(b.querySelector(attr)?.textContent)||0) - (parseInt(a.querySelector(attr)?.textContent)||0));
                     rows.forEach(r => tbody.appendChild(r));
                 }
+                if (onSort) onSort();
             });
         });
     }
-    wireSortChips('eqFilterForm',    'equipmentTable');
-    wireSortChips('toolsFilterForm', 'toolsTable');
+    wireSortChips('eqFilterForm',    'equipmentTable', function() { if(window._eqPager)    window._eqPager.render(); });
+    wireSortChips('toolsFilterForm', 'toolsTable',     function() { if(window._toolsPager) window._toolsPager.render(); });
 
     /* ── Manpower filter chips — live DOM filter ── */
     const mpFilters = { role: '', spec: '', status: '' };
@@ -753,6 +721,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (mpFilters.status && (row.dataset.mpStatusVal ||'') !== mpFilters.status) show = false;
             row.style.display = show ? '' : 'none';
         });
+        if (window._mpPager) window._mpPager.render();
     }
 
     const mpForm = document.getElementById('mpFilterForm');
@@ -785,14 +754,25 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     }
-    wireSearch('searchEquipment', 'equipmentTable');
-    wireSearch('searchTools',     'toolsTable');
+    wireSearch('searchEquipment', 'equipmentTable', function() {
+        var q = (document.getElementById('searchEquipment')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('#equipmentTable tbody tr').forEach(function(row) {
+            row.style.display = !q || row.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
+        if (window._eqPager) window._eqPager.render();
+    });
+    wireSearch('searchTools', 'toolsTable', function() {
+        var q = (document.getElementById('searchTools')?.value || '').trim().toLowerCase();
+        document.querySelectorAll('#toolsTable tbody tr').forEach(function(row) {
+            row.style.display = !q || row.innerText.toLowerCase().includes(q) ? '' : 'none';
+        });
+        if (window._toolsPager) window._toolsPager.render();
+    });
     wireSearch('searchManpower',  'manpowerTable', applyMpFilter);
 
     /* ── Bulk select ── */
     const bulkBar     = document.getElementById('bulkActionBar');
     const bulkCountEl = document.getElementById('bulkCount');
-    const bulkDelBtn  = document.getElementById('bulkDeleteBtn');
 
     function getActivePanel() { return document.querySelector('.rv-panel.active'); }
     function getCheckedInPanel(panel) {
@@ -830,36 +810,13 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmDialog.classList.add('open');
     });
 
-    bulkDelBtn && bulkDelBtn.addEventListener('click', function () {
-        const panel   = getActivePanel();
-        const checked = getCheckedInPanel(panel);
-        if (!checked.length) return;
-        const names = checked.map(c => c.dataset.name || c.value).join(', ');
-        setConfirmType('delete');
-        confirmMessage.innerText = 'Delete ' + checked.length + ' item(s)?\n' + names;
-        pendingDeleteId   = '__bulk__';
-        pendingBulkItems  = checked.map(c => ({ id: c.value, row: c.closest('tr') }));
-        confirmDialog.classList.add('open');
-    });
-
-    /* ── Single delete ── */
+    /* ── Action state ── */
     let pendingDeleteId         = null;
     let pendingRow              = null;
     let pendingBulkItems        = [];
     let pendingArchiveId        = null;
     let pendingArchiveRow       = null;
     let pendingBulkArchiveItems = [];
-
-    document.addEventListener('click', function (e) {
-        var btn = e.target.closest('.action-delete');
-        if (!btn) return;
-        e.preventDefault();
-        pendingDeleteId = btn.dataset.id;
-        pendingRow      = btn.closest('tr');
-        setConfirmType('delete');
-        confirmMessage.innerText = 'Delete "' + (btn.dataset.name || 'this resource') + '"?';
-        confirmDialog.classList.add('open');
-    });
 
     // ── Archive ───────────────────────────────────────────────
     const ARCHIVE_URL = '<?= base_url('resources/archive') ?>';
@@ -943,40 +900,33 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (pendingDeleteId === '__bulk__') {
-            const items = [...pendingBulkItems];
-            pendingBulkItems = []; pendingDeleteId = null;
-            confirmDialog.classList.remove('open');
-            let done = 0;
-            items.forEach(item => {
-                const body = new URLSearchParams();
-                if (csrfName) body.append(csrfName, csrfHash);
-                body.append('id', item.id);
-                fetch(DELETE_URL, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body })
-                    .then(r => r.json())
-                    .then(d => { if (d && d.success) animateRowOut(item.row); })
-                    .finally(() => { done++; if (done === items.length) { showToast(items.length + ' item(s) deleted', 'success'); updateBulkBar(); } });
-            });
-            return;
-        }
-
-        const body = new URLSearchParams();
-        if (csrfName) body.append(csrfName, csrfHash);
-        body.append('id', pendingDeleteId);
-        fetch(DELETE_URL, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body })
-            .then(r => r.json())
-            .then(d => {
-                if (d && d.success) {
-                    showToast('Resource deleted', 'success');
-                    animateRowOut(pendingRow);
-                    updateBulkBar();
-                } else {
-                    showToast(d.message || 'Delete failed', 'error');
-                }
-            })
-            .catch(() => showToast('Error deleting resource', 'error'))
-            .finally(() => { pendingDeleteId = null; pendingRow = null; confirmDialog.classList.remove('open'); });
     });
+
+    // ── Client-side pagers ───────────────────────────────────────────────────
+    window._eqPager = new PzClientPager({
+        tableId: 'equipmentTable',
+        rowSel:  'tbody tr[data-res-id]',
+        noCol:   1,
+        infoId:  'eqPagerInfo',
+        navId:   'eqPagerNav',
+    });
+    window._toolsPager = new PzClientPager({
+        tableId: 'toolsTable',
+        rowSel:  'tbody tr[data-res-id]',
+        noCol:   1,
+        infoId:  'toolsPagerInfo',
+        navId:   'toolsPagerNav',
+    });
+    window._mpPager = new PzClientPager({
+        tableId: 'manpowerTable',
+        rowSel:  'tbody tr[data-mp-id]',
+        noCol:   1,
+        infoId:  'mpPagerInfo',
+        navId:   'mpPagerNav',
+    });
+    window._eqPager.render();
+    window._toolsPager.render();
+    window._mpPager.render();
 
 });
 
@@ -1076,10 +1026,6 @@ document.addEventListener('DOMContentLoaded', function () {
   window._pzPageListeners = true;
 
   var _base   = window.pzBaseUrl || '';
-  var _params = new URLSearchParams(window.location.search);
-  var _eqPage = parseInt(_params.get('page_equipment') || '1', 10);
-  var _tPage  = parseInt(_params.get('page_tools')     || '1', 10);
-  var _mpPage = parseInt(_params.get('page_manpower')  || '1', 10);
 
   function flashRow(row) {
     row.style.transition = 'background .2s';
@@ -1132,7 +1078,6 @@ document.addEventListener('DOMContentLoaded', function () {
          + '<a href="' + _base + 'resources/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
          + '<a href="' + _base + 'resources/edit/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
          + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
-         + '<button type="button" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>'
          + '</td></tr>';
   }
 
@@ -1146,40 +1091,66 @@ document.addEventListener('DOMContentLoaded', function () {
          : 'mp-status-other';
   }
 
+  function normalizeMpSpecSkills(d) {
+    var specEnum = ['BUILD-TO-SUIT','RETROFITTING','COLOCATION','CONVERSION'];
+    var spec = (d.manpower_details && d.manpower_details.specialization) || d.specialization || '';
+    var rawSkills = (d.manpower_details && Array.isArray(d.manpower_details.skills))
+        ? d.manpower_details.skills.slice()
+        : (Array.isArray(d.skills) ? d.skills.slice() : []);
+    if (!spec) {
+        for (var i = 0; i < rawSkills.length; i++) {
+            if (specEnum.indexOf((rawSkills[i] || '').toUpperCase().trim()) !== -1) {
+                spec = (rawSkills[i] || '').toUpperCase().trim();
+                rawSkills.splice(i, 1);
+                break;
+            }
+        }
+    }
+    return { spec: spec, rawSkills: rawSkills };
+  }
+
   function pzUpdateMpRow(id, data) {
     var row = document.querySelector('tr[data-mp-id="' + id + '"]');
     if (!row) return;
     var nameEl   = row.querySelector('[data-mp-name]');
     var roleEl   = row.querySelector('[data-mp-role]');
+    var skillsEl = row.querySelector('[data-mp-skills]');
     var specEl   = row.querySelector('[data-mp-spec]');
     var statusEl = row.querySelector('[data-mp-status]');
-    var role   = (data.manpower_details && data.manpower_details.role)           || data.role           || '';
-    var spec   = (data.manpower_details && data.manpower_details.specialization) || data.specialization || '';
-    var status = data.status || 'Available';
+    var role     = (data.manpower_details && data.manpower_details.role) || data.role || '';
+    var _norm    = normalizeMpSpecSkills(data);
+    var spec     = _norm.spec;
+    var rawSkills = _norm.rawSkills;
+    var status   = data.status || 'Available';
     if (nameEl)   nameEl.innerHTML    = '<strong>' + (data.name || 'N/A').toUpperCase() + '</strong>';
     if (roleEl)   roleEl.textContent  = role;
+    if (skillsEl) skillsEl.textContent = rawSkills.join(', ');
     if (specEl)   specEl.textContent  = spec;
     if (statusEl) { statusEl.className = 'mp-status-badge ' + mpStatusClass(status); statusEl.textContent = status; }
     flashRow(row);
   }
 
   function buildMpRow(id, data) {
-    var name   = (data.name || 'N/A').toUpperCase();
-    var role   = (data.manpower_details && data.manpower_details.role)           || data.role           || '';
-    var spec   = (data.manpower_details && data.manpower_details.specialization) || data.specialization || '';
-    var status = data.status || 'Available';
-    var no     = document.querySelectorAll('#manpowerTable tbody tr[data-mp-id]').length + 1;
+    var name      = (data.name || 'N/A').toUpperCase();
+    var role      = (data.manpower_details && data.manpower_details.role) || data.role || '';
+    var _norm2    = normalizeMpSpecSkills(data);
+    var spec      = _norm2.spec;
+    var rawSkills = _norm2.rawSkills;
+    var skills    = rawSkills.join(', ');
+    var status    = data.status || 'Available';
+    var no        = document.querySelectorAll('#manpowerTable tbody tr[data-mp-id]').length + 1;
     return '<tr data-mp-id="' + id + '" class="pz-row-new">'
          + '<td class="pz-col-check"><input type="checkbox" class="row-cb mp-cb" value="' + id + '" data-name="' + name + '"></td>'
          + '<td>' + no + '</td>'
          + '<td data-mp-name><strong>' + name + '</strong></td>'
          + '<td data-mp-role>' + role + '</td>'
+         + '<td data-mp-skills>' + skills + '</td>'
          + '<td data-mp-spec>' + spec + '</td>'
          + '<td class="text-center"><span class="mp-status-badge ' + mpStatusClass(status) + '" data-mp-status>' + status + '</span></td>'
          + '<td class="text-center" style="white-space:nowrap">'
          + '<a href="' + _base + 'resources/show/' + id + '" class="action-btn" title="View"><span class="material-symbols-outlined">visibility</span></a>'
          + '<a href="' + _base + 'resources/edit/' + id + '" class="action-btn" title="Edit"><span class="material-symbols-outlined">edit</span></a>'
-         + '<button type="button" class="action-btn action-delete" data-id="' + id + '" data-name="' + name + '" title="Delete"><span class="material-symbols-outlined">delete</span></button>'
+         + '<button type="button" class="action-btn action-archive" data-id="' + id + '" data-name="' + name + '" title="Archive"><span class="material-symbols-outlined">inventory_2</span></button>'
          + '</td></tr>';
   }
 
@@ -1203,8 +1174,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (chg.type === 'added') {
           if (document.querySelector('tr[data-res-id="' + id + '"]')) return;
           var tableId = cat === 'equipment' ? 'equipmentTable' : (cat === 'tools' ? 'toolsTable' : null);
-          var page    = cat === 'equipment' ? _eqPage : _tPage;
-          if (!tableId || page > 1) return;
+          if (!tableId) return;
           var tbody = document.querySelector('#' + tableId + ' tbody');
           if (!tbody) return;
           var empty = tbody.querySelector('.empty-state');
@@ -1212,6 +1182,8 @@ document.addEventListener('DOMContentLoaded', function () {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildResRow(id, data, tableId);
           tbody.appendChild(tmp.firstElementChild);
+          if (cat === 'equipment' && window._eqPager) window._eqPager.render();
+          else if (window._toolsPager) window._toolsPager.render();
           return;
         }
 
@@ -1243,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (chg.type === 'modified') { pzUpdateMpRow(id, data); return; }
 
-        if (chg.type === 'added' && _mpPage === 1) {
+        if (chg.type === 'added') {
           if (document.querySelector('tr[data-mp-id="' + id + '"]')) return;
           var tbody = document.querySelector('#manpowerTable tbody');
           if (!tbody) return;
@@ -1252,6 +1224,7 @@ document.addEventListener('DOMContentLoaded', function () {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildMpRow(id, data);
           tbody.appendChild(tmp.firstElementChild);
+          if (window._mpPager) window._mpPager.render();
           return;
         }
 

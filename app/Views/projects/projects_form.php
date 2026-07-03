@@ -59,7 +59,7 @@
     $edDisplay = ($edVal !== '' && ($edTs = strtotime($edVal)) !== false) ? date('d/m/Y', $edTs) : '';
 ?>
 <div class="pz-form-container">
-    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data" data-autosave>
+    <form method="post" action="<?= base_url($projectAction) ?>" id="projectForm" enctype="multipart/form-data" data-autosave novalidate>
         <?= csrf_field() ?>
         <input type="hidden" name="_form_submitted" value="1">
 
@@ -293,7 +293,7 @@
 
                     <div id="phasesContainer">
                         <?php
-                        $units = ['pcs','hrs','days','sqm','cbm','lm','lot','set','kgs'];
+                        $units = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm'];
                         foreach ($phases as $pIdx => $phase):
                             $phaseQty      = $phase['qty']       ?? 1;
                             $phaseUnit     = $phase['unit']      ?? 'pcs';
@@ -635,7 +635,7 @@ if (window.location.hostname === 'localhost') {
 <!-- ── Phase Schedule JS ──────────────────────────────────── -->
 <script>
 (function () {
-    var UNITS = ['pcs','hrs','days','sqm','cbm','lm','lot','set','kgs'];
+    var UNITS = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm'];
 
     // ── Milestone templates keyed by tower type ────────────────
     var TEMPLATES = {
@@ -973,7 +973,8 @@ if (window.location.hostname === 'localhost') {
         clearMilestoneErrors();
 
         // ── 1. Top-level required fields ──────────────────────
-        var errs = [];
+        var errs       = [];
+        var firstErrEl = null;
         var nameEl   = document.getElementById('project_name');
         var clientEl = document.getElementById('client_name');
         var typeEl   = document.getElementById('project_type');
@@ -983,32 +984,62 @@ if (window.location.hostname === 'localhost') {
         var budgetEl = document.getElementById('budget');
         var startEl  = document.getElementById('start_date');
         var endEl    = document.getElementById('end_date');
+        var startDisp = document.getElementById('start_date_display');
+        var endDisp   = document.getElementById('end_date_display');
         var schedCb  = document.getElementById('add_tasks_now');
 
-        if (nameEl   && !nameEl.value.trim())   errs.push('Project Name');
-        if (clientEl && !clientEl.value.trim()) errs.push('Client Name');
-        if (typeEl   && !typeEl.value)          errs.push('Tower Type');
-        if (addrEl   && !addrEl.value.trim())   errs.push('Address');
-        if (pmEl     && !pmEl.value)            errs.push('Project Manager');
-        if (seEl     && !seEl.value)            errs.push('Site Engineer');
-        if (!startEl || !startEl.value)         errs.push('Start Date');
-        if (!endEl   || !endEl.value)           errs.push('End Date');
-        if (budgetEl && budgetEl.value === '')   errs.push('Budget');
+        // Mark a field invalid: highlight it, track first, wire one-shot clear.
+        // el       = element to highlight (and listen on by default)
+        // label    = text shown in the toast
+        // clearEl  = optional different element to listen on for the "fixed" event
+        //            (use for readonly display inputs whose hidden sibling fires change)
+        function markErr(el, label, clearEl) {
+            errs.push(label);
+            if (!el) return;
+            // For readonly date-display inputs, highlight the parent .date-picker wrapper
+            var highlight = el.readOnly ? (el.closest('.date-picker') || el) : el;
+            highlight.classList.add('pz-field-error');
+            if (!firstErrEl) firstErrEl = highlight;
+            var listenEl  = clearEl || el;
+            var clearEvt  = (listenEl.tagName === 'SELECT' || listenEl.type === 'hidden') ? 'change' : 'input';
+            function onFix() {
+                highlight.classList.remove('pz-field-error');
+                listenEl.removeEventListener(clearEvt, onFix);
+            }
+            listenEl.addEventListener(clearEvt, onFix);
+        }
+
+        if (nameEl   && !nameEl.value.trim())   markErr(nameEl,   'Project Name');
+        if (clientEl && !clientEl.value.trim()) markErr(clientEl, 'Client Name');
+        if (typeEl   && !typeEl.value)          markErr(typeEl,   'Tower Type');
+        if (addrEl   && !addrEl.value.trim())   markErr(addrEl,   'Address');
+        if (pmEl     && !pmEl.value)            markErr(pmEl,     'Project Manager');
+        if (seEl     && !seEl.value)            markErr(seEl,     'Site Engineer');
+        // Date pickers: highlight via readonly display input (finds .date-picker wrapper);
+        // clear when the hidden input fires change (calendar selection)
+        if (!startEl || !startEl.value)         markErr(startDisp || startEl, 'Start Date', startEl);
+        if (!endEl   || !endEl.value)           markErr(endDisp   || endEl,   'End Date',   endEl);
+        if (budgetEl && budgetEl.value === '')   markErr(budgetEl, 'Budget');
 
         if (!isEdit) {
             if (!schedCb || !schedCb.checked) {
                 errs.push('Project Schedule (check the box and add milestones)');
+                if (!firstErrEl && schedCb) firstErrEl = schedCb.closest('.checkbox-label') || schedCb;
             } else if (container.querySelectorAll('.phase-card').length === 0) {
                 errs.push('Project Schedule (add at least one milestone)');
+                if (!firstErrEl) firstErrEl = document.getElementById('addPhaseBtn') || schedCb;
             }
         } else if (schedCb && schedCb.checked && container.querySelectorAll('.phase-card').length === 0) {
             errs.push('Project Schedule (add at least one milestone)');
+            if (!firstErrEl) firstErrEl = document.getElementById('addPhaseBtn') || schedCb;
         }
 
         if (errs.length > 0) {
             e.preventDefault();
             e.stopImmediatePropagation();
             showFormToast(errs);
+            if (window._pzToast) window._pzToast('Please complete all required fields.', 'error');
+            if (firstErrEl) firstErrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
 
@@ -1057,6 +1088,7 @@ if (window.location.hostname === 'localhost') {
                 });
                 if (mileErrs.length > MAX) lines.push('... and ' + (mileErrs.length - MAX) + ' more milestone(s)');
                 showFormToast(lines, 'Fix incomplete milestones (' + mileErrs.length + ')');
+                if (window._pzToast) window._pzToast('Fix incomplete milestones before submitting.', 'error');
                 if (firstErrCard) firstErrCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
@@ -1074,6 +1106,7 @@ if (window.location.hostname === 'localhost') {
                     ['Current total is ' + total.toFixed(1) + '% — adjust weights so they add up to 100%.'],
                     'Milestone weights must total 100%'
                 );
+                if (window._pzToast) window._pzToast('Milestone weights must total 100%.', 'error');
             }
         }
     }, true);
@@ -1110,16 +1143,33 @@ if (window.location.hostname === 'localhost') {
     };
 
     window['pzAsRestore_projectForm'] = function (extraData) {
-        if (!extraData) return;
+        // NOTE: extraData may be null when the _x sessionStorage key doesn't exist.
+        // Do NOT bail out early — the phpCards > 0 branch must run regardless.
 
-        // Restore schedule checkbox + section visibility (no change event fired)
-        if (checkbox && extraData.checked !== undefined) {
+        if (extraData && checkbox && extraData.checked !== undefined) {
             checkbox.checked = !!extraData.checked;
             setSectionVisible(!!extraData.checked);
         }
 
-        // Rebuild phase cards from saved JSON
-        if (Array.isArray(extraData.phases) && extraData.phases.length > 0) {
+        var phpCards = container.querySelectorAll('.phase-card').length;
+
+        if (phpCards > 0) {
+            // Edit mode: PHP already rendered cards with correct Firestore data.
+            // doRestore() in main.php ran first and may have set stale sessionStorage
+            // values on the unit selects (and other fields). Undo that by resetting
+            // every phase card field back to the PHP-rendered attribute default.
+            container.querySelectorAll('.phase-card input, .phase-card select').forEach(function (el) {
+                if (el.tagName === 'SELECT') {
+                    Array.from(el.options).forEach(function (opt) { opt.selected = opt.defaultSelected; });
+                } else if (el.type !== 'button' && el.type !== 'submit') {
+                    el.value = el.defaultValue;
+                }
+            });
+            updateTotal();
+            // Clear stale storage so future visits don't repeat the override.
+            if (window.pzAutoSave) window.pzAutoSave.clear(document.getElementById('projectForm'));
+        } else if (extraData && Array.isArray(extraData.phases) && extraData.phases.length > 0) {
+            // Create mode: no PHP-rendered cards — restore from sessionStorage.
             container.innerHTML = '';
             extraData.phases.forEach(function (ph, pi) {
                 container.appendChild(buildPhaseItem(pi, ph));

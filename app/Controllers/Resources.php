@@ -6,6 +6,7 @@ use App\Libraries\ArchiveService;
 use App\Models\Model_Resources;
 use App\Models\Model_Manpower;
 use App\Libraries\FirestoreService;
+use App\Libraries\MLServiceClient;
 use App\Libraries\TrashService;
 use Config\GoogleMaps;
 
@@ -94,28 +95,6 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
-            // ── Pagination (separate per table) ─────────────────────────────
-            $perPage = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $pager   = service('pager');
-
-            $eqPage    = max(1, (int)($this->request->getGet('page_equipment') ?? 1));
-            $eqTotal   = count($equipment);
-            $pager->store('equipment', $eqPage, $perPage, $eqTotal);
-            $eqOffset  = ($eqPage - 1) * $perPage;
-            $equipment = array_slice($equipment, $eqOffset, $perPage);
-
-            $toolsPage    = max(1, (int)($this->request->getGet('page_tools') ?? 1));
-            $toolsTotal   = count($tools);
-            $pager->store('tools', $toolsPage, $perPage, $toolsTotal);
-            $toolsOffset  = ($toolsPage - 1) * $perPage;
-            $tools        = array_slice($tools, $toolsOffset, $perPage);
-
-            $mpPage    = max(1, (int)($this->request->getGet('page_manpower') ?? 1));
-            $mpTotal   = count($manpower);
-            $pager->store('manpower', $mpPage, $perPage, $mpTotal);
-            $mpOffset  = ($mpPage - 1) * $perPage;
-            $manpower  = array_slice($manpower, $mpOffset, $perPage);
-
             $trashService = new TrashService($this->firestore);
             $recentlyDeletedResources = $trashService->getTrashItems('resource');
             $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
@@ -123,15 +102,11 @@ class Resources extends BaseController
             return view('resources/resources_view', [
                 'pageTitle'                 => 'Resources',
                 'equipment'                 => $equipment,
-                'eqTotal'                   => $eqTotal,
-                'eqOffset'                  => $eqOffset,
+                'eqTotal'                   => count($equipment),
                 'tools'                     => $tools,
-                'toolsTotal'                => $toolsTotal,
-                'toolsOffset'               => $toolsOffset,
+                'toolsTotal'                => count($tools),
                 'manpower'                  => $manpower,
-                'mpTotal'                   => $mpTotal,
-                'mpOffset'                  => $mpOffset,
-                'perPage'                   => $perPage,
+                'mpTotal'                   => count($manpower),
                 'activeEquipFilters'        => ['eq_sort'    => $eqSort],
                 'activeToolFilters'         => ['tools_sort' => $toolsSort],
                 'activeManpowerFilters'     => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
@@ -288,7 +263,7 @@ class Resources extends BaseController
             return view($view, [
                 'pageTitle' => $editTitle,
                 'resource' => $resource,
-                'items' => $isManpower ? [] : $this->model->getResourceItems($id),
+                'items' => $isManpower ? [] : $this->groupItemsForEdit($this->sortItemsBySerial($this->model->getResourceItems($id))),
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
@@ -323,6 +298,21 @@ class Resources extends BaseController
 
             if (!$existing) {
                 return redirect()->to('resources')->with('error', 'Resource not found');
+            }
+
+            // Model name edit (preserve_items=1): strict partial update — only patches name and
+            // updated_at; never reads or writes the items subcollection so units are untouched.
+            // Uses ->update() (field-level merge), NOT ->set() which would overwrite the whole doc.
+            $preserveItems = (bool) $this->request->getPost('preserve_items');
+            if (!$isManpower && $preserveItems) {
+                $newName = strtoupper(trim((string) $this->request->getPost('name')));
+                $this->firestore->getDb()
+                    ->collection('resource')->document($id)
+                    ->update([
+                        ['path' => 'name',       'value' => $newName],
+                        ['path' => 'updated_at', 'value' => new \Google\Cloud\Core\Timestamp(new \DateTime())],
+                    ]);
+                return redirect()->to('resources')->with('success', 'Resource updated successfully!');
             }
 
             $data = $this->buildResourcePayload();
@@ -746,13 +736,8 @@ class Resources extends BaseController
                 (string)($b['serial_number'] ?? '')
             ));
 
-            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
-            $itemsTotal  = count($items);
-            $pager       = service('pager');
-            $pager->store('items', $itemsPage, $perPage, $itemsTotal);
-            $pagerOffset = ($itemsPage - 1) * $perPage;
-            $items       = array_slice($items, $pagerOffset, $perPage);
+            $itemsTotal = count($items);
+            $items = $this->attachNextAvailablePredictions($items, (string)($resource['name'] ?? 'Resource'), (string)($resource['category'] ?? ''));
 
             return view('resources/resource_items', [
                 'pageTitle'               => 'Resource Items',
@@ -760,9 +745,6 @@ class Resources extends BaseController
                 'resourceId'              => $resourceId,
                 'items'                   => $items,
                 'itemsTotal'              => $itemsTotal,
-                'perPage'                 => $perPage,
-                'pagerOffset'             => $pagerOffset,
-                'itemsTotalPages'         => $itemsTotal > 0 ? (int)ceil($itemsTotal / $perPage) : 1,
                 'activeFilters'           => [
                     'brand'     => $filterBrand,
                     'condition' => $filterCondition,
@@ -856,8 +838,8 @@ class Resources extends BaseController
                 return redirect()->back()->with('error', 'Missing resource or item id');
             }
 
-            $serial   = trim((string)($this->request->getPost('serial_number') ?? ''));
-            $brand    = trim((string)($this->request->getPost('brand')         ?? ''));
+            $serial   = strtoupper(trim((string)($this->request->getPost('serial_number') ?? '')));
+            $brand    = strtoupper(trim((string)($this->request->getPost('brand')         ?? '')));
             $cond     = trim((string)($this->request->getPost('condition')     ?? ''));
             $status   = trim((string)($this->request->getPost('status')        ?? ''));
             $locType  = strtoupper(trim((string)($this->request->getPost('location_type') ?? '')));
@@ -1044,13 +1026,11 @@ class Resources extends BaseController
             $items     = $this->model->getResourceItems($resourceId);
             $total     = count($items);
             $available = $this->countAvailableUnits($items);
-            $status    = $available > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
             $this->firestore->getDb()
                 ->collection('resource')->document($resourceId)
                 ->update([
-                    ['path' => 'total_quantity',    'value' => $total],
-                    ['path' => 'available_quantity', 'value' => $available],
-                    ['path' => 'status',             'value' => $status],
+                    ['path' => 'total_quantity',     'value' => $total],
+                    ['path' => 'available_quantity',  'value' => $available],
                 ]);
         } catch (\Throwable $e) {
             log_message('error', 'syncResourceCounts(' . $resourceId . '): ' . $e->getMessage());
@@ -1086,7 +1066,7 @@ class Resources extends BaseController
         $items = $this->normalizeItems($this->request->getPost('items') ?? []);
 
         $data = [
-            'name'     => trim((string) $this->request->getPost('name')),
+            'name'     => strtoupper(trim((string) $this->request->getPost('name'))),
             'category' => $category,
         ];
 
@@ -1123,6 +1103,9 @@ class Resources extends BaseController
             $data['next_availability']   = trim((string) $this->request->getPost('next_availability')) ?: null;
             $rawSkills = $this->request->getPost('skills') ?? [];
             $data['skills'] = array_values(array_filter(array_map('trim', is_array($rawSkills) ? $rawSkills : [])));
+            if (strtoupper($data['role']) === 'FOREMAN') {
+                $data['skills'] = ['FOREMAN'];
+            }
 
             // Workers always get a location; default to WAREHOUSE — mobile stamps real values on transfer arrival
             $site         = trim((string) $this->request->getPost('current_site_deployment'));
@@ -1157,8 +1140,8 @@ class Resources extends BaseController
 
         foreach ($rawItems as $item) {
             // New spec fields
-            $serialNumber = trim((string) ($item['serial_number'] ?? ''));
-            $brand        = trim((string) ($item['brand_name'] ?? $item['brand'] ?? ''));
+            $serialNumber = strtoupper(trim((string) ($item['serial_number'] ?? '')));
+            $brand        = strtoupper(trim((string) ($item['brand_name'] ?? $item['brand'] ?? '')));
             $condition = trim((string) ($item['condition'] ?? ''));
             $status = trim((string) ($item['status'] ?? 'In-Storage'));
             $address = trim((string) ($item['address'] ?? ''));
@@ -1252,6 +1235,313 @@ class Resources extends BaseController
         }
         unset($item);
         return $items;
+    }
+
+    /**
+     * Predicts when currently in-use items will free up, via the ML service's
+     * /predict/next-available-tools endpoint. Skips items already released or
+     * in transit (those already have a definitive availability state). Fails
+     * silently (items keep their default "—" availability) if the ML call errors.
+     */
+    private function attachNextAvailablePredictions(array $items, string $resourceName, string $resourceCategory): array
+    {
+        $db = $this->firestore->getDb();
+
+        // Collect in-use items that still need a prediction
+        $candidates = [];
+        foreach ($items as $idx => $item) {
+            $status = strtolower(str_replace(['-', ' '], '', (string)($item['status'] ?? '')));
+            if ($status !== 'inuse') continue;
+            if (!empty($item['transfer_locked'])) continue;
+            if (($item['released_at'] ?? null) !== null) continue;
+
+            $apid = $item['assigned_project_id'] ?? null;
+            $pid  = $apid instanceof \Google\Cloud\Firestore\DocumentReference ? $apid->id() : trim((string)($apid ?? ''));
+            if ($pid === '') continue;
+
+            $candidates[$idx] = $pid;
+        }
+        if (empty($candidates)) return $items;
+
+        try {
+            // Real project data: progress + linear expected-progress-by-now, same
+            // formula used on the dashboard (ProjectDelayPredictor::buildFeatures()).
+            $now             = time();
+            $projectsPayload = [];
+            $projectCache    = [];
+            $activeCount     = 0;
+
+            foreach ($db->collection('project')->documents() as $doc) {
+                if (!$doc->exists()) continue;
+                $d      = $doc->data();
+                $status = strtoupper(trim((string)($d['status'] ?? '')));
+                if (!in_array($status, ['COMPLETED', 'DONE'], true)) $activeCount++;
+            }
+
+            $hasActiveBlocker = [];
+            foreach (array_unique($candidates) as $pid) {
+                $snap = $db->collection('project')->document($pid)->snapshot();
+                if (!$snap->exists()) continue;
+                $d = $snap->data();
+
+                $startTs       = $this->toTimestamp($d['start_date'] ?? null);
+                $endTs         = $this->toTimestamp($d['end_date']   ?? null);
+                $totalDuration = ($startTs && $endTs && $endTs > $startTs) ? max(1, (int)(($endTs - $startTs) / 86400)) : 0;
+                $daysElapsed   = $startTs ? max(0, (int)(($now - $startTs) / 86400)) : 0;
+                if ($totalDuration > 0) $daysElapsed = min($daysElapsed, $totalDuration);
+                $daysRemaining = $endTs ? max(0, (int)(($endTs - $now) / 86400)) : 30;
+                $totalDays     = $totalDuration > 0 ? $totalDuration : max(1, $daysElapsed + $daysRemaining);
+                $plannedPct    = min(100.0, round(($daysElapsed / $totalDays) * 100, 2));
+
+                // Prefer the latest SE daily report over the project doc's overall_progress —
+                // that field is only touched by manual project edits, not by report submissions,
+                // so relying on it means this prediction would never move when an SE files a report.
+                $progress = null;
+                try {
+                    $latestReport = $db->collection('project')->document($pid)
+                        ->collection('daily_progress_reports')
+                        ->orderBy('report_date', 'DESC')->limit(1)->documents();
+                    foreach ($latestReport as $rDoc) {
+                        if (!$rDoc->exists()) break;
+                        $rp = $rDoc->data()['total_completion_percent'] ?? null;
+                        if ($rp !== null) $progress = (float)$rp;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Resources::attachNextAvailablePredictions daily report - ' . $e->getMessage());
+                }
+                if ($progress === null) {
+                    $progress = (float)($d['overall_progress'] ?? $d['completion_percent'] ?? 0);
+                }
+                $progress = min(100, max(0, $progress));
+
+                $projectCache[$pid]    = ['name' => (string)($d['project_name'] ?? $pid), 'progress' => $progress];
+                $projectsPayload[$pid] = [
+                    'id'                  => $pid,
+                    'name'                => (string)($d['project_name'] ?? $pid),
+                    'progress_percent'    => $progress,
+                    'planned_progress'    => $plannedPct,
+                    'days_remaining'      => $daysRemaining,
+                    'concurrent_projects' => $activeCount,
+                ];
+
+                // Ground-truth check (unresolved emergency report) OR the ML's own
+                // blocker classification (e.g. "Low Progress" needs no filed report at all).
+                $hasActiveBlocker[$pid] = $this->_projectHasActiveBlocker($pid)
+                    || $this->_projectHasPredictedBlocker($pid, $progress, $plannedPct, $daysElapsed, $daysRemaining, $d, $startTs, $totalDuration);
+            }
+            if (empty($projectsPayload)) return $items;
+
+            $toolsPayload = [];
+            foreach ($candidates as $idx => $pid) {
+                if (!isset($projectsPayload[$pid])) continue;
+                $item = $items[$idx];
+                $toolsPayload[] = [
+                    'id'                  => (string)($item['id'] ?? ''),
+                    'name'                => $resourceName . ' — ' . (string)($item['serial_number'] ?? ''),
+                    'tool_type'           => strtolower($resourceCategory) ?: 'equipment',
+                    'assigned_project_id' => $pid,
+                ];
+            }
+            if (empty($toolsPayload)) return $items;
+
+            $mlService = new MLServiceClient();
+            $result    = $mlService->predictNextAvailableTools([
+                'projects' => array_values($projectsPayload),
+                'tools'    => $toolsPayload,
+                'season'   => (int)date('n'),
+            ]);
+            if (isset($result['error']) || empty($result['tools'])) return $items;
+
+            $byToolId = [];
+            foreach ($result['tools'] as $t) {
+                $byToolId[(string)($t['tool_id'] ?? '')] = $t;
+            }
+
+            foreach ($candidates as $idx => $pid) {
+                $toolId = (string)($items[$idx]['id'] ?? '');
+                if (!isset($byToolId[$toolId])) continue;
+                $t = $byToolId[$toolId];
+                $daysFree = (int)($t['estimated_days_free'] ?? 0);
+                // A tool can't still be "in use" past its own project's deadline — cap the
+                // raw model output to the project's real remaining timeline (same rationale
+                // as the Dashboard's delay-days cap: the model doesn't self-limit to this).
+                $daysRemainingForProject = (int)($projectsPayload[$pid]['days_remaining'] ?? $daysFree);
+                $daysFree = min($daysFree, $daysRemainingForProject);
+                $items[$idx]['_predicted_days_free']       = $daysFree;
+                $items[$idx]['_predicted_near_completion'] = !empty($t['near_completion']);
+                $items[$idx]['_predicted_available_date']  = date('m/d/Y', $now + ($daysFree * 86400));
+                // The ML model has no concept of blockers — it only reasons about progress
+                // vs. timeline. Flag separately so the view can warn the estimate may slip.
+                $items[$idx]['_predicted_has_blocker']     = $hasActiveBlocker[$pid] ?? false;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::attachNextAvailablePredictions - ' . $e->getMessage());
+        }
+
+        return $items;
+    }
+
+    /** True if the project has any unresolved emergency_reports entry (material/labor/onsite/weather/etc). */
+    private function _projectHasActiveBlocker(string $pid): bool
+    {
+        if ($pid === '') return false;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('emergency_reports')->documents();
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                if (empty($doc->data()['resolved'])) return true;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_projectHasActiveBlocker - ' . $e->getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Checks a project's unresolved emergency_reports for specific cause labels and
+     * returns the 0/1 flags the ML service expects. Mirrors Dashboard.php's version —
+     * kept in sync manually since the two controllers don't share a base class for this.
+     */
+    private function _computeEmergencyFlags(string $pid): array
+    {
+        $flags = ['equipment' => 0, 'labor' => 0, 'onsite' => 0, 'weather' => 0, 'active_count' => 0];
+        if ($pid === '') return $flags;
+
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('emergency_reports')->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) continue;
+                $d = $doc->data();
+                if (!empty($d['resolved'])) continue;
+
+                $flags['active_count']++;
+
+                $causes = array_map('strval', (array)($d['causes'] ?? []));
+                if (in_array('Material Shortage', $causes, true) || in_array('Equipment/Tool Breakdown', $causes, true)) {
+                    $flags['equipment'] = 1;
+                }
+                if (in_array('Labor Shortage', $causes, true))   $flags['labor']   = 1;
+                if (in_array('Onsite Accidents', $causes, true)) $flags['onsite']  = 1;
+                if (in_array('Adverse Weather', $causes, true))  $flags['weather'] = 2;
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_computeEmergencyFlags - ' . $e->getMessage());
+        }
+
+        return $flags;
+    }
+
+    /**
+     * Counts consecutive daily_progress_reports (most recent first) where the
+     * reported progress was behind the linear expected-progress-by-that-date.
+     * Mirrors Dashboard.php's version — kept in sync manually.
+     */
+    private function _computeConsecutiveLowDays(string $pid, ?int $startTs, int $totalDuration): int
+    {
+        if ($pid === '' || !$startTs || $totalDuration <= 0) return 0;
+
+        $count = 0;
+        try {
+            $docs = $this->firestore->getDb()
+                ->collection('project')->document($pid)
+                ->collection('daily_progress_reports')
+                ->orderBy('report_date', 'DESC')
+                ->limit(30)->documents();
+
+            foreach ($docs as $doc) {
+                if (!$doc->exists()) break;
+                $d = $doc->data();
+
+                $reportTs = $this->toTimestamp($d['report_date'] ?? null);
+                $actual   = $d['total_completion_percent'] ?? null;
+                if ($reportTs === null || $actual === null) break;
+
+                $daysElapsedAtReport = min($totalDuration, max(0, (int)(($reportTs - $startTs) / 86400)));
+                $plannedAtReport     = min(100.0, round(($daysElapsedAtReport / $totalDuration) * 100, 2));
+
+                if ((float)$actual < $plannedAtReport) {
+                    $count++;
+                } else {
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_computeConsecutiveLowDays - ' . $e->getMessage());
+        }
+
+        return $count;
+    }
+
+    /**
+     * Calls the ML /predict/blockers classification for the project — catches cases
+     * like "Low Progress" that have no filed emergency report at all, unlike
+     * _projectHasActiveBlocker() which only sees confirmed SE-reported incidents.
+     * Same feature shape as Dashboard.php's ML loop, built from data already on hand.
+     */
+    private function _projectHasPredictedBlocker(string $pid, float $progress, float $plannedPct, int $daysElapsed, int $daysRemaining, array $projectDoc, ?int $startTs = null, int $totalDuration = 0): bool
+    {
+        if ($pid === '') return false;
+        try {
+            $eqTotal = 0; $eqActive = 0;
+            foreach ((array)($projectDoc['resources'] ?? []) as $r) {
+                if (strtolower((string)($r['category'] ?? '')) === 'manpower') continue;
+                $eqTotal++;
+                if (empty($r['transit'])) $eqActive++;
+            }
+            $eqUtil = $eqTotal > 0 ? round($eqActive / $eqTotal, 2) : 1.0;
+
+            $emergFlags         = $this->_computeEmergencyFlags($pid);
+            $consecutiveLowDays = $this->_computeConsecutiveLowDays($pid, $startTs, $totalDuration);
+
+            $features = [
+                'project_id'                    => $pid,
+                'progress_percent'              => $progress,
+                'planned_progress_percent'      => $plannedPct,
+                'days_elapsed'                  => $daysElapsed,
+                'days_remaining'                => $daysRemaining,
+                'workers_present'               => (int)($projectDoc['workers_present'] ?? 0),
+                'workers_planned'               => (int)($projectDoc['workers_planned'] ?? 1),
+                'equipment_utilization'         => $eqUtil,
+                'weather_severity'              => $emergFlags['weather'],
+                'site_access_issues'            => (int)($projectDoc['site_access_issues'] ?? 0),
+                'avg_progress_3d'               => $progress,
+                'progress_trend_3d'             => 0.0,
+                'consecutive_low_days'          => $consecutiveLowDays,
+                'budget_utilization'            => 0.0,
+                'cost_variance_ratio'           => 0.0,
+                'active_blocker_count'          => $emergFlags['active_count'],
+                'days_since_last_blocker'       => (int)($projectDoc['days_since_last_blocker'] ?? 999),
+                'emergency_equipment_shortage'  => $emergFlags['equipment'],
+                'emergency_labor_shortage'      => $emergFlags['labor'],
+                'emergency_onsite_accidents'    => $emergFlags['onsite'],
+            ];
+
+            $result = (new MLServiceClient())->predictBlockers($features);
+            if (isset($result['error'])) return false;
+
+            $raw = $result['blocker_type'] ?? $result['predicted_blocker'] ?? $result['prediction'] ?? 'No Blocker';
+            return !in_array(strtolower((string)$raw), ['no blocker', 'unknown', ''], true);
+        } catch (\Throwable $e) {
+            log_message('warning', 'Resources::_projectHasPredictedBlocker - ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function toTimestamp($val): ?int
+    {
+        if (!$val) return null;
+        if ($val instanceof \Google\Cloud\Core\Timestamp) {
+            try { return $val->get()->getTimestamp(); } catch (\Throwable $e) { return null; }
+        }
+        if (is_numeric($val)) return (int)$val;
+        $ts = strtotime((string)$val);
+        return $ts ?: null;
     }
 
     private function buildConditionSummary(array $items): array
@@ -1397,6 +1687,43 @@ class Resources extends BaseController
         }
     }
 
+    private function sortItemsBySerial(array $items): array
+    {
+        usort($items, fn($a, $b) => strnatcasecmp(
+            (string) ($a['serial_number'] ?? ''),
+            (string) ($b['serial_number'] ?? '')
+        ));
+        return $items;
+    }
+
+    private function groupItemsForEdit(array $items): array
+    {
+        $groups  = [];
+        $prevKey = null;
+
+        foreach ($items as $item) {
+            $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
+            $key = implode("\x00", [
+                strtolower(trim((string)($item['brand_name'] ?? $item['brand'] ?? ''))),
+                strtolower(trim((string)($item['condition'] ?? ''))),
+                strtolower(trim((string)($item['status'] ?? ''))),
+                strtolower(trim((string)($loc['type'] ?? ''))),
+                trim((string)($loc['address'] ?? '')),
+            ]);
+
+            if ($prevKey !== null && $key === $prevKey) {
+                $groups[count($groups) - 1]['quantity']++;
+            } else {
+                $copy             = $item;
+                $copy['quantity'] = 1;
+                $groups[]         = $copy;
+                $prevKey          = $key;
+            }
+        }
+
+        return $groups;
+    }
+
     private function normalizeResourceForView(array $resource): array
     {
         $resource['location'] = is_array($resource['location'] ?? null) ? $resource['location'] : ['address' => '', 'type' => ''];
@@ -1408,13 +1735,6 @@ class Resources extends BaseController
         $resource['manpower_details'] = is_array($resource['manpower_details'] ?? null) ? $resource['manpower_details'] : [];
         $resource['total_quantity_display'] = (int) ($resource['total_quantity'] ?? $resource['asset_details']['total_quantity'] ?? 0);
         $resource['available_units_display'] = max(0, (int) ($resource['available_quantity'] ?? $resource['asset_details']['available_quantity'] ?? 0));
-
-        // Derive status for equipment/tools when the field is missing or empty
-        if (empty($resource['status']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
-            $avail = $resource['available_units_display'];
-            $total = $resource['total_quantity_display'];
-            $resource['status'] = $avail > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
-        }
 
         // Ensure model_code is populated for Equipment/Tools
         if (empty($resource['model_code']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
@@ -1465,7 +1785,6 @@ class Resources extends BaseController
                 'status' => $resource['status'] ?? ($resource['manpower_details']['status'] ?? ''),
                 'role' => $resource['role'] ?? ($resource['manpower_details']['role'] ?? ''),
                 'specialization' => $resource['specialization'] ?? ($resource['manpower_details']['specialization'] ?? ''),
-                'contact_number' => $resource['contact_number'] ?? ($resource['manpower_details']['contact_number'] ?? ''),
                 'assigned_project_id' => (function($v){ return $v instanceof \Google\Cloud\Firestore\DocumentReference ? $v->id() : ($v ?: null); })($resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null)),
                 'skills' => is_array($resource['skills'] ?? null) ? $resource['skills'] : ($resource['manpower_details']['skills'] ?? []),
                 'current_site_deployment' => '',
@@ -1491,6 +1810,23 @@ class Resources extends BaseController
                 }
             } else {
                 $resource['manpower_details']['current_site_deployment'] = $resource['location']['address'] ?? ($resource['manpower_details']['current_site_deployment'] ?? '');
+            }
+        }
+
+        // Backward-compat: older records stored the specialization value inside skills[].
+        // Lift it into the specialization field so both columns display correctly.
+        if (!empty($resource['manpower_details']) && is_array($resource['manpower_details'])
+            && empty($resource['manpower_details']['specialization'])
+        ) {
+            $specEnum  = ['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'];
+            $skillsArr = is_array($resource['manpower_details']['skills'] ?? null) ? $resource['manpower_details']['skills'] : [];
+            foreach ($skillsArr as $k => $s) {
+                if (in_array(strtoupper(trim((string)$s)), $specEnum, true)) {
+                    $resource['manpower_details']['specialization'] = strtoupper(trim((string)$s));
+                    unset($skillsArr[$k]);
+                    $resource['manpower_details']['skills'] = array_values($skillsArr);
+                    break;
+                }
             }
         }
 

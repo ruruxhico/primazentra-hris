@@ -89,13 +89,6 @@ class Validation extends BaseConfig
             ]
         ],
 
-        'contact_number' => [
-            'label' => 'Contact Number',
-            'rules' => 'permit_empty|max_length[30]',
-            'errors' => [
-                'max_length' => 'Contact number cannot exceed 30 characters.'
-            ]
-        ],
     ];
 
     // --------------------------------------------------------------------

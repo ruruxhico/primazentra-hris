@@ -62,6 +62,7 @@ $count = count($items);
                     <th>Source</th>
                     <th>Destination</th>
                     <th>Category</th>
+                    <th>Status</th>
                     <?php endif; ?>
 
                     <th>Archived By</th>
@@ -102,9 +103,14 @@ $count = count($items);
                 <td><?= esc($data['status'] ?? '—') ?></td>
 
                 <?php elseif ($module === 'request'): ?>
+                <?php
+                    $reqStatus  = strtolower($data['status'] ?? '');
+                    $badgeClass = ['pending' => 'pz-badge-pending', 'pending secondary approval' => 'pz-badge-pending-secondary', 'approved' => 'pz-badge-approved', 'in-transit' => 'pz-badge-in-transit', 'completed' => 'pz-badge-completed', 'rejected' => 'pz-badge-rejected', 'cancelled' => 'pz-badge-rejected'][$reqStatus] ?? 'pz-badge-pending';
+                ?>
                 <td><?= esc($data['source_site_name'] ?? $data['source_site'] ?? '—') ?></td>
                 <td><?= esc($data['destination_site_name'] ?? $data['destination_site'] ?? '—') ?></td>
                 <td><?= esc($data['resource_category'] ?? $data['category'] ?? '—') ?></td>
+                <td><span class="pz-badge <?= $badgeClass ?>"><?= esc(strtoupper($data['status'] ?? '—')) ?></span></td>
                 <?php endif; ?>
 
                 <td style="white-space:nowrap"><?= esc($item['archived_by'] ?? 'System') ?></td>
@@ -112,9 +118,6 @@ $count = count($items);
                 <td class="text-center" style="white-space:nowrap">
                     <button class="del-btn del-btn-unarchive" data-id="<?= esc($item['id']) ?>">
                         <span class="material-symbols-outlined">unarchive</span> Unarchive
-                    </button>
-                    <button class="del-btn del-btn-perma" data-id="<?= esc($item['id']) ?>">
-                        <span class="material-symbols-outlined">delete_forever</span> Purge
                     </button>
                 </td>
             </tr>
@@ -218,7 +221,6 @@ $count = count($items);
 
     document.addEventListener('click', async function (e) {
         var unarchiveBtn = e.target.closest('.del-btn-unarchive');
-        var permaBtn     = e.target.closest('.del-btn-perma');
 
         if (unarchiveBtn) {
             var row  = unarchiveBtn.closest('tr');
@@ -244,31 +246,6 @@ $count = count($items);
                     unarchiveBtn.innerHTML = '<span class="material-symbols-outlined">unarchive</span> Unarchive';
                 });
         }
-
-        if (permaBtn) {
-            var row  = permaBtn.closest('tr');
-            var id   = permaBtn.dataset.id;
-            var name = (row.cells[1] && row.cells[1].textContent.trim()) || 'this record';
-            if (!await openArchConfirm('Permanently delete "' + name + '" from archive? This cannot be undone.')) return;
-            permaBtn.disabled = true;
-            permaBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Deleting…';
-            post(BASE + 'archive/permanent-delete', { arch_id: id })
-                .then(function (d) {
-                    if (d.success) {
-                        flash('Record permanently deleted from archive.', true);
-                        animateOut(row);
-                    } else {
-                        flash(d.message || 'Delete failed.', false);
-                        permaBtn.disabled = false;
-                        permaBtn.innerHTML = '<span class="material-symbols-outlined">delete_forever</span> Purge';
-                    }
-                })
-                .catch(function () {
-                    flash('Network error. Please try again.', false);
-                    permaBtn.disabled = false;
-                    permaBtn.innerHTML = '<span class="material-symbols-outlined">delete_forever</span> Purge';
-                });
-        }
     });
 }());
 </script>
@@ -289,6 +266,20 @@ $count = count($items);
          + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   }
 
+  var _badgeMap = {
+    'pending': 'pz-badge-pending',
+    'pending secondary approval': 'pz-badge-pending-secondary',
+    'approved': 'pz-badge-approved',
+    'in-transit': 'pz-badge-in-transit',
+    'completed': 'pz-badge-completed',
+    'rejected': 'pz-badge-rejected',
+    'cancelled': 'pz-badge-rejected',
+  };
+  function reqBadge(status) {
+    var s = (status || '').toLowerCase();
+    return '<span class="pz-badge ' + (_badgeMap[s] || 'pz-badge-pending') + '">' + (status || '—').toUpperCase() + '</span>';
+  }
+
   function moduleCells(item) {
     var d = item.data || {};
     if (_module === 'staff')
@@ -304,7 +295,8 @@ $count = count($items);
     if (_module === 'request')
       return '<td>' + (d.source_site_name || d.source_site || '—') + '</td>'
            + '<td>' + (d.destination_site_name || d.destination_site || '—') + '</td>'
-           + '<td>' + (d.resource_category || d.category || '—') + '</td>';
+           + '<td>' + (d.resource_category || d.category || '—') + '</td>'
+           + '<td>' + reqBadge(d.status) + '</td>';
     return '';
   }
 
@@ -342,8 +334,6 @@ $count = count($items);
          + '<td class="text-center" style="white-space:nowrap">'
          + '<button class="del-btn del-btn-unarchive" data-id="' + id + '">'
          + '<span class="material-symbols-outlined">unarchive</span> Unarchive</button>'
-         + '<button class="del-btn del-btn-perma" data-id="' + id + '">'
-         + '<span class="material-symbols-outlined">delete_forever</span> Purge</button>'
          + '</td></tr>';
   }
 
