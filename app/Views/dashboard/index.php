@@ -2425,7 +2425,9 @@ document.addEventListener('click', function(e) {
           }, 500);
         }
       });
-    }, function (err) { console.warn('[PZ] Dashboard project listener:', err.message); });
+    }, function (err) {
+      console.warn('[PZ] Dashboard project listener:', err.message);
+    });
 
     // Refresh resource pills for one project card by fetching fresh server data.
     function pzRefreshCard(pid) {
@@ -2481,12 +2483,24 @@ document.addEventListener('click', function(e) {
           if (dstPid && dstPid !== srcPid) pzRefreshCard(dstPid);
         }
       });
-    }, function (err) { console.warn('[PZ] Dashboard request listener:', err.message); });
+    }, function (err) {
+      console.warn('[PZ] Dashboard request listener:', err.message);
+    });
   }
 
+  var _dashSetupStarted = false;
+  function tryStartDashboardListeners() {
+    if (_dashSetupStarted || !window.pzFirebaseDb) return;
+    _dashSetupStarted = true;
+    setup(window.pzFirebaseDb);
+  }
   firebase.auth().onAuthStateChanged(function (user) {
-    if (user && window.pzFirebaseDb) setup(window.pzFirebaseDb);
+    if (user) tryStartDashboardListeners();
   });
+  // Safety net: start anyway if the auth-state callback is slow/never fires,
+  // mirroring the notification bell's fallback below. setup() itself is a
+  // no-op if listeners are already attached.
+  setTimeout(tryStartDashboardListeners, 4000);
 }());
 </script>
 

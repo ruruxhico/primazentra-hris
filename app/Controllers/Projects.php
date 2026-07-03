@@ -2574,7 +2574,7 @@ class Projects extends BaseController
             'paraÃ±aque','pasay','san juan','valenzuela','pateros',
             'ilocos norte','ilocos sur','la union','pangasinan',
             'benguet','baguio','ifugao','kalinga','mountain province','apayao','abra',
-            'cagayan','isabela','nueva vizcaya','quirino','batanes',
+            'tuguegarao','isabela','nueva vizcaya','quirino','batanes',
             'nueva ecija','pampanga','tarlac','zambales','bulacan','bataan','aurora',
             'cavite','laguna','batangas','rizal','quezon province',
             'marinduque','occidental mindoro','oriental mindoro','palawan','romblon',
