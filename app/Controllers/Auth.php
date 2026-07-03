@@ -395,7 +395,9 @@ class Auth extends BaseController {
 
     public function register() {
         $token = (string)($this->request->getGet('token') ?? '');
-        if (!$this->validateInviteToken($token)) {
+        // If a token was supplied in the URL, validate it immediately.
+        // If omitted, show the form with a visible token input so the user can paste it manually.
+        if ($token !== '' && !$this->validateInviteToken($token)) {
             return redirect()->to('/login')->with('error', 'This registration link is invalid or has expired.');
         }
         return view('auth/register', ['invite_token' => $token]);
