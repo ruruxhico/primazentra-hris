@@ -215,7 +215,9 @@
 }
 
 /* Table inside side-by-side cards gets padding */
-.pz-sc-row > .pz-sc > .pz-sc-tbl {
+.pz-sc-row > .pz-sc > .pz-sc-tbl,
+.pz-sc-row > .pz-sc > .pz-tools-page > .pz-sc-tbl,
+.pz-sc-row > .pz-sc > .pz-deploy-page > .pz-sc-tbl {
     margin: 8px 10px 6px;
     width: calc(100% - 20px);
 }

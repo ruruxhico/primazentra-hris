@@ -1023,6 +1023,7 @@ class ResourceRequests extends BaseController
                 'rejected_by_role'=> $role,
                 'rejected_at'     => new Timestamp(new \DateTime()),
             ]);
+            $this->_autoArchiveRequest($id);
             return redirect()->to('requests')->with('success', 'Request rejected.');
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::reject - ' . $e->getMessage());
@@ -1058,6 +1059,7 @@ class ResourceRequests extends BaseController
                 'cancelled_by_name' => session()->get('userName') ?? '',
                 'cancelled_at'      => new Timestamp(new \DateTime()),
             ]);
+            $this->_autoArchiveRequest($id);
             return redirect()->to('requests')->with('success', 'Request cancelled successfully.');
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::cancel - ' . $e->getMessage());
@@ -1690,8 +1692,9 @@ class ResourceRequests extends BaseController
                 'accepted_at'      => $now,
                 'updated_at'       => $now,
             ]);
+            $this->_autoArchiveRequest($id);
 
-            return redirect()->to('requests/' . $id)->with('success', 'Delivery accepted — resource is now active at the destination project.');
+            return redirect()->to('requests')->with('success', 'Delivery accepted — resource is now active at the destination project.');
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::acceptDelivery - ' . $e->getMessage());
             return redirect()->to('requests/' . $id)->with('error', 'Failed to accept delivery. Please try again.');
@@ -1757,6 +1760,25 @@ class ResourceRequests extends BaseController
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::archive - ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
+        }
+    }
+
+    /** Auto-archives a request once it reaches a terminal state (Completed/Cancelled/Rejected). */
+    private function _autoArchiveRequest(string $id): void
+    {
+        try {
+            $db   = $this->firestore->getDb();
+            $snap = $db->collection('resource_requests')->document($id)->snapshot();
+            if (!$snap->exists()) return;
+
+            $data = $snap->data();
+            $name = 'REQ-' . strtoupper(substr($id, 0, 6));
+            (new ArchiveService($this->firestore))->moveToArchive(
+                'request', $id, $name, $data, [], session()->get('userName') ?? 'System'
+            );
+            $db->collection('resource_requests')->document($id)->delete();
+        } catch (\Throwable $e) {
+            log_message('warning', 'ResourceRequests::_autoArchiveRequest - ' . $e->getMessage());
         }
     }
 

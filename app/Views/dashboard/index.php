@@ -251,6 +251,12 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
     <div class="pz-sc-row">
 
         <!-- Available Tools -->
+        <?php
+            $tPageSize = 3;
+            $tTotal    = count($toolsDisplay);
+            $tPages    = $tTotal > 0 ? (int)ceil($tTotal / $tPageSize) : 1;
+            $tChunks   = array_chunk($toolsDisplay, $tPageSize);
+        ?>
         <div class="pz-sc">
             <div class="pz-sc-head">
                 Available Resources<?php if ($usingMcdaTools): ?> <span style="font-size:.6rem;color:#1e6b45;font-weight:700;">AI</span><?php endif; ?>
@@ -258,44 +264,112 @@ window.__monitorMapKey = '<?= esc($googleMapsBrowserKey ?? '') ?>';
             <?php if (empty($toolsDisplay)): ?>
                 <p class="pz-sc-empty">No resources available.</p>
             <?php else: ?>
-            <table class="pz-sc-tbl">
-                <thead><tr>
-                    <th>Name</th>
-                    <th style="width:3rem;text-align:center">Qty</th>
-                    <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
-                </tr></thead>
-                <tbody>
-                <?php foreach ($toolsDisplay as $t): ?>
-                <tr>
-                    <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
-                    <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
-                    <?php if ($usingMcdaTools): ?>
-                    <td style="color:#777;font-size:.75rem"><?= esc($t['next_deployment'] ?? '—') ?></td>
-                    <?php endif; ?>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+
+            <?php foreach ($tChunks as $pi => $chunk): ?>
+            <div class="pz-tools-page" data-tpage="<?= $pi ?>" <?= $pi > 0 ? 'style="display:none"' : '' ?>>
+                <table class="pz-sc-tbl">
+                    <thead><tr>
+                        <th>Name</th>
+                        <th style="width:3rem;text-align:center">Qty</th>
+                        <?php if ($usingMcdaTools): ?><th>Next Site</th><?php endif; ?>
+                    </tr></thead>
+                    <tbody>
+                    <?php foreach ($chunk as $t): ?>
+                    <tr>
+                        <td class="pz-sc-name" title="<?= esc(strtoupper($t['name'] ?? '')) ?>"><?= esc(strtoupper($t['name'] ?? 'N/A')) ?></td>
+                        <td style="text-align:center"><?= esc((string)($t['qty'] ?? $t['available_quantity'] ?? $t['asset_details']['available_quantity'] ?? $t['available_units_display'] ?? '0')) ?></td>
+                        <?php if ($usingMcdaTools): ?>
+                        <td style="color:#777;font-size:.75rem"><?= esc($t['next_deployment'] ?? '—') ?></td>
+                        <?php endif; ?>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+
+            <?php if ($tPages > 1): ?>
+            <div class="pz-sc-nav">
+                <button class="pz-sc-nav-btn" id="tPrev" onclick="tNav(-1)" disabled>
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span class="pz-sc-nav-label" id="tLabel">1 / <?= $tPages ?></span>
+                <button class="pz-sc-nav-btn" id="tNext" onclick="tNav(1)">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+            <script>
+            (function(){
+                var cur=0, total=<?= $tPages ?>;
+                window.tNav = function(d){
+                    document.querySelectorAll('.pz-tools-page[data-tpage="'+cur+'"]').forEach(function(el){ el.style.display='none'; });
+                    cur = Math.max(0, Math.min(total-1, cur+d));
+                    document.querySelectorAll('.pz-tools-page[data-tpage="'+cur+'"]').forEach(function(el){ el.style.display=''; });
+                    document.getElementById('tLabel').textContent = (cur+1)+' / '+total;
+                    document.getElementById('tPrev').disabled = cur===0;
+                    document.getElementById('tNext').disabled = cur===total-1;
+                };
+            })();
+            </script>
+            <?php endif; ?>
+
             <?php endif; ?>
         </div>
 
         <!-- Available to Deploy -->
+        <?php
+            $dPageSize = 3;
+            $dTotal    = count($availableManpower);
+            $dPages    = $dTotal > 0 ? (int)ceil($dTotal / $dPageSize) : 1;
+            $dChunks   = array_chunk($availableManpower, $dPageSize);
+        ?>
         <div class="pz-sc">
             <div class="pz-sc-head">Available to Deploy</div>
             <?php if (empty($availableManpower)): ?>
                 <p class="pz-sc-empty">No manpower available.</p>
             <?php else: ?>
-            <table class="pz-sc-tbl">
-                <thead><tr><th>Name</th><th>Role</th></tr></thead>
-                <tbody>
-                <?php foreach ($availableManpower as $mp): ?>
-                <tr>
-                    <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
-                    <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
+
+            <?php foreach ($dChunks as $pi => $chunk): ?>
+            <div class="pz-deploy-page" data-dpage="<?= $pi ?>" <?= $pi > 0 ? 'style="display:none"' : '' ?>>
+                <table class="pz-sc-tbl">
+                    <thead><tr><th>Name</th><th>Role</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($chunk as $mp): ?>
+                    <tr>
+                        <td class="pz-sc-name" title="<?= esc(strtoupper($mp['name'] ?? '')) ?>"><?= esc(strtoupper($mp['name'] ?? 'N/A')) ?></td>
+                        <td><?= esc(strtoupper($mp['manpower_details']['role'] ?? $mp['role'] ?? 'Field Worker')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endforeach; ?>
+
+            <?php if ($dPages > 1): ?>
+            <div class="pz-sc-nav">
+                <button class="pz-sc-nav-btn" id="dPrev" onclick="dNav(-1)" disabled>
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <span class="pz-sc-nav-label" id="dLabel">1 / <?= $dPages ?></span>
+                <button class="pz-sc-nav-btn" id="dNext" onclick="dNav(1)">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+            <script>
+            (function(){
+                var cur=0, total=<?= $dPages ?>;
+                window.dNav = function(d){
+                    document.querySelectorAll('.pz-deploy-page[data-dpage="'+cur+'"]').forEach(function(el){ el.style.display='none'; });
+                    cur = Math.max(0, Math.min(total-1, cur+d));
+                    document.querySelectorAll('.pz-deploy-page[data-dpage="'+cur+'"]').forEach(function(el){ el.style.display=''; });
+                    document.getElementById('dLabel').textContent = (cur+1)+' / '+total;
+                    document.getElementById('dPrev').disabled = cur===0;
+                    document.getElementById('dNext').disabled = cur===total-1;
+                };
+            })();
+            </script>
+            <?php endif; ?>
+
             <?php endif; ?>
         </div>
 
