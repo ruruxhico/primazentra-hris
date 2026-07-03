@@ -15,7 +15,8 @@ use Dompdf\Options;
 class Export extends BaseController
 {
     protected FirestoreService $firestore;
-    private array $_userNameCache = [];
+    private array $_userNameCache    = [];
+    private array $_projectNameCache = [];
 
     public function __construct()
     {
@@ -60,7 +61,7 @@ class Export extends BaseController
     private function getProjectsData(): array
     {
         $headers = [
-            'Project ID', 'Project Name', 'Project Type', 'Client', 'Status',
+            'Project Name', 'Project Type', 'Client', 'Status',
             'Overall Progress (%)', 'Budget (PHP)', 'Region', 'Site Address',
             'Latitude', 'Longitude', 'Project Manager', 'Site Engineer',
             'Start Date (MM/DD/YYYY)', 'End Date (MM/DD/YYYY)', 'Created At', 'Updated At',
@@ -85,7 +86,6 @@ class Export extends BaseController
                 $lng = '';
             }
             $rows[] = [
-                $doc->id(),
                 $p['project_name'] ?? '',
                 $p['project_type'] ?? '',
                 $p['client_name'] ?? '',
@@ -118,7 +118,7 @@ class Export extends BaseController
     private function getResourceModelsData(string $category): array
     {
         $headers = [
-            'Model ID', 'Model Code', 'Model Name',
+            'Model Code', 'Model Name',
             'Total Quantity', 'Available Quantity',
             'Condition: New', 'Condition: Functional', 'Condition: Worn', 'Condition: Broken',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
@@ -137,7 +137,6 @@ class Export extends BaseController
                 : (is_array($ad['condition_summary'] ?? null) ? $ad['condition_summary'] : []);
 
             $rows[] = [
-                $doc->id(),
                 $r['model_code'] ?? '',
                 $r['name'] ?? '',
                 $r['total_quantity'] ?? ($ad['total_quantity'] ?? 0),
@@ -157,9 +156,9 @@ class Export extends BaseController
     private function getResourceUnitsData(string $category): array
     {
         $headers = [
-            'Model ID', 'Model Code', 'Model Name',
-            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand',
-            'Location Address', 'Location Type', 'Assigned Project ID',
+            'Model Code', 'Model Name',
+            'Serial Number', 'Condition', 'Status', 'Brand',
+            'Location Address', 'Location Type',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
         ];
         $rows = [];
@@ -191,24 +190,21 @@ class Export extends BaseController
             }
 
             if (empty($itemList)) {
-                $rows[] = array_merge([$modelId, $modelCode, $modelName], array_fill(0, 11, ''));
+                $rows[] = array_merge([$modelCode, $modelName], array_fill(0, 8, ''));
                 continue;
             }
 
             foreach ($itemList as $item) {
                 $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
                 $rows[] = [
-                    $modelId,
                     $modelCode,
                     $modelName,
-                    $item['__id'] ?? '',
                     $item['serial_number'] ?? '',
                     $item['condition'] ?? '',
                     $item['status'] ?? '',
                     $item['brand'] ?? ($item['brand_name'] ?? ''),
                     $loc['address'] ?? ($item['location_address'] ?? ($item['address'] ?? '')),
                     $loc['type']    ?? ($item['location_type']    ?? ''),
-                    $this->docRefToStr($item['assigned_project_id'] ?? null),
                     $this->formatDateMDY($item['created_at'] ?? ''),
                     $this->formatDateMDY($item['updated_at'] ?? ''),
                 ];
@@ -223,8 +219,8 @@ class Export extends BaseController
         if ($resourceId === '') return [[], [], 'Export'];
 
         $headers = [
-            'Unit ID', 'Serial Number', 'Condition', 'Status', 'Brand',
-            'Location Address', 'Location Type', 'Assigned Project ID',
+            'Serial Number', 'Condition', 'Status', 'Brand',
+            'Location Address', 'Location Type',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
         ];
         $rows = [];
@@ -255,14 +251,12 @@ class Export extends BaseController
         foreach ($itemList as $item) {
             $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
             $rows[] = [
-                $item['__id'] ?? '',
                 $item['serial_number'] ?? '',
                 $item['condition'] ?? '',
                 $item['status'] ?? '',
                 $item['brand'] ?? ($item['brand_name'] ?? ''),
                 $loc['address'] ?? ($item['location_address'] ?? ($item['address'] ?? '')),
                 $loc['type']    ?? ($item['location_type']    ?? ''),
-                $this->docRefToStr($item['assigned_project_id'] ?? null),
                 $this->formatDateMDY($item['created_at'] ?? ''),
                 $this->formatDateMDY($item['updated_at'] ?? ''),
             ];
@@ -364,7 +358,7 @@ class Export extends BaseController
         $headers = [
             'Employee ID', 'First Name', 'Middle Name', 'Last Name', 'Full Name',
             'Role', 'Specialization', 'Skills', 'Status',
-            'Assigned Project ID', 'Location Address', 'Location Type',
+            'Assigned Project', 'Location Address', 'Location Type',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
         ];
         $rows = [];
@@ -394,7 +388,7 @@ class Export extends BaseController
                 $m['specialization'] ?? ($md['specialization'] ?? ''),
                 $skills,
                 $m['status']         ?? ($md['status']         ?? ''),
-                $this->docRefToStr($m['assigned_project_id'] ?? ($md['assigned_project_id'] ?? null)),
+                $this->resolveProjectName($m['assigned_project_id'] ?? ($md['assigned_project_id'] ?? null)),
                 $loc['address'] ?? '',
                 $loc['type']    ?? '',
                 $this->formatDateMDY($m['created_at'] ?? ''),
@@ -432,50 +426,94 @@ class Export extends BaseController
     private function exportXlsx(array $headers, array $rows, string $title)
     {
         $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
+        $sheet       = $spreadsheet->getActiveSheet();
         $sheet->setTitle($title);
 
-        // Header row
-        $col = 'A';
-        foreach ($headers as $h) {
-            $sheet->setCellValue($col . '1', $h);
-            $col++;
+        $colCount = count($headers);
+        $lastCol  = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colCount);
+
+        // ── Letterhead ────────────────────────────────────────────────────────
+        $logoPath = FCPATH . 'assets/PrimaSolution.jpg';
+        if (file_exists($logoPath)) {
+            $drawing = new Drawing();
+            $drawing->setName('Logo');
+            $drawing->setDescription('Prima Solution');
+            $drawing->setPath($logoPath);
+            $drawing->setHeight(55);
+            $drawing->setCoordinates('A1');
+            $drawing->setOffsetX(5);
+            $drawing->setOffsetY(5);
+            $drawing->setWorksheet($sheet);
+            $sheet->getRowDimension(1)->setRowHeight(65);
         }
 
-        // Header styling
-        $lastCol = chr(ord('A') + count($headers) - 1);
-        $sheet->getStyle("A1:{$lastCol}1")->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1A3C5E']],
+        $sheet->mergeCells("A2:{$lastCol}2");
+        $sheet->setCellValue('A2', 'Prima Solution');
+        $sheet->getStyle('A2')->applyFromArray([
+            'font'      => ['bold' => true, 'size' => 16, 'color' => ['argb' => 'FF1A3C5E']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getRowDimension(2)->setRowHeight(24);
+
+        $sheet->mergeCells("A3:{$lastCol}3");
+        $sheet->setCellValue('A3', $title);
+        $sheet->getStyle('A3')->applyFromArray([
+            'font'      => ['bold' => true, 'size' => 13, 'color' => ['argb' => 'FF1A3C5E']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+        ]);
+        $sheet->getRowDimension(3)->setRowHeight(20);
+
+        $sheet->mergeCells("A4:{$lastCol}4");
+        $sheet->setCellValue('A4', 'Generated: ' . date('F j, Y  g:i A'));
+        $sheet->getStyle('A4')->applyFromArray([
+            'font'      => ['italic' => true, 'size' => 10, 'color' => ['argb' => 'FF555555']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
-            'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCCCCCC']]],
+        ]);
+        $sheet->getRowDimension(4)->setRowHeight(16);
+        $sheet->getStyle("A4:{$lastCol}4")->getBorders()
+            ->getBottom()->setBorderStyle(Border::BORDER_MEDIUM)
+            ->getColor()->setARGB('FF1A3C5E');
+
+        $sheet->getRowDimension(5)->setRowHeight(6);
+
+        // ── Column headers (row 6) ────────────────────────────────────────────
+        $headerRow = 6;
+        foreach ($headers as $i => $h) {
+            $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
+            $sheet->setCellValue($colLetter . $headerRow, $h);
+        }
+        $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->applyFromArray([
+            'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+            'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FF1A3C5E']],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            'borders'   => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => 'FFCCCCCC']]],
         ]);
 
-        // Data rows
-        foreach ($rows as $i => $row) {
-            $rowNum = $i + 2;
-            $col = 'A';
-            foreach ($row as $cell) {
+        // ── Data rows ─────────────────────────────────────────────────────────
+        foreach ($rows as $ri => $row) {
+            $rowNum = $ri + $headerRow + 1;
+            foreach ($row as $ci => $cell) {
+                $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci + 1);
                 $safe = $cell instanceof \Google\Cloud\Firestore\DocumentReference
                     ? $cell->id()
                     : (is_object($cell) && !is_numeric($cell) ? '' : $cell);
-                $sheet->setCellValue($col . $rowNum, $safe);
-                $col++;
+                $sheet->setCellValue($colLetter . $rowNum, $safe);
             }
-            // Alternating row color
-            if ($i % 2 === 0) {
+            if ($ri % 2 === 0) {
                 $sheet->getStyle("A{$rowNum}:{$lastCol}{$rowNum}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF5F8FB');
             }
         }
 
         // Auto width
-        for ($c = 'A'; $c <= $lastCol; $c++) {
-            $sheet->getColumnDimension($c)->setAutoSize(true);
+        for ($ci = 1; $ci <= $colCount; $ci++) {
+            $sheet->getColumnDimension(
+                \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($ci)
+            )->setAutoSize(true);
         }
 
-        $writer = new XlsxWriter($spreadsheet);
-        $filename = strtolower($title) . '_' . date('Ymd') . '.xlsx';
+        $writer   = new XlsxWriter($spreadsheet);
+        $filename = strtolower(str_replace([' ', '—', '/'], ['_', '-', '-'], $title)) . '_' . date('Ymd') . '.xlsx';
 
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -782,6 +820,30 @@ HTML;
     {
         if ($val instanceof \Google\Cloud\Firestore\DocumentReference) return $val->id();
         return (string)($val ?? '');
+    }
+
+    private function resolveProjectName(mixed $projectRef): string
+    {
+        if (empty($projectRef)) return '';
+        if ($projectRef instanceof \Google\Cloud\Firestore\DocumentReference) {
+            $id = $projectRef->id();
+        } elseif (is_string($projectRef)) {
+            $id = preg_replace('#^.*/#', '', $projectRef);
+        } else {
+            return '';
+        }
+        if ($id === '') return '';
+        if (array_key_exists($id, $this->_projectNameCache)) {
+            return $this->_projectNameCache[$id];
+        }
+        try {
+            $doc = $this->firestore->getDb()->collection('project')->document($id)->snapshot();
+            if ($doc->exists()) {
+                $name = trim((string)($doc->data()['project_name'] ?? ''));
+                return $this->_projectNameCache[$id] = ($name ?: $id);
+            }
+        } catch (\Throwable) {}
+        return $this->_projectNameCache[$id] = '';
     }
 
     private function resolveUserName(mixed $userId): string

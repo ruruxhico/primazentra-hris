@@ -16,7 +16,7 @@ $resName   = $req['resource_name'] ?? '';
 $sourceName= $req['source_site_name'] ?? 'To be assigned';
 $destName  = $req['destination_site_name'] ?? '—';
 $qty       = $req['requested_quantity'] ?? $req['quantity'] ?? 1;
-$model     = $req['requested_model_id'] ?? $req['model'] ?? '';
+$model     = $req['requested_model_name'] ?? $req['model'] ?? '';
 $reqBy     = $req['requested_by_name'] ?? '—';
 $reqRole   = $req['requested_by_role'] ?? '—';
 $createdAt = $req['created_at_fmt'] ?? '—';
@@ -77,7 +77,10 @@ $sameRoleBlocked     = $isPendingSecondary && $primaryApproverRole && $role === 
             <div>
                 <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a07830;margin-bottom:.1rem;"><?= esc($category) ?></div>
                 <div style="font-size:1.15rem;font-weight:700;color:#2c1a00;line-height:1.2;"><?= esc($resName ?: $model ?: 'Resource Request') ?></div>
-                <div style="font-size:.78rem;color:#9a7b3a;margin-top:.15rem;">ID: <?= esc(strtoupper(substr($req['id'] ?? '', 0, 6))) ?></div>
+                <?php $unitSerial = $req['_unit_serial'] ?? ''; ?>
+                <?php if ($unitSerial !== ''): ?>
+                <div style="font-size:.78rem;color:#9a7b3a;margin-top:.15rem;">Serial #: <?= esc($unitSerial) ?></div>
+                <?php endif; ?>
             </div>
         </div>
         <span id="pzReqStatusBadge" class="pz-badge <?= $badgeCls ?>" style="font-size:.78rem;padding:.35rem .9rem;"><?= esc(strtoupper($status)) ?></span>

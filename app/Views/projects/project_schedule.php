@@ -101,53 +101,6 @@
             </div>
         </div>
 
-        <!-- Weekly Progress Targets -->
-        <div style="margin-bottom:1.2rem;">
-            <div class="ps-weekly-toggle" onclick="toggleWeekly(this)">
-                <span class="material-symbols-outlined">calendar_month</span>
-                Weekly Progress Targets
-                <span class="material-symbols-outlined" style="margin-left:auto;font-size:18px;transition:transform .2s" id="weeklyChevron">expand_more</span>
-            </div>
-            <div id="weeklySection">
-                <div class="ps-card" style="margin-bottom:0">
-                    <table class="ps-weekly-table">
-                        <thead>
-                            <tr>
-                                <th>Week No.</th>
-                                <th class="num">Running Cumulative %</th>
-                                <th class="num">Cumulative Target %</th>
-                                <th class="num">Variance (+/−)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="weeklyTbody">
-                            <?php if (empty($weeklyTargets)): ?>
-                            <tr><td colspan="4" class="ps-weekly-empty">
-                                <?php if ($startDate === ''): ?>
-                                    No start date set on this project. Set a start date to see weekly targets.
-                                <?php else: ?>
-                                    No milestones with target dates yet. Add target dates to see weekly targets.
-                                <?php endif; ?>
-                            </td></tr>
-                            <?php else: ?>
-                            <?php $weekNo = 1; foreach ($weeklyTargets as $wt): ?>
-                            <?php
-                                $weekLabel = 'Week ' . $weekNo . ' (' . date('d-M-y', strtotime($wt['weekEnd'])) . ')';
-                                $target    = number_format((float)$wt['target'], 1);
-                            ?>
-                            <tr>
-                                <td><?= esc($weekLabel) ?></td>
-                                <td class="num">—</td>
-                                <td class="num"><?= $target ?></td>
-                                <td class="num">—</td>
-                            </tr>
-                            <?php $weekNo++; endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
         <!-- Actions -->
         <div class="ps-footer">
             <button type="submit" class="ps-btn ps-btn-save">SAVE</button>
@@ -236,15 +189,10 @@
 
     /* ── Re-index name attributes ── */
     function reindex() {
+        var keys = ['name', 'weight', 'qty', 'unit', 'target_date'];
         list.querySelectorAll('.ps-ms-row').forEach(function (row, i) {
-            var fields = row.querySelectorAll('input, select');
-            var names  = ['name', 'weight', 'qty', 'unit', 'target_date'];
-            // inputs: name, weight, qty, date / select: unit
-            var fieldEls = row.querySelectorAll('input.ps-ms-name, input.weight-input, input.ps-ms-qty, select.ps-ms-select, input.ps-ms-date');
-            var keys = ['name', 'weight', 'qty', 'unit', 'target_date'];
-            fieldEls.forEach(function (el, j) {
-                el.name = 'milestones[' + i + '][' + keys[j] + ']';
-            });
+            row.querySelectorAll('input.ps-ms-name, input.weight-input, input.ps-ms-qty, select.ps-ms-select, input.ps-ms-date')
+               .forEach(function (el, j) { el.name = 'milestones[' + i + '][' + keys[j] + ']'; });
         });
     }
 
@@ -283,15 +231,6 @@
             }
         }
     });
-
-    /* ── Weekly toggle ── */
-    window.toggleWeekly = function (el) {
-        var sec = document.getElementById('weeklySection');
-        var chv = document.getElementById('weeklyChevron');
-        var hidden = sec.style.display === 'none';
-        sec.style.display = hidden ? '' : 'none';
-        chv.textContent = hidden ? 'expand_less' : 'expand_more';
-    };
 
     /* ── Init ── */
     recomputeTotal();

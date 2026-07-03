@@ -5,7 +5,11 @@
     $staffId  = $staffId ?? '';
     $fullName = trim(($staff['first_name'] ?? '') . ' ' . ($staff['middle_name'] ? $staff['middle_name'] . ' ' : '') . ($staff['last_name'] ?? ''));
     $initials = strtoupper(substr($staff['first_name'] ?? 'S', 0, 1));
-    $pic      = $staff['profile_picture'] ?? '';
+    $pic      = (string)($staff['profile_photo_url'] ?? '');
+    if ($pic === '') {
+        $picLocal = (string)($staff['profile_picture'] ?? '');
+        $pic = ($picLocal !== '' && file_exists(FCPATH . $picLocal)) ? asset_url($picLocal) . '?v=' . time() : '';
+    }
 ?>
 
 <?php if (session()->getFlashdata('success')): ?>
@@ -47,7 +51,7 @@
     <!-- Name + avatar card -->
     <div class="pd-project-card" style="display:flex;align-items:center;gap:1.2rem">
         <?php if ($pic !== ''): ?>
-            <img src="<?= asset_url($pic) ?>?v=<?= time() ?>" alt="Profile"
+            <img src="<?= esc($pic) ?>" alt="Profile"
                  style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid #d0dce8;flex-shrink:0">
         <?php else: ?>
             <div style="width:64px;height:64px;border-radius:50%;background:#e8eef5;border:3px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#1a3c5e;flex-shrink:0">

@@ -291,13 +291,15 @@
             </div>
             <?php
               $hdrPic      = (string)(session()->get('profilePicture') ?? '');
-              $hdrPicValid = $hdrPic !== '' && file_exists(FCPATH . $hdrPic);
+              $hdrIsUrl    = str_starts_with($hdrPic, 'http');
+              $hdrPicValid = $hdrPic !== '' && ($hdrIsUrl || file_exists(FCPATH . $hdrPic));
+              $hdrSrc      = $hdrPicValid ? ($hdrIsUrl ? $hdrPic : base_url($hdrPic) . '?v=' . filemtime(FCPATH . $hdrPic)) : '';
               $hdrInitial  = strtoupper(substr($userName !== '' ? $userName : 'User', 0, 1));
             ?>
             <a href="<?= base_url('profile') ?>" class="user-profile" style="text-decoration:none;color:inherit;" title="My Profile">
               <span class="avatar-initial" id="hdrAvatarWrap" style="<?= $hdrPicValid ? 'padding:0;overflow:hidden;' : '' ?>">
                 <?php if ($hdrPicValid): ?>
-                  <img src="<?= base_url($hdrPic) ?>?v=<?= filemtime(FCPATH . $hdrPic) ?>"
+                  <img src="<?= esc($hdrSrc) ?>"
                        alt=""
                        id="hdrAvatarImg"
                        style="width:100%;height:100%;object-fit:cover;border-radius:50%;"
@@ -908,89 +910,135 @@
   };
   </script>
 
-  <!-- ── Interactive pagination ── -->
+  <!-- ── Client-side pagination (PzClientPager) ── -->
   <script>
   (function () {
-    // Show loading spinner + navigate when a pager link is clicked
-    document.addEventListener('click', function (e) {
-      var link = e.target.closest('.pager-link');
-      if (!link || !link.href || link.href === '#') return;
+    /* ── PzClientPager constructor ───────────────────────────────────────── */
+    window.__pzPagerRegistry = [];
 
-      var section = link.closest('.pager-section');
-      if (!section) return;
+    window.PzClientPager = function (opts) {
+      var self     = this;
+      self.tableId = opts.tableId;
+      self.rowSel  = opts.rowSel || 'tbody tr';
+      self.noCol   = opts.noCol !== undefined ? opts.noCol : 1;
+      self.infoEl  = document.getElementById(opts.infoId);
+      self.navEl   = document.getElementById(opts.navId);
+      self.currentPage = 1;
 
-      e.preventDefault();
+      var _s = localStorage.getItem('pz_per_page');
+      self.perPage = _s === 'all' ? Infinity : (_s ? parseInt(_s, 10) : 10);
+      if (!self.perPage || isNaN(self.perPage)) self.perPage = 10;
 
-      var overlay = document.createElement('div');
-      overlay.className = 'pager-loading-overlay';
-      overlay.innerHTML = '<div class="pager-spinner"></div>';
-      section.appendChild(overlay);
+      window.__pzPagerRegistry.push(self);
 
-      // Navigate after a short delay so the spinner is visible
-      var dest = link.href;
-      setTimeout(function () { window.location.href = dest; }, 80);
+      self.onPerPageChange = function (val) {
+        self.perPage     = val === 'all' ? Infinity : parseInt(val, 10);
+        self.currentPage = 1;
+        self.render();
+      };
+
+      self.goTo = function (n) { self.currentPage = n; self.render(); };
+
+      self.render = function () {
+        var table = document.getElementById(self.tableId);
+        if (!table) return;
+        var tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        var all = Array.from(tbody.querySelectorAll(self.rowSel));
+
+        // Clear previous page-hidden so only filter state drives visibility
+        all.forEach(function (r) { r.classList.remove('pz-page-hidden'); });
+
+        var vis   = all.filter(function (r) { return r.style.display !== 'none'; });
+        var total = vis.length;
+
+        var pp = (self.perPage === Infinity || isNaN(self.perPage)) ? total : self.perPage;
+        if (!pp || pp < 1) pp = total || 1;
+        var totalPages = Math.max(1, Math.ceil(total / pp));
+        if (self.currentPage > totalPages) self.currentPage = 1;
+
+        var start = (self.currentPage - 1) * pp;
+        var end   = start + pp;
+
+        vis.forEach(function (r, i) {
+          if (i < start || i >= end) r.classList.add('pz-page-hidden');
+        });
+
+        // Renumber the NO. column
+        if (self.noCol >= 0) {
+          vis.slice(start, end).forEach(function (r, i) {
+            var c = r.cells[self.noCol];
+            if (c) c.textContent = start + i + 1;
+          });
+        }
+
+        // Pager info text
+        if (self.infoEl) {
+          self.infoEl.textContent = total === 0
+            ? 'No records found'
+            : 'Showing ' + (start + 1) + '–' + Math.min(end, total) + ' of ' + total + ' records';
+        }
+
+        self._renderNav(totalPages);
+      };
+
+      self._renderNav = function (totalPages) {
+        if (!self.navEl) return;
+        if (totalPages <= 1) { self.navEl.innerHTML = ''; return; }
+        var cur = self.currentPage;
+        var h   = '<ul class="pager-list">';
+        if (cur > 1) h += '<li><a href="#" class="pager-link pz-pg" data-pg="' + (cur - 1) + '">‹ Prev</a></li>';
+        var lo = Math.max(1, cur - 2), hi = Math.min(totalPages, cur + 2);
+        if (lo > 1) h += '<li><a href="#" class="pager-link pz-pg" data-pg="1">1</a></li>';
+        if (lo > 2) h += '<li class="pager-ellipsis">…</li>';
+        for (var p = lo; p <= hi; p++) {
+          h += '<li><a href="#" class="pager-link pz-pg' + (p === cur ? ' active' : '') + '" data-pg="' + p + '">' + p + '</a></li>';
+        }
+        if (hi < totalPages - 1) h += '<li class="pager-ellipsis">…</li>';
+        if (hi < totalPages) h += '<li><a href="#" class="pager-link pz-pg" data-pg="' + totalPages + '">' + totalPages + '</a></li>';
+        if (cur < totalPages) h += '<li><a href="#" class="pager-link pz-pg" data-pg="' + (cur + 1) + '">Next ›</a></li>';
+        h += '</ul>';
+        h += '<div class="pager-jump">Go to page&nbsp;<input type="number" class="pager-jump-input pz-pg-jump" min="1" max="' + totalPages + '" placeholder="—"><span>&nbsp;of&nbsp;' + totalPages + '</span></div>';
+        self.navEl.innerHTML = h;
+        var nav = self.navEl;
+        nav.querySelectorAll('.pz-pg').forEach(function (a) {
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            self.goTo(parseInt(this.dataset.pg, 10));
+            var tbl = document.getElementById(self.tableId);
+            var sec = tbl && tbl.closest('.pager-section');
+            if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        });
+        var ji = nav.querySelector('.pz-pg-jump');
+        ji && ji.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          var n = parseInt(this.value, 10);
+          if (n >= 1 && n <= totalPages) self.goTo(n);
+        });
+      };
+
+      return self;
+    };
+
+    /* ── Per-page select: sync to localStorage on load + change ─────────── */
+    document.addEventListener('DOMContentLoaded', function () {
+      var stored = localStorage.getItem('pz_per_page') || '10';
+      document.querySelectorAll('.pager-per-page').forEach(function (sel) {
+        var vals = Array.from(sel.options).map(function (o) { return o.value; });
+        sel.value = vals.indexOf(stored) !== -1 ? stored : '10';
+      });
     });
 
-    // Auto-scroll to the paginated section when a page param is present in the URL
-    document.addEventListener('DOMContentLoaded', function () {
-      var p = new URLSearchParams(window.location.search);
-      var target = null;
-
-      if (p.has('page_equipment')) target = document.getElementById('eq-section');
-      if (p.has('page_tools'))    target = document.getElementById('tools-section');
-      if (p.has('page_manpower')) target = document.getElementById('mp-section');
-      // Staff and Projects both use 'page' — pick the one present on the page
-      if (!target && p.has('page')) {
-        target = document.getElementById('staff-section') ||
-                 document.getElementById('projects-section');
-      }
-
-      if (target) {
-        setTimeout(function () {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 120);
-      }
-
-      // "Go to page" — jump on Enter
-      document.querySelectorAll('.pager-jump-input').forEach(function (inp) {
-        var maxPage   = parseInt(inp.dataset.totalPages, 10) || 1;
-        var pageParam = inp.dataset.pageParam || 'page';
-
-        inp.addEventListener('keydown', function (e) {
-          if (e.key !== 'Enter') return;
-          e.preventDefault();
-          var n = parseInt(inp.value, 10);
-          if (isNaN(n) || n < 1 || n > maxPage) return;
-          var url = new URL(window.location.href);
-          url.searchParams.set(pageParam, n);
-          window.location.href = url.toString();
-        });
+    document.addEventListener('change', function (e) {
+      var sel = e.target;
+      if (!sel.classList.contains('pager-per-page')) return;
+      var val = sel.value;
+      localStorage.setItem('pz_per_page', val);
+      document.querySelectorAll('.pager-per-page').forEach(function (s) {
+        if (s !== sel) s.value = val;
       });
-
-      // "Records per page" — apply on Enter or when input loses focus with a changed value
-      var _PAGE_PARAMS = ['page', 'page_projects', 'page_equipment', 'page_tools', 'page_manpower'];
-      function _applyPerPage(inp) {
-        var val = parseInt(inp.value, 10);
-        if (isNaN(val) || val < 1) return;
-        val = Math.max(5, Math.min(200, val));
-        var url = new URL(window.location.href);
-        url.searchParams.set('per_page', val);
-        _PAGE_PARAMS.forEach(function(p) { url.searchParams.delete(p); });
-        window.location.href = url.toString();
-      }
-      document.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter') return;
-        var inp = e.target;
-        if (!inp.classList.contains('pager-per-page')) return;
-        e.preventDefault();
-        _applyPerPage(inp);
-      });
-      document.querySelectorAll('.pager-per-page').forEach(function(inp) {
-        var _orig = inp.value;
-        inp.addEventListener('blur', function() {
-          if (inp.value !== _orig) _applyPerPage(inp);
-        });
-      });
+      (window.__pzPagerRegistry || []).forEach(function (p) { p.onPerPageChange(val); });
     });
   }());
   </script>

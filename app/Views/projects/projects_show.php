@@ -75,9 +75,6 @@
                     <span class="rpt-legend-item"><span class="rpt-dot outline"></span>Today</span>
                 </div>
                 <div id="rptSummaryBtns" style="display:none;margin-top:1rem;flex-direction:column;gap:.5rem;">
-                    <button class="rpt-summary-btn" onclick="showProgressSummary('weekly')">
-                        <span class="material-symbols-outlined">bar_chart</span> Weekly Summary
-                    </button>
                     <button class="rpt-summary-btn" onclick="showProgressSummary('overall')">
                         <span class="material-symbols-outlined">table_chart</span> Overall Progress Summary
                     </button>
@@ -237,12 +234,24 @@
     var _dates = [], _idMap = {};
     var _calMo = new Date();
     var _summaryType = '', _summaryData = null;
+    var _currentReport = null, _currentDateStr = null;
 
     var _base = '<?= rtrim(base_url(), '/') ?>';
     var CAN_CREATE_EMERGENCY  = <?= pz_can('create_emergency_report')  ? 'true' : 'false' ?>;
     var CAN_RESOLVE_EMERGENCY = <?= pz_can('resolve_emergency_report') ? 'true' : 'false' ?>;
     var CAN_EDIT_PROGRESS     = <?= pz_can('edit_progress_report')     ? 'true' : 'false' ?>;
     var ML_INSIGHTS = <?= json_encode($mlInsights ?? ['blocker' => null, 'delay_days' => 0]) ?>;
+    var PROJECT_MILESTONES = <?= json_encode(array_map(function ($m) {
+        return [
+            'id'                  => (string)($m['id'] ?? $m['__id'] ?? ''),
+            'name'                => (string)($m['milestone_name'] ?? $m['name'] ?? ''),
+            'unit'                => (string)($m['unit'] ?? ''),
+            'target_quantity'     => (float)($m['target_quantity'] ?? 0),
+            'completed_quantity'  => (float)($m['completed_quantity'] ?? 0),
+            'completion_percent'  => (float)($m['completion_percent'] ?? 0),
+            'weight_percent'      => (float)($m['weight_percent'] ?? $m['weight'] ?? 0),
+        ];
+    }, $milestones ?? []), JSON_UNESCAPED_UNICODE) ?>;
 
     window.openReportModal = function (type, pid, pname) {
         _type = type; _pid = pid; _pname = pname;
@@ -301,6 +310,10 @@
             if (canCreate) {
                 html += '<button class="rpt-btn-new" onclick="showNewReportForm()"><span class="material-symbols-outlined">add</span>New Report</button>';
             }
+        }
+        if (_state === 'detail' && _type === 'daily' && CAN_EDIT_PROGRESS && _currentReport) {
+            html += '<button class="rpt-btn-edit" onclick="showEditReportForm(_currentReport, _currentDateStr)">' +
+                    '<span class="material-symbols-outlined">edit</span>Edit</button>';
         }
         if (_state === 'form') {
             html += '<button class="rpt-btn-submit" onclick="submitReport()">Submit</button>';
@@ -398,6 +411,8 @@
     }
 
     function renderDetail(d, dateStr) {
+        _currentReport  = d;
+        _currentDateStr = dateStr;
         var fmtDate = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US',
             { year: 'numeric', month: 'long', day: 'numeric' });
         var html = '';
@@ -482,11 +497,24 @@
                 ms.forEach(function (m) {
                     var label = h(m.name) + (m.unit ? ' (' + h(m.unit) + ')' : '');
                     var todayVal = (m.today >= 0 ? '+' : '') + m.today;
+                    var pct = Math.min(100, Math.max(0, parseFloat(m.percent) || 0));
                     html += '<div class="rpt-daily-milestone">';
                     html += '<div class="rpt-daily-ms-name">' + label + '</div>';
                     html += '<div class="rpt-daily-ms-meta">Today: ' + todayVal +
                             ' &bull; Total: ' + m.total +
                             ' &bull; ' + m.percent + '%</div>';
+                    html += '<div class="rpt-daily-ms-bar-wrap"><div class="rpt-daily-ms-bar" style="width:' + pct + '%"></div></div>';
+                    var imgs = m.image_urls || [];
+                    if (imgs.length) {
+                        var allImgs = imgs; // capture for closure
+                        html += '<div class="rpt-ms-photos">';
+                        imgs.forEach(function (url, idx) {
+                            html += '<img src="' + h(url) + '" class="rpt-ms-thumb" loading="lazy"' +
+                                    ' data-imgs=\'' + JSON.stringify(allImgs).replace(/'/g,'&#39;') + '\'' +
+                                    ' data-idx="' + idx + '">';
+                        });
+                        html += '</div>';
+                    }
                     html += '</div>';
                 });
             }
@@ -495,6 +523,12 @@
             if (d.description) {
                 html += '<div class="rpt-daily-section-title" style="margin-top:.8rem">Notes</div>';
                 html += '<div class="rpt-daily-row">' + h(d.description) + '</div>';
+            }
+
+            // Remarks (mobile field)
+            if (d.remarks) {
+                html += '<div class="rpt-daily-section-title" style="margin-top:.8rem">Remarks</div>';
+                html += '<div class="rpt-daily-row">' + h(d.remarks) + '</div>';
             }
 
             if (d.filed_by) html += '<div class="rpt-detail-meta" style="margin-top:.6rem">Filed by: ' + h(d.filed_by) + '</div>';
@@ -519,6 +553,17 @@
             html += '</div>';
         }
         document.getElementById('rptDetailEl').innerHTML = html;
+
+        // Wire up photo thumbnails (lightbox)
+        document.getElementById('rptDetailEl').querySelectorAll('.rpt-ms-thumb').forEach(function (img) {
+            img.addEventListener('click', function () {
+                try {
+                    var imgs = JSON.parse(img.getAttribute('data-imgs'));
+                    var idx  = parseInt(img.getAttribute('data-idx'), 10) || 0;
+                    pzOpenLightbox(imgs, idx);
+                } catch (e) {}
+            });
+        });
 
         // Wire up resolve button if present
         var resolveBtn = document.getElementById('rptResolveBtn');
@@ -555,52 +600,200 @@
         }
     }
 
+    // ── Report form helpers ──────────────────────────────────────────────────
+
+    // Render per-milestone rows into html string, given fetched form-data
+    function _renderMsRows(milestones, msAmounts) {
+        var html = '';
+        milestones.forEach(function (m, i) {
+            var logged  = (msAmounts[m.id] || {}).amount_done_today || 0;
+            // base = completed_quantity already persisted BEFORE this report's date
+            var base    = m.completed_quantity - logged;
+            var imgUrls = (msAmounts[m.id] || {}).image_urls || [];
+            var pct     = m.target_quantity > 0 ? Math.min(100, base / m.target_quantity * 100) : 0;
+
+            html += '<div class="rpt-ms-row">';
+            html += '<input type="hidden" name="milestone_progress[' + i + '][milestone_id]" value="' + h(m.id) + '">';
+            html += '<div class="rpt-ms-row-header">' + h(m.name) +
+                    (m.unit ? ' <span style="color:#999;font-weight:400">(' + h(m.unit) + ')</span>' : '') + '</div>';
+            html += '<div style="font-size:.75rem;color:#999;margin-bottom:.3rem">Before today: ' +
+                    base.toFixed(2) + ' / ' + m.target_quantity + ' ' + h(m.unit) +
+                    ' &nbsp;(' + pct.toFixed(1) + '%)</div>';
+            html += '<div class="rpt-ms-row-qty">' +
+                    '<span class="rpt-ms-row-qty-label">Done today</span>' +
+                    '<input type="number" name="milestone_progress[' + i + '][amount_done_today]"' +
+                    ' min="0" step="any" value="' + logged + '"' +
+                    ' data-base="' + base + '" data-target="' + m.target_quantity + '"' +
+                    ' data-row="' + i + '" class="rpt-ms-amt-input">' +
+                    '</div>';
+            html += '<div class="rpt-ms-row-after" data-after-row="' + i + '"></div>';
+            if (imgUrls.length) {
+                html += '<div class="rpt-ms-existing-photos">';
+                imgUrls.forEach(function (url, idx) {
+                    html += '<img src="' + h(url) + '" class="rpt-ms-thumb" loading="lazy"' +
+                            ' data-imgs=\'' + JSON.stringify(imgUrls).replace(/'/g, '&#39;') + '\'' +
+                            ' data-idx="' + idx + '">';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+        return html;
+    }
+
+    // Wire milestone amount inputs after the form is injected into the DOM
+    function _wireMsInputs(formEl) {
+        formEl.querySelectorAll('.rpt-ms-amt-input').forEach(function (inp) {
+            function recompute() {
+                var row    = parseInt(inp.getAttribute('data-row'), 10);
+                var base   = parseFloat(inp.getAttribute('data-base'))   || 0;
+                var target = parseFloat(inp.getAttribute('data-target')) || 0;
+                var today  = parseFloat(inp.value) || 0;
+                var newQty = base + today;
+                var newPct = target > 0 ? Math.min(100, newQty / target * 100) : 0;
+                var afterEl = formEl.querySelector('[data-after-row="' + row + '"]');
+                if (afterEl) {
+                    afterEl.textContent = today > 0
+                        ? 'After: ' + newQty.toFixed(2) + ' (' + newPct.toFixed(1) + '%)'
+                        : '';
+                }
+            }
+            inp.addEventListener('input',  recompute);
+            inp.addEventListener('change', recompute);
+            // Show initial state if pre-filled
+            if (parseFloat(inp.value) > 0) inp.dispatchEvent(new Event('change'));
+        });
+
+        formEl.querySelectorAll('.rpt-ms-thumb').forEach(function (img) {
+            img.addEventListener('click', function () {
+                try {
+                    pzOpenLightbox(
+                        JSON.parse(img.getAttribute('data-imgs')),
+                        parseInt(img.getAttribute('data-idx'), 10) || 0
+                    );
+                } catch (e) {}
+            });
+        });
+    }
+
+    // Render manpower checklist into html string
+    function _renderMpList(manpower, checkedIds) {
+        if (!manpower.length) {
+            return '<div class="rpt-mp-empty">No workers assigned to this project</div>';
+        }
+        var html = '';
+        manpower.forEach(function (mp, i) {
+            var checked = checkedIds.indexOf(mp.id) !== -1 ? ' checked' : '';
+            html += '<label class="rpt-mp-item">' +
+                    '<input type="checkbox" name="manpower[' + i + '][id]" value="' + h(mp.id) + '"' + checked + '>' +
+                    '<input type="hidden" name="manpower[' + i + '][name]" value="' + h(mp.name) + '">' +
+                    '<span class="rpt-mp-name">' + h(mp.name) + '</span>' +
+                    (mp.role ? '<span class="rpt-mp-role">· ' + h(mp.role) + '</span>' : '') +
+                    '</label>';
+        });
+        return html;
+    }
+
+    // Load form data from API then render the form
+    function _loadAndRenderReportForm(dateVal, prefillTitle) {
+        var formEl = document.getElementById('rptFormEl');
+        formEl.innerHTML = '<div style="text-align:center;padding:2rem;color:#999;font-size:.9rem">Loading…</div>';
+        setState('form');
+
+        fetch(_base + '/projects/' + _pid + '/daily-reports/' + dateVal + '/form-data', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (fd) {
+                var milestones = fd.milestones || [];
+                var manpower   = fd.manpower   || [];
+                var existing   = fd.existing;  // null or {weather, remarks, description, manpower_ids, ms_amounts}
+
+                var checkedMpIds = existing ? (existing.manpower_ids || []) : manpower.map(function (mp) { return mp.id; });
+                var msAmounts    = existing ? (existing.ms_amounts    || {}) : {};
+
+                var html = '<div class="rpt-form-title">' + h(prefillTitle) + '</div>';
+                html += '<form id="rptNewForm">';
+                html += '<input type="hidden" name="date" value="' + h(dateVal) + '">';
+
+                // Weather
+                html += '<div class="rpt-form-group"><label>Weather</label>' +
+                        '<input type="text" name="weather" placeholder="e.g. Sunny, Rainy…"' +
+                        ' value="' + h(existing ? existing.weather : '') + '"></div>';
+
+                // Manpower
+                html += '<div class="rpt-form-group"><label>Workers on Site *</label>' +
+                        '<div class="rpt-mp-list">' + _renderMpList(manpower, checkedMpIds) + '</div></div>';
+
+                // Milestones
+                if (milestones.length) {
+                    html += '<div class="rpt-form-group"><label>Milestone Progress</label>';
+                    html += _renderMsRows(milestones, msAmounts);
+                    html += '</div>';
+                }
+
+                // Description / Remarks
+                html += '<div class="rpt-form-group"><label>Description / Notes</label>' +
+                        '<textarea name="description" rows="3" placeholder="Describe the day\'s progress…">' +
+                        h(existing ? existing.description : '') + '</textarea></div>';
+                html += '<div class="rpt-form-group"><label>Remarks</label>' +
+                        '<textarea name="remarks" rows="2" placeholder="Additional remarks…">' +
+                        h(existing ? existing.remarks : '') + '</textarea></div>';
+
+                html += '</form>';
+                formEl.innerHTML = html;
+                _wireMsInputs(formEl);
+                renderFooter();
+            })
+            .catch(function () {
+                formEl.innerHTML = '<div style="color:#c0392b;padding:1rem;font-size:.88rem">Failed to load form data. Please try again.</div>';
+            });
+    }
+
     window.showNewReportForm = function () {
-        var today = new Date().toISOString().slice(0, 10);
-        var todayDisp = today.slice(8,10) + '/' + today.slice(5,7) + '/' + today.slice(0,4);
-        var html  = '<div class="rpt-form-title">' +
-                    (_type === 'emergency' ? 'Emergency' : 'Progress Report') +
-                    ' for ' + h(_pname) + '</div>';
-        html += '<form id="rptNewForm">';
-        html += '<div class="rpt-form-group"><label>Date *</label>' +
-                '<div class="date-picker" id="rptDatePicker">' +
-                '<input type="text" class="date-display" placeholder="DD/MM/YYYY" value="' + todayDisp + '" readonly>' +
-                '<input type="hidden" name="date" value="' + today + '">' +
-                '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
-                '<div class="calendar-popup" aria-hidden="true"></div>' +
-                '</div></div>';
         if (_type === 'emergency') {
+            // Keep original emergency form rendering (no API call needed)
+            var today    = new Date().toISOString().slice(0, 10);
+            var todayDisp = today.slice(8,10) + '/' + today.slice(5,7) + '/' + today.slice(0,4);
+            var html = '<div class="rpt-form-title">Emergency for ' + h(_pname) + '</div>';
+            html += '<form id="rptNewForm">';
+            html += '<div class="rpt-form-group"><label>Date *</label>' +
+                    '<div class="date-picker" id="rptDatePicker">' +
+                    '<input type="text" class="date-display" placeholder="DD/MM/YYYY" value="' + todayDisp + '" readonly>' +
+                    '<input type="hidden" name="date" value="' + today + '">' +
+                    '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
+                    '<div class="calendar-popup" aria-hidden="true"></div>' +
+                    '</div></div>';
             var causes = ['Adverse Weather','Material Shortage','Equipment/Tool Breakdown',
                           'Labor Shortage','Onsite Accidents','Other'];
             html += '<div class="rpt-form-group"><label>Cause *</label><div class="rpt-causes">';
             causes.forEach(function (c) {
-                html += '<label class="rpt-cause-item">' +
-                        '<input type="checkbox" name="causes[]" value="' + h(c) + '">' +
-                        '<span>' + h(c) + '</span></label>';
+                html += '<label class="rpt-cause-item"><input type="checkbox" name="causes[]" value="' + h(c) + '"><span>' + h(c) + '</span></label>';
             });
             html += '</div></div>';
             html += '<div class="rpt-form-group"><label>Notes</label>' +
-                    '<textarea name="notes" rows="4" placeholder="Describe the emergency specifics..." autocapitalize="off" autocorrect="off"></textarea></div>';
-        } else {
-            html += '<div class="rpt-form-group"><label>Progress %</label>' +
-                    '<input type="number" name="progress_percent" min="0" max="100" step="1" placeholder="0–100"></div>';
-            html += '<div class="rpt-form-group"><label>Description</label>' +
-                    '<textarea name="description" rows="4" placeholder="Describe the day\'s progress..."></textarea></div>';
+                    '<textarea name="notes" rows="4" placeholder="Describe the emergency specifics…" autocapitalize="off" autocorrect="off"></textarea></div>';
+            html += '</form>';
+            document.getElementById('rptFormEl').innerHTML = html;
+            var dpWrapper = document.getElementById('rptDatePicker');
+            if (dpWrapper && window.pzInitDatePicker) {
+                window.pzInitDatePicker(dpWrapper, { getMax: function () { return new Date().toISOString().slice(0, 10); } });
+            }
+            setState('form');
+            return;
         }
-        html += '</form>';
-        document.getElementById('rptFormEl').innerHTML = html;
-        var dpWrapper = document.getElementById('rptDatePicker');
-        if (dpWrapper && window.pzInitDatePicker) {
-            window.pzInitDatePicker(dpWrapper, {
-                getMax: function () { return new Date().toISOString().slice(0, 10); }
-            });
-        }
-        setState('form');
+        // Daily progress report — fetch fresh data from server
+        var today = new Date().toISOString().slice(0, 10);
+        _loadAndRenderReportForm(today, 'Progress Report — ' + _pname);
+    };
+
+    window.showEditReportForm = function (d, dateStr) {
+        if (!d || !dateStr) return;
+        _loadAndRenderReportForm(dateStr, 'Edit Progress Report — ' + _pname);
     };
 
     window.submitReport = function () {
         var form = document.getElementById('rptNewForm');
         if (!form) return;
+
         if (_type === 'emergency') {
             var checked = form.querySelectorAll('input[name="causes[]"]:checked');
             if (!checked.length) {
@@ -612,8 +805,39 @@
                 }
                 return;
             }
+        } else {
+            // Daily: validate at least one manpower checkbox is checked
+            var mpChecked = form.querySelectorAll('input[name^="manpower["][type="checkbox"]:checked');
+            if (!mpChecked.length) {
+                var mpList = form.querySelector('.rpt-mp-list');
+                if (mpList) {
+                    mpList.style.outline = '2px solid #c0392b';
+                    mpList.style.borderRadius = '8px';
+                    setTimeout(function () { mpList.style.outline = ''; }, 2000);
+                }
+                return;
+            }
         }
-        var fd = new FormData(form);
+
+        // Build FormData; for daily report manpower, only include rows where checkbox is checked
+        var fd = new FormData();
+        if (_type === 'daily') {
+            // Collect only checked manpower rows
+            var mpIdx = 0;
+            form.querySelectorAll('input[name^="manpower["][type="checkbox"]:checked').forEach(function (cb) {
+                var rowIdx = cb.name.match(/\[(\d+)\]/)[1];
+                fd.append('manpower[' + mpIdx + '][id]',   cb.value);
+                var nameInput = form.querySelector('input[name="manpower[' + rowIdx + '][name]"]');
+                fd.append('manpower[' + mpIdx + '][name]', nameInput ? nameInput.value : '');
+                mpIdx++;
+            });
+            // Append all other non-manpower fields
+            new FormData(form).forEach(function (val, key) {
+                if (!key.startsWith('manpower[')) fd.append(key, val);
+            });
+        } else {
+            new FormData(form).forEach(function (val, key) { fd.append(key, val); });
+        }
         var csrfName = (document.querySelector('meta[name="csrf-name"]') || {}).content;
         var csrfHash = (document.querySelector('meta[name="csrf-hash"]') || {}).content;
         if (csrfName && csrfHash) fd.append(csrfName, csrfHash);
@@ -669,6 +893,44 @@
                     '<div class="rpt-sum-empty">Unable to load summary data.</div>';
                 setState('summary');
             });
+    };
+
+    // ── Lightbox ─────────────────────────────────────────────────────────
+    window.pzOpenLightbox = function (urls, startIdx) {
+        if (!urls || !urls.length) return;
+        var idx = startIdx || 0;
+        var lb  = document.getElementById('pzLightboxOverlay');
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.id = 'pzLightboxOverlay';
+            lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;align-items:center;justify-content:center;';
+            lb.innerHTML =
+                '<button id="pzLbPrev" style="position:absolute;left:1rem;font-size:2.5rem;color:#fff;background:none;border:none;cursor:pointer;padding:.5rem;">&#8249;</button>' +
+                '<img id="pzLbImg" style="max-width:90vw;max-height:86vh;border-radius:6px;box-shadow:0 4px 32px rgba(0,0,0,.6);">' +
+                '<button id="pzLbNext" style="position:absolute;right:1rem;font-size:2.5rem;color:#fff;background:none;border:none;cursor:pointer;padding:.5rem;">&#8250;</button>' +
+                '<button id="pzLbClose" style="position:absolute;top:.8rem;right:1.2rem;font-size:1.8rem;color:#fff;background:none;border:none;cursor:pointer;line-height:1;">&#215;</button>' +
+                '<div id="pzLbCount" style="position:absolute;bottom:1rem;left:50%;transform:translateX(-50%);color:#ccc;font-size:.82rem;"></div>';
+            document.body.appendChild(lb);
+            document.getElementById('pzLbClose').addEventListener('click', function () { lb.style.display = 'none'; });
+            lb.addEventListener('click', function (e) { if (e.target === lb) lb.style.display = 'none'; });
+            document.getElementById('pzLbPrev').addEventListener('click', function () { show(idx - 1); });
+            document.getElementById('pzLbNext').addEventListener('click', function () { show(idx + 1); });
+            document.addEventListener('keydown', function (e) {
+                if (lb.style.display === 'none') return;
+                if (e.key === 'ArrowLeft')  show(idx - 1);
+                if (e.key === 'ArrowRight') show(idx + 1);
+                if (e.key === 'Escape')     lb.style.display = 'none';
+            });
+        }
+        function show(i) {
+            idx = ((i % urls.length) + urls.length) % urls.length;
+            document.getElementById('pzLbImg').src = urls[idx];
+            document.getElementById('pzLbCount').textContent = (idx + 1) + ' / ' + urls.length;
+            document.getElementById('pzLbPrev').style.display = urls.length > 1 ? '' : 'none';
+            document.getElementById('pzLbNext').style.display = urls.length > 1 ? '' : 'none';
+        }
+        lb.style.display = 'flex';
+        show(idx);
     };
 
     // ── Calculation helpers ──────────────────────────────────────────────
@@ -903,7 +1165,7 @@
                     var varRow     = (tdPassed && plannedRow !== null) ? actualPct - plannedRow : null;
                     var completionDate = m.actual_completion_date ? _fmtDate(m.actual_completion_date) : '<span class="muted">—</span>';
 
-                    html += '<tr data-target-date="' + (m.target_date || '') + '">';
+                    html += '<tr data-target-date="' + (m.target_date || '') + '" data-completion-date="' + (m.actual_completion_date || '') + '" data-ms-status="' + stLow + '">';
                     html += '<td>' + h(m.milestone_name) + '</td>';
                     html += '<td>' + _fmtDate(m.target_date) + '</td>';
                     html += '<td>' + completionDate + '</td>';
@@ -1020,11 +1282,16 @@
 
         var total = 0, visible = 0;
         table.querySelectorAll('tbody tr').forEach(function (row) {
-            var td   = row.dataset.targetDate || '';
+            // Completed milestones: filter by when they were actually done.
+            // In-progress / not-started: filter by target date (scheduled scope).
+            var isCompleted  = row.dataset.msStatus === 'completed';
+            var filterDate   = isCompleted
+                ? (row.dataset.completionDate || row.dataset.targetDate || '')
+                : (row.dataset.targetDate || '');
             var show = true;
-            if (from && td && td < from) show = false;
-            if (to   && td && td > to)   show = false;
-            if (!td && (from || to))     show = false;
+            if (from && filterDate && filterDate < from) show = false;
+            if (to   && filterDate && filterDate > to)   show = false;
+            if (!filterDate && (from || to))              show = false;
             row.style.display = show ? '' : 'none';
             total++;
             if (show) visible++;
@@ -1035,7 +1302,7 @@
         if (hdr) hdr.textContent = fmt(from) + ' → ' + fmt(to);
 
         if (visible === 0) {
-            tbody.appendChild(_rptEmptyRow(5, 'No records match the selected date range.'));
+            tbody.appendChild(_rptEmptyRow(7, 'No records match the selected date range.'));
             _rptSetMsg('rptMsFilterMsg', 'No results.', true);
         } else {
             _rptSetMsg('rptMsFilterMsg', 'Showing ' + visible + ' of ' + total + ' rows.', false);

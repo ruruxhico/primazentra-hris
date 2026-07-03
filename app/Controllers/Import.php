@@ -82,10 +82,13 @@ class Import extends BaseController
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFFFF3CD']],
         ]);
 
+        $coord = fn(int $c, int $r): string =>
+            \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c) . $r;
+
         // Notes row 2
         $col = 1;
         foreach ($tpl['notes'] as $note) {
-            $sheet->setCellValueByColumnAndRow($col++, 2, $note);
+            $sheet->setCellValue($coord($col++, 2), $note);
         }
         $sheet->getStyle("A2:{$lastCol}2")->applyFromArray([
             'font' => ['italic' => true, 'color' => ['argb' => 'FF888888']],
@@ -95,7 +98,7 @@ class Import extends BaseController
         // Header row 3
         $col = 1;
         foreach ($tpl['headers'] as $h) {
-            $sheet->setCellValueByColumnAndRow($col++, 3, $h);
+            $sheet->setCellValue($coord($col++, 3), $h);
         }
         $sheet->getStyle("A3:{$lastCol}3")->applyFromArray([
             'font'      => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
@@ -108,10 +111,10 @@ class Import extends BaseController
         if ($module === 'projects') {
             // Force date columns (L=12, M=13) to text format so MM/DD/YYYY stays intact
             foreach ([12, 13] as $dateCol) {
-                $sheet->getStyleByColumnAndRow($dateCol, 4)
+                $sheet->getStyle($coord($dateCol, 4))
                     ->getNumberFormat()
                     ->setFormatCode(\PhpOffice\PhpSpreadsheet\Style\NumberFormat::FORMAT_TEXT);
-                $sheet->getCellByColumnAndRow($dateCol, 4)->setValueExplicit(
+                $sheet->getCell($coord($dateCol, 4))->setValueExplicit(
                     'e.g. 01/15/2025',
                     \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
                 );
@@ -119,7 +122,9 @@ class Import extends BaseController
         }
 
         for ($c = 1; $c <= $colCount; $c++) {
-            $sheet->getColumnDimensionByColumn($c)->setAutoSize(true);
+            $sheet->getColumnDimension(
+                \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c)
+            )->setAutoSize(true);
         }
 
         $writer = new XlsxWriter($spreadsheet);
@@ -178,7 +183,19 @@ class Import extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'Could not find header row. Ensure columns match the template.']);
         }
 
-        $dataRows = array_slice($rows, $headerRowIdx + 1);
+        $dataRows = array_values(array_filter(
+            array_slice($rows, $headerRowIdx + 1),
+            static function (array $row): bool {
+                $first = trim((string)($row[0] ?? ''));
+                // Drop the template sample row (starts with '--')
+                if (str_starts_with($first, '--')) return false;
+                // Drop fully-empty rows (Excel trailing blank rows, etc.)
+                foreach ($row as $cell) {
+                    if (trim((string)($cell ?? '')) !== '') return true;
+                }
+                return false;
+            }
+        ));
 
         [$imported, $skipped, $error] = match ($module) {
             'projects'       => $this->importProjects($dataRows),

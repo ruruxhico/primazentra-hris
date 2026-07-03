@@ -251,7 +251,7 @@ class Auth extends BaseController {
             }
 
             // Valid temp password — log in with the force-change flag
-            $picPath = (string)($userData['profile_picture'] ?? '');
+            $sessionPic = self::resolveProfilePic($userData);
             session()->set([
                 'isLoggedIn'              => true,
                 'userId'                  => $user['id'],
@@ -262,13 +262,13 @@ class Auth extends BaseController {
                 'remember_me'             => $rememberMe,
                 'force_change_password'   => true,
                 'temp_password_expires_at'=> $expiresTs ?? null,
-                'profilePicture'          => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
+                'profilePicture'          => $sessionPic,
             ]);
 
             return redirect()->to('/change-password');
         }
 
-        $picPath = (string)($userData['profile_picture'] ?? '');
+        $sessionPic = self::resolveProfilePic($userData);
         session()->set([
             'isLoggedIn'     => true,
             'userId'         => $user['id'],
@@ -277,7 +277,7 @@ class Auth extends BaseController {
             'role'           => $userData['role'],
             'login_time'     => time(),
             'remember_me'    => $rememberMe,
-            'profilePicture' => ($picPath !== '' && file_exists(FCPATH . $picPath)) ? $picPath : null,
+            'profilePicture' => $sessionPic,
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);
@@ -556,6 +556,17 @@ class Auth extends BaseController {
     private function requiresEmailVerification(): bool
     {
         return filter_var(env('AUTH_REQUIRE_EMAIL_VERIFICATION', false), FILTER_VALIDATE_BOOL);
+    }
+
+    private static function resolveProfilePic(array $userData): ?string
+    {
+        $url = (string)($userData['profile_photo_url'] ?? '');
+        if ($url !== '') return $url;
+
+        $path = (string)($userData['profile_picture'] ?? '');
+        if ($path !== '' && file_exists(FCPATH . $path)) return $path;
+
+        return null;
     }
 
     private function applyRememberMeCookies(bool $rememberMe, string $email): void

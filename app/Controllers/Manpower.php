@@ -74,7 +74,6 @@ class Manpower extends BaseController
                         'status' => $doc['status'] ?? '',
                         'role' => $doc['role'] ?? '',
                         'specialization' => $doc['specialization'] ?? '',
-                        'contact_number' => $doc['contact_number'] ?? '',
                         'assigned_project_id' => $doc['assigned_project_id'] ?? null,
                         'skills' => is_array($doc['skills'] ?? null) ? $doc['skills'] : [],
                         'current_site_deployment' => '',
@@ -187,12 +186,14 @@ class Manpower extends BaseController
             'last_name' => $lastName,
             'role' => trim((string) $this->request->getPost('manpower_role')),
             'specialization' => trim((string) $this->request->getPost('specialization')),
-            'contact_number' => trim((string) $this->request->getPost('contact_number')),
             'assigned_project_id' => trim((string) $this->request->getPost('assigned_project_id')) ?: null,
         ];
 
         $rawSkills = $this->request->getPost('skills') ?? [];
         $data['skills'] = array_values(array_filter(array_map('trim', is_array($rawSkills) ? $rawSkills : [])));
+        if (strtoupper($data['role']) === 'FOREMAN') {
+            $data['skills'] = ['FOREMAN'];
+        }
 
         // location: if assigned_project_id present and no explicit site provided, try to resolve
         $site = trim((string) $this->request->getPost('current_site_deployment'));

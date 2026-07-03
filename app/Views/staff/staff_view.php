@@ -76,7 +76,12 @@
 
     <div class="pager-top">
         <span>Show</span>
-        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <select class="pager-per-page">
+            <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+            <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+            <?php endforeach; ?>
+            <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+        </select>
         <span>records per page</span>
     </div>
 </div>
@@ -140,7 +145,11 @@
                 <?php $offset = $pagerOffset ?? 0; ?>
                 <?php foreach ($staff as $index => $person): ?>
                     <?php
-                        $pic = $person['profile_picture'] ?? '';
+                        $pic = (string)($person['profile_photo_url'] ?? '');
+                        if ($pic === '') {
+                            $picLocal = (string)($person['profile_picture'] ?? '');
+                            $pic = ($picLocal !== '' && file_exists(FCPATH . $picLocal)) ? asset_url($picLocal) : '';
+                        }
                         $ini = strtoupper(substr((string)($person['first_name'] ?? 'S'), 0, 1));
                     ?>
                     <tr data-staff-id="<?= esc((string)($person['id'] ?? '')) ?>"
@@ -151,7 +160,7 @@
                         </td>
                         <td style="padding:4px 8px">
                             <?php if ($pic !== ''): ?>
-                                <img src="<?= asset_url($pic) ?>" alt=""
+                                <img src="<?= esc($pic) ?>" alt=""
                                      style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid #d0dce8;display:block">
                             <?php else: ?>
                                 <div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e"><?= esc($ini) ?></div>
@@ -194,24 +203,8 @@
 </div>
 
 <div class="pager-wrapper">
-    <?php
-        $staffTotal  = $staffTotal ?? count($staff ?? []);
-        $perPage     = $perPage ?? 20;
-        $pagerOffset = $pagerOffset ?? 0;
-        $showingFrom = $staffTotal > 0 ? $pagerOffset + 1 : 0;
-        $showingTo   = min($pagerOffset + $perPage, $staffTotal);
-    ?>
-    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $staffTotal ?> records</span>
-    <?= service('pager')->links('staff', 'bootstrap_full') ?>
-    <?php $staffTotalPages = $staffTotal > 0 ? (int)ceil($staffTotal / $perPage) : 1; ?>
-    <?php if ($staffTotalPages > 1): ?>
-    <div class="pager-jump">
-        Go to page
-        <input type="number" class="pager-jump-input" min="1" max="<?= $staffTotalPages ?>"
-               data-total-pages="<?= $staffTotalPages ?>" data-page-param="page" placeholder="—">
-        <span>of <?= $staffTotalPages ?></span>
-    </div>
-    <?php endif; ?>
+    <span class="pager-info" id="staffPagerInfo"></span>
+    <div id="staffPagerNav"></div>
 </div>
 </div><!-- /.pager-section#staff-section -->
 
@@ -307,6 +300,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             row.style.display = show ? '' : 'none';
         });
+        if (window._staffPager) window._staffPager.render();
     }
 
     if (search) search.addEventListener('input', applyStaffFilters);
@@ -498,6 +492,16 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(() => showToast('Error deleting staff', 'error'));
     });
 
+    // ── Client-side pager ────────────────────────────────────────────────────
+    window._staffPager = new PzClientPager({
+        tableId: 'staffTable',
+        rowSel:  'tbody tr[data-staff-id]',
+        noCol:   2,
+        infoId:  'staffPagerInfo',
+        navId:   'staffPagerNav',
+    });
+    window._staffPager.render();
+
     // ── Archive (event delegation — works for live-added rows too) ────────
     const ARCHIVE_URL = '<?= base_url('staff/archive') ?>';
     document.addEventListener('click', async function (e) {
@@ -651,7 +655,6 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
   window._pzPageListeners = true;
 
   var _base          = window.pzBaseUrl || '';
-  var _page          = parseInt(new URLSearchParams(window.location.search).get('page') || '1', 10);
   var CAN_EDIT_STAFF = <?= pz_can('edit_staff') ? 'true' : 'false' ?>;
 
   var ROLE_CLS = {
@@ -694,8 +697,10 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
     var ini  = (fn.charAt(0) || 'S').toUpperCase();
     var fullName = fn + ' ' + ln;
     var no   = document.querySelectorAll('tr[data-staff-id]').length + 1;
-    var avatar = '<div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;'
-               + 'display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e">' + ini + '</div>';
+    var photoUrl = data.profile_photo_url || '';
+    var avatar = photoUrl
+        ? '<img src="' + photoUrl + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid #d0dce8;display:block">'
+        : '<div style="width:32px;height:32px;border-radius:50%;background:#e8eef5;border:2px solid #d0dce8;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#1a3c5e">' + ini + '</div>';
     return '<tr data-staff-id="' + id + '" class="pz-row-new">'
          + '<td class="pz-col-check"><input type="checkbox" class="row-cb" value="' + id + '" data-name="' + fullName + '"></td>'
          + '<td style="padding:4px 8px">' + avatar + '</td>'
@@ -724,7 +729,7 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
 
         if (chg.type === 'modified') { pzUpdateStaffRow(id, chg.doc.data()); return; }
 
-        if (chg.type === 'added' && _page === 1) {
+        if (chg.type === 'added') {
           if (document.querySelector('tr[data-staff-id="' + id + '"]')) return;
           var tbody = document.querySelector('table tbody');
           if (!tbody) return;
@@ -733,6 +738,7 @@ document.getElementById('exportModal')?.addEventListener('click', function(e) {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildStaffRow(id, chg.doc.data());
           tbody.appendChild(tmp.firstElementChild);
+          if (window._staffPager) window._staffPager.render();
           return;
         }
 

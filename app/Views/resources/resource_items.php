@@ -78,9 +78,6 @@
         </button>
 
         <div class="rv-btn-group-view">
-            <a href="<?= base_url('resources/viewItems/' . $resourceId . '/deleted') ?>" class="rv-btn-trash">
-                <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-            </a>
             <a href="<?= base_url('resources/viewItems/' . $resourceId . '/archived') ?>" class="rv-btn-archive">
                 <span class="material-symbols-outlined">inventory_2</span> Archive
             </a>
@@ -93,9 +90,6 @@
     <span class="bulk-count" id="bulkCount">0 selected</span>
     <button type="button" class="bulk-archive-btn" id="bulkArchiveBtn">
         <span class="material-symbols-outlined">inventory_2</span> Archive Selected
-    </button>
-    <button type="button" class="bulk-delete-btn" id="bulkDeleteBtn">
-        <span class="material-symbols-outlined">delete</span> Delete Selected
     </button>
 </div>
 
@@ -151,11 +145,17 @@
 <!-- Units Table -->
 <div class="pager-top">
     <span>Show</span>
-    <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+    <select class="pager-per-page">
+        <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+        <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+        <?php endforeach; ?>
+        <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+    </select>
     <span>records per page</span>
 </div>
-<div class="pz-table-wrap">
-    <table id="itemsTable" class="pz-table" data-offset="<?= $pagerOffset ?? 0 ?>">
+<div class="pager-section" id="items-section">
+<div class="table-container">
+    <table id="itemsTable" class="resource-table" data-offset="<?= $pagerOffset ?? 0 ?>">
         <thead>
             <tr>
                 <th style="width:36px"><input type="checkbox" id="selectAll" title="Select all"></th>
@@ -197,7 +197,7 @@
                     <td><input type="checkbox" class="row-check" value="<?= esc($item['id'] ?? '') ?>"></td>
                     <td class="pz-row-num"><?= $pagerOffset + $index + 1 ?></td>
                     <td><?= esc((string)($item['serial_number'] ?? 'N/A')) ?></td>
-                    <td class="pz-row-muted"><?= esc((string)($item['brand_name'] ?? $item['brand'] ?? '—')) ?></td>
+                    <td class="pz-row-muted" style="text-transform:uppercase"><?= esc((string)($item['brand_name'] ?? $item['brand'] ?? '—')) ?></td>
                     <td>
                         <?php $cond = strtolower($item['condition'] ?? ''); $cbc = $cond === 'new' ? 'pz-badge-approved' : ($cond === 'functional' ? 'pz-badge-available' : ($cond === 'worn' ? 'pz-badge-deployed' : 'pz-badge-rejected')); ?>
                         <span class="pz-badge <?= $cbc ?>"><?= esc((string)($item['condition'] ?? 'N/A')) ?></span>
@@ -284,11 +284,6 @@
                                 data-serial="<?= esc($item['serial_number'] ?? $item['id'] ?? 'this unit') ?>">
                                 <span class="material-symbols-outlined">inventory_2</span>
                             </button>
-                            <button class="action-btn action-delete delete-unit-btn" title="Delete"
-                                data-id="<?= esc($item['id'] ?? '') ?>"
-                                data-serial="<?= esc($item['serial_number'] ?? $item['id'] ?? 'this unit') ?>">
-                                <span class="material-symbols-outlined">delete</span>
-                            </button>
                         </div>
                     </td>
                 </tr>
@@ -296,23 +291,12 @@
             <?php endif; ?>
         </tbody>
     </table>
-</div>
+</div><!-- /.table-container -->
 <div class="pager-wrapper">
-    <?php
-        $showingFrom = $itemsTotal > 0 ? $pagerOffset + 1 : 0;
-        $showingTo   = min($pagerOffset + $perPage, $itemsTotal);
-    ?>
-    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $itemsTotal ?> records</span>
-    <?= service('pager')->links('items', 'bootstrap_full') ?>
-    <?php if ($itemsTotalPages > 1): ?>
-    <div class="pager-jump">
-        Go to page
-        <input type="number" class="pager-jump-input" min="1" max="<?= $itemsTotalPages ?>"
-               data-total-pages="<?= $itemsTotalPages ?>" data-page-param="page" placeholder="—">
-        <span>of <?= $itemsTotalPages ?></span>
-    </div>
-    <?php endif; ?>
+    <span class="pager-info" id="itemsPagerInfo"></span>
+    <div id="itemsPagerNav"></div>
 </div>
+</div><!-- /.pager-section#items-section -->
 </div><!-- /.page-module -->
 
 <!-- View Unit Modal -->
@@ -322,7 +306,7 @@
         <p style="font-weight:700;font-size:1rem;color:#3b2a0e;margin:0 0 1rem">Unit Details</p>
         <div class="pz-info-grid" style="gap:.5rem 1.2rem">
             <span class="pz-info-label">Serial No.</span><span class="pz-info-value" id="vu-serial">—</span>
-            <span class="pz-info-label">Brand</span><span class="pz-info-value" id="vu-brand">—</span>
+            <span class="pz-info-label">Brand</span><span class="pz-info-value" id="vu-brand" style="text-transform:uppercase">—</span>
             <span class="pz-info-label">Condition</span><span class="pz-info-value" id="vu-condition">—</span>
             <span class="pz-info-label">Status</span><span class="pz-info-value" id="vu-status">—</span>
             <span class="pz-info-label">Location Type</span><span class="pz-info-value" id="vu-loctype">—</span>
@@ -381,27 +365,6 @@
             <button onclick="document.getElementById('importUnitsModal').style.display='none'" class="pz-btn pz-btn-cancel" style="min-width:80px;">Cancel</button>
             <button id="unitsImportBtn" class="pz-btn pz-btn-primary" style="min-width:80px;"><span class="material-symbols-outlined">upload</span> Import</button>
         </div>
-    </div>
-</div>
-
-<!-- Delete Unit Confirmation Modal -->
-<div id="deleteItemModal" class="confirm-dialog" role="dialog" aria-modal="true">
-    <div class="confirm-backdrop" onclick="document.getElementById('deleteItemModal').style.display='none'"></div>
-    <div class="confirm-box">
-        <div class="confirm-hdr">
-            <span class="material-symbols-outlined confirm-hdr-icon">delete_forever</span>
-            <p class="confirm-hdr-title">Delete Unit</p>
-        </div>
-        <div class="confirm-content">
-            <p>Are you sure you want to delete unit <strong id="deleteUnitLabel"></strong>? This cannot be undone.</p>
-        </div>
-        <form id="deleteItemForm" method="POST" action="">
-            <?= csrf_field() ?>
-            <div class="confirm-actions">
-                <button type="submit" class="confirm-btn confirm-btn-action"><span class="material-symbols-outlined" style="font-size:1.1rem">delete_forever</span> Delete</button>
-                <button type="button" class="confirm-btn confirm-btn-cancel" onclick="document.getElementById('deleteItemModal').classList.remove('open')">Cancel</button>
-            </div>
-        </form>
     </div>
 </div>
 
@@ -750,6 +713,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const editForm  = document.getElementById('editItemForm');
     const baseUpdateUrl = '<?= base_url('resources/updateItem/' . $resourceId) ?>/';
 
+    function normalizeLocType(val) {
+        if (!val) return '';
+        var v = val.trim();
+        if (/^warehouse$/i.test(v)) return 'Warehouse';
+        if (/^project[\s_-]?site$/i.test(v)) return 'Project Site';
+        return v;
+    }
+
+    function statusToLocType(status) {
+        if (!status) return '';
+        var s = status.toLowerCase().replace(/[^a-z]/g, '');
+        if (s === 'instorage' || s === 'repair') return 'Warehouse';
+        if (s === 'inuse') return 'Project Site';
+        return '';
+    }
+
     document.querySelectorAll('.edit-unit-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             const d = this.dataset;
@@ -758,10 +737,18 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('editBrand').value     = d.brand;
             document.getElementById('editCondition').value = d.condition;
             document.getElementById('editStatus').value    = d.status;
-            document.getElementById('editLocType').value   = d.locType || '';
+            var locType = normalizeLocType(d.locType) || statusToLocType(d.status);
+            document.getElementById('editLocType').value   = locType;
             document.getElementById('editLocAddr').value   = d.locAddr || '';
             editModal.style.display = 'flex';
         });
+    });
+
+    document.getElementById('editStatus') && document.getElementById('editStatus').addEventListener('change', function () {
+        var locTypeEl = document.getElementById('editLocType');
+        if (locTypeEl && !locTypeEl.value) {
+            locTypeEl.value = statusToLocType(this.value);
+        }
     });
 
     // Close edit modal when clicking the backdrop
@@ -827,26 +814,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // ── Delete Unit Modal ────────────────────────────────────────────────────
-    const deleteModal     = document.getElementById('deleteItemModal');
-    const deleteForm      = document.getElementById('deleteItemForm');
-    const deleteUnitLabel = document.getElementById('deleteUnitLabel');
-    const baseDeleteUrl   = '<?= base_url('resources/deleteItem/' . $resourceId) ?>/';
-
-    document.querySelectorAll('.delete-unit-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            const id     = this.dataset.id;
-            const serial = this.dataset.serial || id;
-            deleteForm.action      = baseDeleteUrl + encodeURIComponent(id);
-            deleteUnitLabel.textContent = serial;
-            deleteModal.classList.add('open');
-        });
-    });
-
-    deleteModal.querySelector('.confirm-backdrop')?.addEventListener('click', function () {
-        deleteModal.classList.remove('open');
-    });
-
     // ── View unit modal ──────────────────────────────────────────────────────
     var viewModal = document.getElementById('viewUnitModal');
     document.querySelectorAll('.view-unit-btn').forEach(function (btn) {
@@ -906,7 +873,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     var bulkArchBtn = document.getElementById('bulkArchiveBtn');
-    var bulkDelBtn  = document.getElementById('bulkDeleteBtn');
 
     bulkArchBtn && bulkArchBtn.addEventListener('click', async function () {
         var ids = getCheckedIds();
@@ -919,22 +885,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     ids.forEach(id => { animateRowOut(document.querySelector('.row-check[value="' + id + '"]')?.closest('tr')); });
                     setTimeout(renumberTable, 290);
                     showToast(d.archived + ' unit(s) archived', 'success');
-                    updateBulkBar();
-                }
-            });
-    });
-
-    bulkDelBtn && bulkDelBtn.addEventListener('click', async function () {
-        var ids = getCheckedIds();
-        if (!ids.length || !await openConfirm('Permanently delete ' + ids.length + ' unit(s)? This cannot be undone.')) return;
-        var fd = new FormData(); ids.forEach(id => fd.append('ids[]', id));
-        if (csrfName && csrfHash) fd.append(csrfName, csrfHash);
-        fetch('<?= base_url('resources/bulkDeleteItems/' . $resourceId) ?>', { method: 'POST', body: fd })
-            .then(r => r.json()).then(function (d) {
-                if (d.success) {
-                    ids.forEach(id => { animateRowOut(document.querySelector('.row-check[value="' + id + '"]')?.closest('tr')); });
-                    setTimeout(renumberTable, 290);
-                    showToast(d.deleted + ' unit(s) deleted', 'success');
                     updateBulkBar();
                 }
             });
@@ -964,6 +914,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (itemFilters.brand     && !(row.dataset.brand      ||'').includes(itemFilters.brand)) show = false;
             row.style.display = show ? '' : 'none';
         });
+        if (window._itemsPager) window._itemsPager.render();
     }
 
     if (unitSearch) unitSearch.addEventListener('input', applyItemFilters);
@@ -1004,6 +955,16 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target === exportModal) { exportModal.style.display = 'none'; exportModal.setAttribute('hidden', ''); }
         });
     }
+
+    // ── Client-side pager ────────────────────────────────────────────────────
+    window._itemsPager = new PzClientPager({
+        tableId: 'itemsTable',
+        rowSel:  'tbody tr[data-id]',
+        noCol:   1,
+        infoId:  'itemsPagerInfo',
+        navId:   'itemsPagerNav',
+    });
+    window._itemsPager.render();
 
     // ── Import units ─────────────────────────────────────────────────────────
     const importModal  = document.getElementById('importUnitsModal');

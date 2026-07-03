@@ -95,28 +95,6 @@ class Resources extends BaseController
                     strcasecmp((string)($m['status'] ?? ''), $mpStatus) === 0));
             }
 
-            // ── Pagination (separate per table) ─────────────────────────────
-            $perPage = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $pager   = service('pager');
-
-            $eqPage    = max(1, (int)($this->request->getGet('page_equipment') ?? 1));
-            $eqTotal   = count($equipment);
-            $pager->store('equipment', $eqPage, $perPage, $eqTotal);
-            $eqOffset  = ($eqPage - 1) * $perPage;
-            $equipment = array_slice($equipment, $eqOffset, $perPage);
-
-            $toolsPage    = max(1, (int)($this->request->getGet('page_tools') ?? 1));
-            $toolsTotal   = count($tools);
-            $pager->store('tools', $toolsPage, $perPage, $toolsTotal);
-            $toolsOffset  = ($toolsPage - 1) * $perPage;
-            $tools        = array_slice($tools, $toolsOffset, $perPage);
-
-            $mpPage    = max(1, (int)($this->request->getGet('page_manpower') ?? 1));
-            $mpTotal   = count($manpower);
-            $pager->store('manpower', $mpPage, $perPage, $mpTotal);
-            $mpOffset  = ($mpPage - 1) * $perPage;
-            $manpower  = array_slice($manpower, $mpOffset, $perPage);
-
             $trashService = new TrashService($this->firestore);
             $recentlyDeletedResources = $trashService->getTrashItems('resource');
             $recentlyDeletedManpower  = $trashService->getTrashItems('manpower');
@@ -124,15 +102,11 @@ class Resources extends BaseController
             return view('resources/resources_view', [
                 'pageTitle'                 => 'Resources',
                 'equipment'                 => $equipment,
-                'eqTotal'                   => $eqTotal,
-                'eqOffset'                  => $eqOffset,
+                'eqTotal'                   => count($equipment),
                 'tools'                     => $tools,
-                'toolsTotal'                => $toolsTotal,
-                'toolsOffset'               => $toolsOffset,
+                'toolsTotal'                => count($tools),
                 'manpower'                  => $manpower,
-                'mpTotal'                   => $mpTotal,
-                'mpOffset'                  => $mpOffset,
-                'perPage'                   => $perPage,
+                'mpTotal'                   => count($manpower),
                 'activeEquipFilters'        => ['eq_sort'    => $eqSort],
                 'activeToolFilters'         => ['tools_sort' => $toolsSort],
                 'activeManpowerFilters'     => ['mp_role' => $mpRole, 'mp_spec' => $mpSpec, 'mp_status' => $mpStatus],
@@ -289,7 +263,7 @@ class Resources extends BaseController
             return view($view, [
                 'pageTitle' => $editTitle,
                 'resource' => $resource,
-                'items' => $isManpower ? [] : $this->model->getResourceItems($id),
+                'items' => $isManpower ? [] : $this->groupItemsForEdit($this->sortItemsBySerial($this->model->getResourceItems($id))),
                 'projectSites' => $this->getProjectSiteOptions(),
                 'projects' => $this->getProjectOptions(),
                 'warehouseLocations' => $this->getWarehouseLocationOptions(),
@@ -324,6 +298,21 @@ class Resources extends BaseController
 
             if (!$existing) {
                 return redirect()->to('resources')->with('error', 'Resource not found');
+            }
+
+            // Model name edit (preserve_items=1): strict partial update — only patches name and
+            // updated_at; never reads or writes the items subcollection so units are untouched.
+            // Uses ->update() (field-level merge), NOT ->set() which would overwrite the whole doc.
+            $preserveItems = (bool) $this->request->getPost('preserve_items');
+            if (!$isManpower && $preserveItems) {
+                $newName = strtoupper(trim((string) $this->request->getPost('name')));
+                $this->firestore->getDb()
+                    ->collection('resource')->document($id)
+                    ->update([
+                        ['path' => 'name',       'value' => $newName],
+                        ['path' => 'updated_at', 'value' => new \Google\Cloud\Core\Timestamp(new \DateTime())],
+                    ]);
+                return redirect()->to('resources')->with('success', 'Resource updated successfully!');
             }
 
             $data = $this->buildResourcePayload();
@@ -747,14 +736,7 @@ class Resources extends BaseController
                 (string)($b['serial_number'] ?? '')
             ));
 
-            $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-            $itemsPage   = max(1, (int) ($this->request->getGet('page') ?? 1));
-            $itemsTotal  = count($items);
-            $pager       = service('pager');
-            $pager->store('items', $itemsPage, $perPage, $itemsTotal);
-            $pagerOffset = ($itemsPage - 1) * $perPage;
-            $items       = array_slice($items, $pagerOffset, $perPage);
-
+            $itemsTotal = count($items);
             $items = $this->attachNextAvailablePredictions($items, (string)($resource['name'] ?? 'Resource'), (string)($resource['category'] ?? ''));
 
             return view('resources/resource_items', [
@@ -763,9 +745,6 @@ class Resources extends BaseController
                 'resourceId'              => $resourceId,
                 'items'                   => $items,
                 'itemsTotal'              => $itemsTotal,
-                'perPage'                 => $perPage,
-                'pagerOffset'             => $pagerOffset,
-                'itemsTotalPages'         => $itemsTotal > 0 ? (int)ceil($itemsTotal / $perPage) : 1,
                 'activeFilters'           => [
                     'brand'     => $filterBrand,
                     'condition' => $filterCondition,
@@ -859,8 +838,8 @@ class Resources extends BaseController
                 return redirect()->back()->with('error', 'Missing resource or item id');
             }
 
-            $serial   = trim((string)($this->request->getPost('serial_number') ?? ''));
-            $brand    = trim((string)($this->request->getPost('brand')         ?? ''));
+            $serial   = strtoupper(trim((string)($this->request->getPost('serial_number') ?? '')));
+            $brand    = strtoupper(trim((string)($this->request->getPost('brand')         ?? '')));
             $cond     = trim((string)($this->request->getPost('condition')     ?? ''));
             $status   = trim((string)($this->request->getPost('status')        ?? ''));
             $locType  = strtoupper(trim((string)($this->request->getPost('location_type') ?? '')));
@@ -1047,13 +1026,11 @@ class Resources extends BaseController
             $items     = $this->model->getResourceItems($resourceId);
             $total     = count($items);
             $available = $this->countAvailableUnits($items);
-            $status    = $available > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
             $this->firestore->getDb()
                 ->collection('resource')->document($resourceId)
                 ->update([
-                    ['path' => 'total_quantity',    'value' => $total],
-                    ['path' => 'available_quantity', 'value' => $available],
-                    ['path' => 'status',             'value' => $status],
+                    ['path' => 'total_quantity',     'value' => $total],
+                    ['path' => 'available_quantity',  'value' => $available],
                 ]);
         } catch (\Throwable $e) {
             log_message('error', 'syncResourceCounts(' . $resourceId . '): ' . $e->getMessage());
@@ -1089,7 +1066,7 @@ class Resources extends BaseController
         $items = $this->normalizeItems($this->request->getPost('items') ?? []);
 
         $data = [
-            'name'     => trim((string) $this->request->getPost('name')),
+            'name'     => strtoupper(trim((string) $this->request->getPost('name'))),
             'category' => $category,
         ];
 
@@ -1126,6 +1103,9 @@ class Resources extends BaseController
             $data['next_availability']   = trim((string) $this->request->getPost('next_availability')) ?: null;
             $rawSkills = $this->request->getPost('skills') ?? [];
             $data['skills'] = array_values(array_filter(array_map('trim', is_array($rawSkills) ? $rawSkills : [])));
+            if (strtoupper($data['role']) === 'FOREMAN') {
+                $data['skills'] = ['FOREMAN'];
+            }
 
             // Workers always get a location; default to WAREHOUSE — mobile stamps real values on transfer arrival
             $site         = trim((string) $this->request->getPost('current_site_deployment'));
@@ -1160,8 +1140,8 @@ class Resources extends BaseController
 
         foreach ($rawItems as $item) {
             // New spec fields
-            $serialNumber = trim((string) ($item['serial_number'] ?? ''));
-            $brand        = trim((string) ($item['brand_name'] ?? $item['brand'] ?? ''));
+            $serialNumber = strtoupper(trim((string) ($item['serial_number'] ?? '')));
+            $brand        = strtoupper(trim((string) ($item['brand_name'] ?? $item['brand'] ?? '')));
             $condition = trim((string) ($item['condition'] ?? ''));
             $status = trim((string) ($item['status'] ?? 'In-Storage'));
             $address = trim((string) ($item['address'] ?? ''));
@@ -1663,6 +1643,43 @@ class Resources extends BaseController
         }
     }
 
+    private function sortItemsBySerial(array $items): array
+    {
+        usort($items, fn($a, $b) => strnatcasecmp(
+            (string) ($a['serial_number'] ?? ''),
+            (string) ($b['serial_number'] ?? '')
+        ));
+        return $items;
+    }
+
+    private function groupItemsForEdit(array $items): array
+    {
+        $groups  = [];
+        $prevKey = null;
+
+        foreach ($items as $item) {
+            $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
+            $key = implode("\x00", [
+                strtolower(trim((string)($item['brand_name'] ?? $item['brand'] ?? ''))),
+                strtolower(trim((string)($item['condition'] ?? ''))),
+                strtolower(trim((string)($item['status'] ?? ''))),
+                strtolower(trim((string)($loc['type'] ?? ''))),
+                trim((string)($loc['address'] ?? '')),
+            ]);
+
+            if ($prevKey !== null && $key === $prevKey) {
+                $groups[count($groups) - 1]['quantity']++;
+            } else {
+                $copy             = $item;
+                $copy['quantity'] = 1;
+                $groups[]         = $copy;
+                $prevKey          = $key;
+            }
+        }
+
+        return $groups;
+    }
+
     private function normalizeResourceForView(array $resource): array
     {
         $resource['location'] = is_array($resource['location'] ?? null) ? $resource['location'] : ['address' => '', 'type' => ''];
@@ -1674,13 +1691,6 @@ class Resources extends BaseController
         $resource['manpower_details'] = is_array($resource['manpower_details'] ?? null) ? $resource['manpower_details'] : [];
         $resource['total_quantity_display'] = (int) ($resource['total_quantity'] ?? $resource['asset_details']['total_quantity'] ?? 0);
         $resource['available_units_display'] = max(0, (int) ($resource['available_quantity'] ?? $resource['asset_details']['available_quantity'] ?? 0));
-
-        // Derive status for equipment/tools when the field is missing or empty
-        if (empty($resource['status']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
-            $avail = $resource['available_units_display'];
-            $total = $resource['total_quantity_display'];
-            $resource['status'] = $avail > 0 ? 'Available' : ($total > 0 ? 'In-Use' : 'Available');
-        }
 
         // Ensure model_code is populated for Equipment/Tools
         if (empty($resource['model_code']) && in_array($resource['category'] ?? '', ['Equipment', 'Tools'], true)) {
@@ -1731,7 +1741,6 @@ class Resources extends BaseController
                 'status' => $resource['status'] ?? ($resource['manpower_details']['status'] ?? ''),
                 'role' => $resource['role'] ?? ($resource['manpower_details']['role'] ?? ''),
                 'specialization' => $resource['specialization'] ?? ($resource['manpower_details']['specialization'] ?? ''),
-                'contact_number' => $resource['contact_number'] ?? ($resource['manpower_details']['contact_number'] ?? ''),
                 'assigned_project_id' => (function($v){ return $v instanceof \Google\Cloud\Firestore\DocumentReference ? $v->id() : ($v ?: null); })($resource['assigned_project_id'] ?? ($resource['manpower_details']['assigned_project_id'] ?? null)),
                 'skills' => is_array($resource['skills'] ?? null) ? $resource['skills'] : ($resource['manpower_details']['skills'] ?? []),
                 'current_site_deployment' => '',
@@ -1757,6 +1766,23 @@ class Resources extends BaseController
                 }
             } else {
                 $resource['manpower_details']['current_site_deployment'] = $resource['location']['address'] ?? ($resource['manpower_details']['current_site_deployment'] ?? '');
+            }
+        }
+
+        // Backward-compat: older records stored the specialization value inside skills[].
+        // Lift it into the specialization field so both columns display correctly.
+        if (!empty($resource['manpower_details']) && is_array($resource['manpower_details'])
+            && empty($resource['manpower_details']['specialization'])
+        ) {
+            $specEnum  = ['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'];
+            $skillsArr = is_array($resource['manpower_details']['skills'] ?? null) ? $resource['manpower_details']['skills'] : [];
+            foreach ($skillsArr as $k => $s) {
+                if (in_array(strtoupper(trim((string)$s)), $specEnum, true)) {
+                    $resource['manpower_details']['specialization'] = strtoupper(trim((string)$s));
+                    unset($skillsArr[$k]);
+                    $resource['manpower_details']['skills'] = array_values($skillsArr);
+                    break;
+                }
             }
         }
 

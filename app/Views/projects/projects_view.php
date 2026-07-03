@@ -81,7 +81,12 @@
 
     <div class="pager-top">
         <span>Show</span>
-        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <select class="pager-per-page">
+            <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+            <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+            <?php endforeach; ?>
+            <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+        </select>
         <span>records per page</span>
     </div>
 </div>
@@ -232,24 +237,8 @@
 </div>
 
 <div class="pager-wrapper">
-    <?php
-        $projectsTotal = $projectsTotal ?? count($projects ?? []);
-        $perPage       = $perPage ?? 20;
-        $pagerOffset   = $pagerOffset ?? 0;
-        $showingFrom   = $projectsTotal > 0 ? $pagerOffset + 1 : 0;
-        $showingTo     = min($pagerOffset + $perPage, $projectsTotal);
-    ?>
-    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $projectsTotal ?> records</span>
-    <?= service('pager')->links('projects', 'bootstrap_full') ?>
-    <?php $projTotalPages = $projectsTotal > 0 ? (int)ceil($projectsTotal / $perPage) : 1; ?>
-    <?php if ($projTotalPages > 1): ?>
-    <div class="pager-jump">
-        Go to page
-        <input type="number" class="pager-jump-input" min="1" max="<?= $projTotalPages ?>"
-               data-total-pages="<?= $projTotalPages ?>" data-page-param="page_projects" placeholder="—">
-        <span>of <?= $projTotalPages ?></span>
-    </div>
-    <?php endif; ?>
+    <span class="pager-info" id="projectsPagerInfo"></span>
+    <div id="projectsPagerNav"></div>
 </div>
 </div><!-- /.pager-section#projects-section -->
 
@@ -371,6 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             visible.forEach(r => tbody.appendChild(r));
         }
+        if (window._projectsPager) window._projectsPager.render();
     }
 
     if (filterForm) filterForm.querySelectorAll('select').forEach(s => s.addEventListener('change', applyProjectFilters));
@@ -603,6 +593,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     exportBtn.addEventListener('click', () => openExportModal(exportBtn.dataset.module));
     importBtn.addEventListener('click', () => openImportModal(importBtn.dataset.module));
+
+    // ── Client-side pager ────────────────────────────────────────────────────
+    window._projectsPager = new PzClientPager({
+        tableId: 'projectsTable',
+        rowSel:  'tbody tr[data-proj-id]',
+        noCol:   1,
+        infoId:  'projectsPagerInfo',
+        navId:   'projectsPagerNav',
+    });
+    window._projectsPager.render();
 });
 </script>
 
@@ -770,7 +770,6 @@ document.addEventListener('DOMContentLoaded', function () {
   window._pzPageListeners = true;
 
   var _base  = window.pzBaseUrl || '';
-  var _page  = parseInt(new URLSearchParams(window.location.search).get('page_projects') || '1', 10);
   var CAN_EDIT_PROJECT = <?= pz_can('edit_project') ? 'true' : 'false' ?>;
 
   function flashRow(row) {
@@ -830,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (chg.type === 'modified') { pzUpdateProjectRow(id, chg.doc.data()); return; }
 
-        if (chg.type === 'added' && _page === 1) {
+        if (chg.type === 'added') {
           if (document.querySelector('tr[data-proj-id="' + id + '"]')) return;
           var tbody = document.querySelector('table tbody');
           if (!tbody) return;
@@ -839,6 +838,7 @@ document.addEventListener('DOMContentLoaded', function () {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildProjectRow(id, chg.doc.data());
           tbody.appendChild(tmp.firstElementChild);
+          if (window._projectsPager) window._projectsPager.render();
           return;
         }
 

@@ -11,8 +11,7 @@ $activeFilterCount = ($filterStatus !== '' ? 1 : 0) + ($filterCategory !== '' ? 
 
 helper('access');
 $canArchive = pz_can('archive_request');
-$canDelete  = pz_can('delete_request');
-$canBulk    = $canArchive || $canDelete;
+$canBulk    = $canArchive;
 ?>
 
 <div class="pz-page-header">
@@ -47,9 +46,6 @@ $canBulk    = $canArchive || $canDelete;
     </button>
 
     <div class="rv-btn-group-view">
-        <a href="<?= base_url('requests/deleted') ?>" class="rv-btn-trash">
-            <span class="material-symbols-outlined">restore_from_trash</span> Deleted
-        </a>
         <a href="<?= base_url('requests/archived') ?>" class="rv-btn-archive">
             <span class="material-symbols-outlined">inventory_2</span> Archive
         </a>
@@ -57,7 +53,12 @@ $canBulk    = $canArchive || $canDelete;
 
     <div class="pager-top">
         <span>Show</span>
-        <input type="number" class="pager-per-page" value="<?= $perPage ?? 20 ?>" min="5" max="200" title="Rows per page — press Enter to apply">
+        <select class="pager-per-page">
+            <?php foreach ([5,10,20,30,40,50] as $_pp): ?>
+            <option value="<?= $_pp ?>"<?= (($perPage??10)==$_pp&&($perPage??10)<99999)?' selected':'' ?>><?= $_pp ?></option>
+            <?php endforeach; ?>
+            <option value="all"<?= (($perPage??10)>=99999)?' selected':'' ?>>All</option>
+        </select>
         <span>records per page</span>
     </div>
 </div>
@@ -108,11 +109,6 @@ $canBulk    = $canArchive || $canDelete;
         <span class="material-symbols-outlined" style="font-size:16px">inventory_2</span> Archive Selected
     </button>
     <?php endif; ?>
-    <?php if ($canDelete): ?>
-    <button type="button" id="rrBulkDeleteBtn" class="pz-btn-sm pz-btn-delete" style="display:flex;align-items:center;gap:5px;">
-        <span class="material-symbols-outlined" style="font-size:16px">delete</span> Delete Selected
-    </button>
-    <?php endif; ?>
     <button type="button" id="rrBulkClearBtn" style="background:none;border:none;font-size:.8rem;color:#999;cursor:pointer;padding:2px 6px;">Clear</button>
 </div>
 <?php endif; ?>
@@ -127,7 +123,7 @@ $canBulk    = $canArchive || $canDelete;
                     <input type="checkbox" id="rrSelectAll" title="Select all">
                 </th>
                 <?php endif; ?>
-                <th>ID</th>
+                <th>No.</th>
                 <th>Source</th>
                 <th>Destination</th>
                 <th class="text-center">Status</th>
@@ -148,7 +144,9 @@ $canBulk    = $canArchive || $canDelete;
                 <?php endif; ?>
             </td></tr>
         <?php else: ?>
+            <?php $rrRowNum = 0; ?>
             <?php foreach ($requests as $r): ?>
+            <?php $rrRowNum++; ?>
             <tr data-req-id="<?= esc($r['id']) ?>"
                 data-req-status="<?= esc(strtolower($r['status'] ?? 'pending')) ?>"
                 data-req-category="<?= esc(strtolower($r['resource_category'] ?? '')) ?>">
@@ -157,7 +155,7 @@ $canBulk    = $canArchive || $canDelete;
                     <input type="checkbox" class="rr-row-cb" value="<?= esc($r['id']) ?>">
                 </td>
                 <?php endif; ?>
-                <td style="font-family:monospace;letter-spacing:.05em"><?= esc(strtoupper(substr($r['id'], 0, 6))) ?></td>
+                <td><?= $rrRowNum ?></td>
                 <td title="<?= esc($r['source_site_name'] ?? '—') ?>"><?= esc($r['source_site_name'] ?? '—') ?></td>
                 <td title="<?= esc($r['destination_site_name'] ?? '—') ?>"><?= esc($r['destination_site_name'] ?? '—') ?></td>
                 <td class="text-center" data-req-status><?= rr_badge($r['status'] ?? 'Pending') ?></td>
@@ -173,11 +171,6 @@ $canBulk    = $canArchive || $canDelete;
                         <span class="material-symbols-outlined" style="color:#c07000">inventory_2</span>
                     </button>
                     <?php endif; ?>
-                    <?php if ($canDelete): ?>
-                    <button type="button" class="action-btn rr-delete-btn" data-id="<?= esc($r['id']) ?>" title="Delete">
-                        <span class="material-symbols-outlined" style="color:#c0392b">delete</span>
-                    </button>
-                    <?php endif; ?>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -187,20 +180,8 @@ $canBulk    = $canArchive || $canDelete;
 </div>
 
 <div class="pager-wrapper">
-    <?php
-        $showingFrom = $requestsTotal > 0 ? $pagerOffset + 1 : 0;
-        $showingTo   = min($pagerOffset + $perPage, $requestsTotal);
-    ?>
-    <span class="pager-info">Showing <?= $showingFrom ?>–<?= $showingTo ?> of <?= $requestsTotal ?> records</span>
-    <?= service('pager')->links('requests', 'bootstrap_full') ?>
-    <?php if ($requestsTotalPages > 1): ?>
-    <div class="pager-jump">
-        Go to page
-        <input type="number" class="pager-jump-input" min="1" max="<?= $requestsTotalPages ?>"
-               data-total-pages="<?= $requestsTotalPages ?>" data-page-param="page" placeholder="—">
-        <span>of <?= $requestsTotalPages ?></span>
-    </div>
-    <?php endif; ?>
+    <span class="pager-info" id="rrPagerInfo"></span>
+    <div id="rrPagerNav"></div>
 </div>
 
 <!-- Confirm dialog reuse -->
@@ -228,7 +209,6 @@ var CSRF_N = '<?= csrf_token() ?>';
 var CSRF_V = '<?= csrf_hash() ?>';
 var BASE   = '<?= base_url() ?>';
 var CAN_ARCHIVE = <?= $canArchive ? 'true' : 'false' ?>;
-var CAN_DELETE  = <?= $canDelete  ? 'true' : 'false' ?>;
 
 /* ── Filter panel toggle ── */
 var filterToggle = document.getElementById('rrFilterToggle');
@@ -252,6 +232,7 @@ function applyRRFilters() {
         if (rrFilters.category && (row.dataset.reqCategory ||'') !== rrFilters.category) show = false;
         row.style.display = show ? '' : 'none';
     });
+    if (window._rrPager) window._rrPager.render();
 }
 
 var searchInput = document.getElementById('rrSearch');
@@ -406,21 +387,9 @@ document.getElementById('rrBulkArchiveBtn')?.addEventListener('click', async fun
     }).catch(function () { flash('Network error.', false); });
 });
 
-/* ── Bulk delete ── */
-document.getElementById('rrBulkDeleteBtn')?.addEventListener('click', async function () {
-    var ids = getChecked();
-    if (!ids.length) return;
-    if (!await openConfirm('Delete Requests', 'Delete ' + ids.length + ' selected request(s)? They will be moved to trash.', 'delete')) return;
-    post(BASE + 'requests/delete', { 'ids[]': ids }).then(function (d) {
-        if (d.success) { removeRows(ids); flash(ids.length + ' request(s) deleted.', true); }
-        else flash(d.message || 'Delete failed.', false);
-    }).catch(function () { flash('Network error.', false); });
-});
-
 /* ── Row-level archive ── */
 document.addEventListener('click', async function (e) {
     var archBtn = e.target.closest('.rr-archive-btn');
-    var delBtn  = e.target.closest('.rr-delete-btn');
 
     if (archBtn) {
         var id = archBtn.dataset.id;
@@ -432,16 +401,17 @@ document.addEventListener('click', async function (e) {
         }).catch(function () { flash('Network error.', false); archBtn.disabled = false; });
     }
 
-    if (delBtn) {
-        var id = delBtn.dataset.id;
-        if (!await openConfirm('Delete Request', 'Delete request ' + id.substring(0,6).toUpperCase() + '? It will be moved to trash.', 'delete')) return;
-        delBtn.disabled = true;
-        post(BASE + 'requests/delete', { 'ids[]': [id] }).then(function (d) {
-            if (d.success) { removeRows([id]); flash('Request deleted.', true); }
-            else { flash(d.message || 'Delete failed.', false); delBtn.disabled = false; }
-        }).catch(function () { flash('Network error.', false); delBtn.disabled = false; });
-    }
 });
+
+/* ── Client-side pager ── */
+window._rrPager = new PzClientPager({
+    tableId: 'rrTable',
+    rowSel:  'tbody tr[data-req-id]',
+    noCol:   -1,
+    infoId:  'rrPagerInfo',
+    navId:   'rrPagerNav',
+});
+window._rrPager.render();
 }());
 </script>
 <?php $this->endSection() ?>
@@ -452,12 +422,9 @@ document.addEventListener('click', async function (e) {
   window._pzPageListeners = true;
 
   var _base = window.pzBaseUrl || '';
-  var _params   = new URLSearchParams(window.location.search);
-  var _fStatus  = (_params.get('status')   || '').toLowerCase();
-  var _fCat     = (_params.get('category') || '').toLowerCase();
-  var _page     = parseInt(_params.get('page') || '1', 10);
+  var _fStatus  = (new URLSearchParams(window.location.search).get('status')   || '').toLowerCase();
+  var _fCat     = (new URLSearchParams(window.location.search).get('category') || '').toLowerCase();
   var CAN_ARCHIVE = <?= $canArchive ? 'true' : 'false' ?>;
-  var CAN_DELETE  = <?= $canDelete  ? 'true' : 'false' ?>;
 
   function fmtDate(ts) {
     if (!ts || typeof ts.toDate !== 'function') return '—';
@@ -473,9 +440,8 @@ document.addEventListener('click', async function (e) {
     var shortId = id.substring(0, 6).toUpperCase();
     var src     = (data.source_site_name      || '—').replace(/</g,'&lt;');
     var dst     = (data.destination_site_name || '—').replace(/</g,'&lt;');
-    var cbCol   = (CAN_ARCHIVE || CAN_DELETE) ? '<td class="pz-col-check"><input type="checkbox" class="rr-row-cb" value="' + id + '"></td>' : '';
+    var cbCol   = CAN_ARCHIVE ? '<td class="pz-col-check"><input type="checkbox" class="rr-row-cb" value="' + id + '"></td>' : '';
     var archBtn = CAN_ARCHIVE ? '<button type="button" class="action-btn rr-archive-btn" data-id="' + id + '" title="Archive"><span class="material-symbols-outlined" style="color:#c07000">inventory_2</span></button>' : '';
-    var delBtn  = CAN_DELETE  ? '<button type="button" class="action-btn rr-delete-btn"  data-id="' + id + '" title="Delete"><span class="material-symbols-outlined" style="color:#c0392b">delete</span></button>' : '';
     return '<tr data-req-id="' + id + '" class="pz-row-new">'
          + cbCol
          + '<td style="font-family:monospace;letter-spacing:.05em">' + shortId + '</td>'
@@ -487,12 +453,11 @@ document.addEventListener('click', async function (e) {
          + '<td class="rr-col-md" style="white-space:nowrap">' + fmtDate(data.created_at) + '</td>'
          + '<td class="text-center" style="white-space:nowrap"><a href="' + _base + 'requests/' + id + '" class="action-btn" title="View details">'
          + '<span class="material-symbols-outlined">visibility</span></a>'
-         + archBtn + delBtn + '</td>'
+         + archBtn + '</td>'
          + '</tr>';
   }
 
   function matchesFilter(data) {
-    if (_page > 1) return false;
     var status = (data.status   || '').toLowerCase();
     var cat    = (data.resource_category || '').toLowerCase();
     if (_fStatus && _fStatus !== status) return false;
@@ -537,6 +502,7 @@ document.addEventListener('click', async function (e) {
           var tmp = document.createElement('tbody');
           tmp.innerHTML = buildRow(id, data);
           tbody.insertBefore(tmp.firstElementChild, tbody.firstChild);
+          if (window._rrPager) window._rrPager.render();
           return;
         }
 
@@ -550,7 +516,7 @@ document.addEventListener('click', async function (e) {
             row.remove();
             var tbody = document.querySelector('#rrTable tbody');
             if (tbody && !tbody.querySelector('tr[data-req-id]')) {
-              var cols = (CAN_ARCHIVE || CAN_DELETE) ? 9 : 8;
+              var cols = CAN_ARCHIVE ? 9 : 8;
               tbody.innerHTML = '<tr><td colspan="' + cols + '" class="pz-table-empty">No requests found.</td></tr>';
             }
           }, 400);

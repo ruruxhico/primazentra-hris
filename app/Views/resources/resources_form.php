@@ -135,12 +135,6 @@
             </div>
             <div class="pz-form-row cols-2" style="margin-top:.65rem">
                 <div class="pz-form-group">
-                    <label for="contact_number">Contact Number *</label>
-                    <input type="tel" id="contact_number" name="contact_number"
-                           value="<?= esc((string)($resource['manpower_details']['contact_number'] ?? '')) ?>"
-                           placeholder="09XX-XXXX-XXX" required>
-                </div>
-                <div class="pz-form-group">
                     <label for="manpower_assigned_project_id">Assigned Project (Optional)</label>
                     <input type="text" id="manpower_assigned_project_id" name="manpower_assigned_project_id"
                            value="<?= esc((string)($resource['manpower_details']['assigned_project_id'] ?? '')) ?>">

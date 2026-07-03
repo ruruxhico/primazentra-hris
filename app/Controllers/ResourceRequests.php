@@ -55,24 +55,12 @@ class ResourceRequests extends BaseController
             $requests = [];
         }
 
-        $perPage     = max(5, min(200, (int)($this->request->getGet('per_page') ?: config('Pager')->perPage)));
-        $currentPage = max(1, (int) ($this->request->getGet('page') ?? 1));
-        $total       = count($requests);
-        $pager       = service('pager');
-        $pager->store('requests', $currentPage, $perPage, $total);
-        $requests = array_slice($requests, ($currentPage - 1) * $perPage, $perPage);
-
-        $pagerOffset   = ($currentPage - 1) * $perPage;
-        $totalPages    = $total > 0 ? (int)ceil($total / $perPage) : 1;
-
+        $total = count($requests);
         return view('requests/index', [
             'pageTitle'       => 'Resource Requests & Transfers',
             'activePage'      => 'resources',
             'requests'        => $requests,
             'requestsTotal'   => $total,
-            'perPage'         => $perPage,
-            'pagerOffset'     => $pagerOffset,
-            'requestsTotalPages' => $totalPages,
             'filterStatus'    => $status,
             'filterCategory'  => $category,
             'filterSearch'    => $search,
@@ -95,6 +83,60 @@ class ResourceRequests extends BaseController
 
         if (!$req) {
             return redirect()->to('requests')->with('error', 'Request not found.');
+        }
+
+        // Resolve resource_name when it is missing (request stored model doc ID instead of name).
+        if (empty($req['resource_name']) || empty($req['requested_model_name'])) {
+            $modelDocId = trim($req['requested_model_id'] ?? $req['resource_id'] ?? '');
+            if ($modelDocId !== '') {
+                try {
+                    $modelSnap = $this->firestore->getDb()->collection('resource')->document($modelDocId)->snapshot();
+                    if ($modelSnap->exists()) {
+                        $resolvedName = strtoupper(trim((string)($modelSnap->data()['name'] ?? '')));
+                        if ($resolvedName !== '') {
+                            $req['resource_name']         = $req['resource_name']         ?: $resolvedName;
+                            $req['requested_model_name']  = $req['requested_model_name']  ?: $resolvedName;
+                        }
+                    }
+                } catch (\Throwable) {}
+            }
+        }
+
+        // Fetch unit serial number for the header display.
+        // Fast path: unit_serial stored on request doc (new requests + backfilled on approval).
+        // Fallback: reserved_resources[0] → item doc lookup for legacy requests.
+        $req['_unit_serial'] = strtoupper(trim((string)($req['unit_serial'] ?? '')));
+        $reserved0 = is_array($req['reserved_resources'] ?? null) ? ($req['reserved_resources'][0] ?? null) : null;
+        if ($reserved0 !== null) {
+            // reserved_resources entry has display_name = serial_number ?: unitDocId.
+            // Fetch the actual serial_number from the item doc using the stored resource_id + model_id.
+            $rrUnitId  = trim((string)($reserved0['resource_id'] ?? ''));
+            $rrModelId = trim((string)($reserved0['model_id']    ?? ''));
+            if ($rrUnitId !== '' && $rrModelId !== '') {
+                try {
+                    $snap = $this->firestore->getDb()
+                        ->collection('resource')->document($rrModelId)
+                        ->collection('items')->document($rrUnitId)->snapshot();
+                    if ($snap->exists()) {
+                        $req['_unit_serial'] = strtoupper(trim((string)($snap->data()['serial_number'] ?? '')));
+                    }
+                } catch (\Throwable) {}
+            }
+        }
+        if ($req['_unit_serial'] === '') {
+            // Pre-approval: try source_resource_id (web DnD) or unit_id (mobile)
+            $unitDocId  = trim($req['source_resource_id'] ?? $req['unit_id'] ?? '');
+            $modelDocId = trim($req['requested_model_id'] ?? $req['resource_id'] ?? '');
+            if ($unitDocId !== '' && $modelDocId !== '') {
+                try {
+                    $snap = $this->firestore->getDb()
+                        ->collection('resource')->document($modelDocId)
+                        ->collection('items')->document($unitDocId)->snapshot();
+                    if ($snap->exists()) {
+                        $req['_unit_serial'] = strtoupper(trim((string)($snap->data()['serial_number'] ?? '')));
+                    }
+                } catch (\Throwable) {}
+            }
         }
 
         // One collection-group query to find every project that has ≥1 emergency report
@@ -784,12 +826,26 @@ class ResourceRequests extends BaseController
 
         $cat = ucfirst(strtolower($category));
 
+        // Resolve serial number for single-unit DnD transfers
+        $unitSerial = '';
+        if ($sourceResId !== '' && $modelId !== '') {
+            try {
+                $itemSnap = $this->firestore->getDb()
+                    ->collection('resource')->document($modelId)
+                    ->collection('items')->document($sourceResId)->snapshot();
+                if ($itemSnap->exists()) {
+                    $unitSerial = strtoupper(trim((string)($itemSnap->data()['serial_number'] ?? '')));
+                }
+            } catch (\Throwable) {}
+        }
+
         $data = [
             'request_kind'           => $requestKind,
             'resource_category'      => $cat,
             'resource_name'          => $resName,
             'requested_model_id'     => $modelId ?: null,
             'requested_model_name'   => $resName ?: null,
+            'unit_serial'            => $unitSerial ?: null,
             'manpower_type'          => $manpowerType ?: null,
             'source_resource_id'     => $sourceResId ?: null,
             'source_resource_code'   => $sourceResCode ?: null,
@@ -1377,7 +1433,18 @@ class ResourceRequests extends BaseController
                     'bypass_secondary' => $bypassSecond,
                 ];
 
-                $this->requestModel->update($reqId, [
+                // Backfill unit_serial for single-unit requests created before this field existed
+                $approvedSerial = '';
+                if (count($reservedResources) === 1) {
+                    $rr0 = $reservedResources[0];
+                    $rr0Sn = strtoupper(trim((string)($rr0['display_name'] ?? '')));
+                    // display_name is serial ?: unitDocId; skip if it looks like a raw Firestore ID
+                    if ($rr0Sn !== '' && strlen($rr0Sn) < 30) {
+                        $approvedSerial = $rr0Sn;
+                    }
+                }
+
+                $approveUpdate = [
                     'status'             => 'In-Transit',
                     'approval_stage'     => 'Complete',
                     'transfer_state'     => 'In-Transit',
@@ -1391,7 +1458,11 @@ class ResourceRequests extends BaseController
                     'approved_by_name'   => $approverName,
                     'approved_by_role'   => $approverRole,
                     'approval_history'   => $existingHistory,
-                ]);
+                ];
+                if ($approvedSerial !== '' && empty($req['unit_serial'])) {
+                    $approveUpdate['unit_serial'] = $approvedSerial;
+                }
+                $this->requestModel->update($reqId, $approveUpdate);
             }
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::_finalizeTransfer - ' . $e->getMessage());
