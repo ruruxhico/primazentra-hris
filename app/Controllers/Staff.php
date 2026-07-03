@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\ArchiveService;
+use App\Libraries\BrevoMailer;
 use App\Libraries\FirestoreService;
 use App\Libraries\StorageService;
 use App\Libraries\TrashService;
@@ -546,41 +547,12 @@ class Staff extends BaseController
 
     private function sendWelcomeEmail(string $email, string $firstName, string $tempPassword): void
     {
-        $mailer      = service('email');
-        $emailConfig = config('Email');
-
-        $mailer->initialize([
-            'protocol'       => (string) env('EMAIL_PROTOCOL',       $emailConfig->protocol),
-            'mailPath'       => (string) env('EMAIL_MAIL_PATH',      $emailConfig->mailPath ?? ''),
-            'SMTPHost'       => (string) env('EMAIL_SMTP_HOST',      $emailConfig->SMTPHost),
-            'SMTPUser'       => (string) env('EMAIL_SMTP_USER',      $emailConfig->SMTPUser),
-            'SMTPPass'       => (string) env('EMAIL_SMTP_PASS',      $emailConfig->SMTPPass),
-            'SMTPPort'       => (int)    env('EMAIL_SMTP_PORT',      $emailConfig->SMTPPort),
-            'SMTPCrypto'     => (string) env('EMAIL_SMTP_CRYPTO',    $emailConfig->SMTPCrypto),
-            'SMTPAuthMethod' => (string) env('EMAIL_SMTP_AUTH_METHOD', $emailConfig->SMTPAuthMethod ?? 'login'),
-            'SMTPTimeout'    => (int)    env('EMAIL_SMTP_TIMEOUT',   $emailConfig->SMTPTimeout ?? 5),
-            'mailType'       => 'html',
-            'charset'        => 'UTF-8',
-            'wordWrap'       => true,
-            'validate'       => false,
-            'CRLF'           => (string) env('EMAIL_CRLF',    $emailConfig->CRLF    ?? "\r\n"),
-            'newline'        => (string) env('EMAIL_NEWLINE', $emailConfig->newline  ?? "\r\n"),
-        ]);
-
-        $fromEmail = $emailConfig->fromEmail ?: (string) env('EMAIL_FROM', 'no-reply@primazentra.local');
-        $fromName  = $emailConfig->fromName  ?: (string) env('EMAIL_FROM_NAME', 'PrimaZentra');
-
-        $mailer->setFrom($fromEmail, $fromName);
-        $mailer->setTo($email);
-        $mailer->setSubject('Your PrimaZentra Account Credentials');
-        $mailer->setMessage(view('emails/welcome_credentials', [
+        $html = view('emails/welcome_credentials', [
             'firstName'    => $firstName,
             'email'        => $email,
             'tempPassword' => $tempPassword,
-        ]));
+        ]);
 
-        if (!$mailer->send(false)) {
-            throw new \RuntimeException('Email send failed: ' . $mailer->printDebugger(['headers']));
-        }
+        (new BrevoMailer())->send($email, 'Your PrimaZentra Account Credentials', $html);
     }
 }
