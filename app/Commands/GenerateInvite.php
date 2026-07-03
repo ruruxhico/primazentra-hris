@@ -45,7 +45,6 @@ class GenerateInvite extends BaseCommand
             CLI::write('  Expires : ' . $hours . ' hours from now', 'dark_gray');
             CLI::write('  Use     : single-use only', 'dark_gray');
             CLI::write('  ' . str_repeat('─', 60), 'dark_gray');
-            CLI::write('  Tip: paste the TOKEN into ' . base_url('register') . ' if the URL is localhost.', 'dark_gray');
             CLI::newLine();
         } catch (\Throwable $e) {
             CLI::error('Failed to generate invite token: ' . $e->getMessage());

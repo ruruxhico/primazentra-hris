@@ -23,17 +23,7 @@
             <?php endif; ?>
 
             <form action="<?= base_url('auth/processRegister') ?>" method="post" class="auth-form" novalidate id="registerForm" data-autosave>
-                <?php if (!empty($invite_token)): ?>
                 <input type="hidden" name="invite_token" value="<?= esc($invite_token) ?>">
-                <?php else: ?>
-                <div class="auth-field" style="margin-bottom:1.2rem">
-                    <label for="invite_token">INVITE TOKEN *</label>
-                    <div class="auth-input-wrap">
-                        <input type="text" id="invite_token" name="invite_token" placeholder="Paste invite token here" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="font-family:monospace;font-size:.85rem;letter-spacing:.03em">
-                    </div>
-                    <p style="font-size:.75rem;color:#999;margin-top:.35rem">Run <code>php spark auth:invite</code> to generate a token.</p>
-                </div>
-                <?php endif; ?>
                 <div class="auth-section-label">
                     <span class="auth-section-icon material-symbols-outlined" aria-hidden="true">person</span>
                     <span>Personal Information</span>
