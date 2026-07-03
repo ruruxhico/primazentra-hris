@@ -118,7 +118,7 @@ class Export extends BaseController
     private function getResourceModelsData(string $category): array
     {
         $headers = [
-            'Model Code', 'Model Name',
+            'Model Name',
             'Total Quantity', 'Available Quantity',
             'Condition: New', 'Condition: Functional', 'Condition: Worn', 'Condition: Broken',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
@@ -137,7 +137,6 @@ class Export extends BaseController
                 : (is_array($ad['condition_summary'] ?? null) ? $ad['condition_summary'] : []);
 
             $rows[] = [
-                $r['model_code'] ?? '',
                 $r['name'] ?? '',
                 $r['total_quantity'] ?? ($ad['total_quantity'] ?? 0),
                 $r['available_quantity'] ?? ($ad['available_quantity'] ?? 0),
@@ -156,7 +155,7 @@ class Export extends BaseController
     private function getResourceUnitsData(string $category): array
     {
         $headers = [
-            'Model Code', 'Model Name',
+            'Model Name',
             'Serial Number', 'Condition', 'Status', 'Brand',
             'Location Address', 'Location Type',
             'Created At (MM/DD/YYYY)', 'Updated At (MM/DD/YYYY)',
@@ -170,7 +169,6 @@ class Export extends BaseController
             if (($r['category'] ?? '') !== $category) continue;
 
             $modelId   = $doc->id();
-            $modelCode = $r['model_code'] ?? '';
             $modelName = $r['name'] ?? '';
 
             // Collect items from subcollection first
@@ -190,14 +188,13 @@ class Export extends BaseController
             }
 
             if (empty($itemList)) {
-                $rows[] = array_merge([$modelCode, $modelName], array_fill(0, 8, ''));
+                $rows[] = array_merge([$modelName], array_fill(0, 8, ''));
                 continue;
             }
 
             foreach ($itemList as $item) {
                 $loc = is_array($item['location'] ?? null) ? $item['location'] : [];
                 $rows[] = [
-                    $modelCode,
                     $modelName,
                     $item['serial_number'] ?? '',
                     $item['condition'] ?? '',
@@ -268,7 +265,7 @@ class Export extends BaseController
     private function getUtilizationData(): array
     {
         $headers = [
-            'Category', 'Model Code', 'Model Name',
+            'Category', 'Model Name',
             'Total Units', 'In-Use', 'In-Storage', 'Transfer Pending',
             'Available', 'Released', 'Other',
             'Utilization %', 'Times Transferred',
@@ -286,7 +283,6 @@ class Export extends BaseController
             if (!in_array($cat, ['Equipment', 'Tools'])) continue;
 
             $modelId   = $doc->id();
-            $modelCode = $r['model_code'] ?? '';
             $modelName = $r['name']       ?? '';
 
             $counts = [
@@ -318,7 +314,7 @@ class Export extends BaseController
             $utilPct = $total > 0 ? round($counts['in-use'] / $total * 100, 1) : 0.0;
 
             $rows[] = [
-                $cat, $modelCode, $modelName,
+                $cat, $modelName,
                 $total,
                 $counts['in-use'], $counts['in-storage'], $counts['transfer pending'],
                 $counts['available'], $counts['released'], $counts['other'],
@@ -337,13 +333,13 @@ class Export extends BaseController
         }
 
         // Sort by utilization % descending
-        usort($rows, fn($a, $b) => (float)$b[10] <=> (float)$a[10]);
+        usort($rows, fn($a, $b) => (float)$b[9] <=> (float)$a[9]);
 
         // Grand-total summary row
         if (!empty($rows)) {
             $grandPct = $grandTotal > 0 ? round($grandInUse / $grandTotal * 100, 1) : 0.0;
             $rows[] = [
-                'TOTAL', '', '',
+                'TOTAL', '',
                 $grandTotal, $grandInUse, $grandInStorage, $grandPending,
                 $grandAvail, $grandReleased, $grandOther,
                 $grandPct . '%', $grandTransferred,
@@ -401,7 +397,7 @@ class Export extends BaseController
 
     private function getStaffData(): array
     {
-        $headers = ['Employee ID', 'First Name', 'Last Name', 'Email', 'Role', 'Status'];
+        $headers = ['First Name', 'Last Name', 'Email', 'Role', 'Status'];
         $rows = [];
         $db = $this->firestore->getDb();
 
@@ -409,7 +405,6 @@ class Export extends BaseController
             if (!$doc->exists()) continue;
             $s = $doc->data();
             $rows[] = [
-                $s['employee_id'] ?? '',
                 $s['first_name'] ?? '',
                 $s['last_name'] ?? '',
                 $s['email'] ?? '',
