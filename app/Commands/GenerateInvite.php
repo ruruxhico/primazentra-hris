@@ -38,8 +38,9 @@ class GenerateInvite extends BaseCommand
             $url = base_url('register?token=' . $token);
 
             CLI::newLine();
-            CLI::write('  Admin Invite Link Generated', 'green');
+            CLI::write('  Admin Invite Token Generated', 'green');
             CLI::write('  ' . str_repeat('─', 60), 'dark_gray');
+            CLI::write('  TOKEN   : ' . $token, 'cyan');
             CLI::write('  URL     : ' . $url, 'yellow');
             CLI::write('  Expires : ' . $hours . ' hours from now', 'dark_gray');
             CLI::write('  Use     : single-use only', 'dark_gray');

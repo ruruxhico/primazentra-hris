@@ -395,6 +395,7 @@ class Auth extends BaseController {
 
     public function register() {
         $token = (string)($this->request->getGet('token') ?? '');
+        // A valid, unexpired invite token is required to even view this page.
         if (!$this->validateInviteToken($token)) {
             return redirect()->to('/login')->with('error', 'This registration link is invalid or has expired.');
         }
