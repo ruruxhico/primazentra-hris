@@ -72,7 +72,7 @@ $canBulk    = $canArchive;
                class="rv-chip <?= $filterStatus === '' ? 'active' : '' ?>">
                 <span class="rr-check-icon material-symbols-outlined" <?= $filterStatus === '' ? '' : 'style="display:none"' ?>>check</span>All
             </a>
-            <?php foreach (['Pending', 'Pending Secondary Approval', 'In-Transit', 'Completed'] as $s): ?>
+            <?php foreach (['Pending', 'Pending Secondary Approval', 'In-Transit'] as $s): ?>
             <a href="#" data-filter="status" data-val="<?= esc($s) ?>"
                class="rv-chip <?= $filterStatus === $s ? 'active' : '' ?>">
                 <span class="rr-check-icon material-symbols-outlined" <?= $filterStatus === $s ? '' : 'style="display:none"' ?>>check</span><?= esc($s) ?>

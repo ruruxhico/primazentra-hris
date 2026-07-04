@@ -2304,18 +2304,30 @@ document.addEventListener('click', function(e) {
     _ready = true;
 
     // ── Detect Philippine region from address (mirrors PHP detectRegion) ──
-    function detectRegion(addr) {
+    function detectRegion(addr, geopoint) {
       var a = (addr || '').toLowerCase();
+      // Mindanao/Visayas checked first: their keywords are specific island/province
+      // names, whereas Luzon's list includes common words (e.g. "rizal", "isabela")
+      // that can appear inside a street/city name elsewhere in the country.
       var map = {
-        'LUZON':    ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','cagayan'],
+        'MINDANAO': ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao','basilan','sulu','tawi-tawi','lanao'],
         'VISAYAS':  ['cebu','iloilo','bacolod','tacloban','dumaguete','ormoc','leyte','samar','bohol','negros','panay','aklan','antique','capiz','biliran'],
-        'MINDANAO': ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao'],
+        'LUZON':    ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','tuguegarao'],
       };
       for (var region in map) {
         var kws = map[region];
         for (var i = 0; i < kws.length; i++) {
           if (a.indexOf(kws[i]) !== -1) return region;
         }
+      }
+      // No keyword match — fall back to the geopoint so islands like Basilan/Sulu/
+      // Tawi-Tawi don't default to Luzon.
+      var lat = geopoint && typeof geopoint.lat === 'number' ? geopoint.lat : null;
+      var lng = geopoint && typeof geopoint.lng === 'number' ? geopoint.lng : null;
+      if (lat !== null && lng !== null && lat >= 4.5 && lat <= 21.5 && lng >= 116.0 && lng <= 128.0) {
+        if (lat >= 12.0) return 'LUZON';
+        if (lat >= 8.5)  return 'VISAYAS';
+        return 'MINDANAO';
       }
       return 'LUZON';
     }
@@ -2394,7 +2406,8 @@ document.addEventListener('click', function(e) {
           if (document.querySelector('.db-project-card[data-pid="' + chg.doc.id + '"]')) return;
           var data    = chg.doc.data();
           var addr    = (data.location && data.location.address) ? data.location.address : '';
-          var region  = detectRegion(addr);
+          var geopoint = data.location && data.location.geopoint ? data.location.geopoint : null;
+          var region  = detectRegion(addr, geopoint);
           var row     = ensureRegionRow(region);
           if (!row) return;
           var col = document.createElement('div');

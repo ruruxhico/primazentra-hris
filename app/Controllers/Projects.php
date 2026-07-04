@@ -2600,9 +2600,12 @@ class Projects extends BaseController
             'tawi-tawi','sulu','basilan',
         ];
 
-        foreach ($luzon    as $kw) { if (str_contains($addr, $kw)) return 'LUZON';    }
-        foreach ($visayas  as $kw) { if (str_contains($addr, $kw)) return 'VISAYAS';  }
+        // Mindanao/Visayas checked first: their keywords are specific island/province
+        // names, whereas Luzon's list includes bare names (e.g. "isabela") that can
+        // collide with a Mindanao city sharing the same name (e.g. "Isabela City, Basilan").
         foreach ($mindanao as $kw) { if (str_contains($addr, $kw)) return 'MINDANAO'; }
+        foreach ($visayas  as $kw) { if (str_contains($addr, $kw)) return 'VISAYAS';  }
+        foreach ($luzon    as $kw) { if (str_contains($addr, $kw)) return 'LUZON';    }
 
         return '';
     }

@@ -50,6 +50,7 @@ class ResourceRequests extends BaseController
 
         try {
             $requests = $this->requestModel->getAll($filters);
+            $requests = $this->_sweepTerminalRequests($requests);
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::index - ' . $e->getMessage());
             $requests = [];
@@ -1761,6 +1762,25 @@ class ResourceRequests extends BaseController
             log_message('error', 'ResourceRequests::archive - ' . $e->getMessage());
             return $this->response->setStatusCode(500)->setJSON(['success' => false, 'message' => 'Archive failed']);
         }
+    }
+
+    /**
+     * Sweeps any requests already in a terminal state (Completed/Rejected/Cancelled) into the
+     * archive — a safety net for requests that reached that status before auto-archiving existed,
+     * or through any path that doesn't already call _autoArchiveRequest(). Status is preserved as-is.
+     */
+    private function _sweepTerminalRequests(array $requests): array
+    {
+        $terminal = ['completed', 'rejected', 'cancelled'];
+        $kept = [];
+        foreach ($requests as $r) {
+            if (in_array(strtolower($r['status'] ?? ''), $terminal, true)) {
+                $this->_autoArchiveRequest($r['id']);
+                continue;
+            }
+            $kept[] = $r;
+        }
+        return $kept;
     }
 
     /** Auto-archives a request once it reaches a terminal state (Completed/Cancelled/Rejected). */

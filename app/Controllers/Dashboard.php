@@ -342,11 +342,16 @@ class Dashboard extends BaseController
                         // rule_days*2 ceiling). With a genuine active blocker (injury, accident,
                         // shortage, weather), trust the model's severity far more loosely — a
                         // real incident shouldn't be flattened just because the project is short.
-                        // With no blocker signal at all, keep a tight duration-based sanity cap.
+                        // With no blocker signal, scale the cap by how far behind schedule the
+                        // project actually is (same "behind%" shown in the reason text) rather
+                        // than a flat runway/duration multiple — so an on-track project caps near
+                        // zero, a 10%-behind project caps near its accumulated slip × a margin,
+                        // and the number stays explainable next to the "X% Behind" reason.
                         $hasActiveBlockerSignal = $emergFlags['active_count'] > 0;
+                        $behindRatio = max(0.0, ($plannedPct - $progress) / 100);
                         $maxDelay = $hasActiveBlockerSignal
                             ? max(180, ($totalDuration > 0 ? $totalDuration : 365) * 10)
-                            : ($totalDuration > 0 ? $totalDuration : 365) * 3;
+                            : ($totalDuration > 0 ? max(1, (int) round($totalDuration * $behindRatio * 3)) : 365);
                         $estimatedDelay = min((float)$estimatedDelay, (float)$maxDelay);
 
                         $seReason = $this->_fetchBlockerReason((string)($p['id'] ?? ''), $predictedBlocker, $features);
@@ -1076,16 +1081,28 @@ class Dashboard extends BaseController
 
         $addr = strtolower((string)($p['location']['address'] ?? ''));
 
+        // Mindanao/Visayas checked first: their keywords are specific island/province
+        // names, whereas Luzon's list includes common words (e.g. "rizal", "isabela")
+        // that can appear inside a street/city name elsewhere in the country.
         $map = [
-            'LUZON'    => ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','tuguegarao'],
+            'MINDANAO' => ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao','basilan','sulu','tawi-tawi','lanao'],
             'VISAYAS'  => ['cebu','iloilo','bacolod','tacloban','dumaguete','ormoc','leyte','samar','bohol','negros','panay','aklan','antique','capiz','biliran'],
-            'MINDANAO' => ['davao','cagayan de oro','zamboanga','cotabato','butuan','iligan','general santos','bukidnon','misamis','surigao','agusan','maguindanao'],
+            'LUZON'    => ['manila','quezon','caloocan','makati','taguig','pasig','marikina','laguna','cavite','batangas','pampanga','bulacan','rizal','baguio','ilocos','nueva ecija','tarlac','zambales','bataan','aurora','palawan','bicol','albay','camarines','tuguegarao'],
         ];
 
         foreach ($map as $region => $keywords) {
             foreach ($keywords as $kw) {
                 if (strpos($addr, $kw) !== false) return $region;
             }
+        }
+
+        // No keyword match (e.g. address doesn't spell out the province) — fall back
+        // to the geopoint so islands like Basilan/Sulu/Tawi-Tawi don't default to Luzon.
+        [$lat, $lng] = $this->extractLatLng($p);
+        if ($lat !== null && $lng !== null && $lat >= 4.5 && $lat <= 21.5 && $lng >= 116.0 && $lng <= 128.0) {
+            if ($lat >= 12.0) return 'LUZON';
+            if ($lat >= 8.5)  return 'VISAYAS';
+            return 'MINDANAO';
         }
 
         return 'LUZON';
