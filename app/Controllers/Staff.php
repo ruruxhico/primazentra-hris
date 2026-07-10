@@ -167,6 +167,11 @@ class Staff extends BaseController
                     return redirect()->back()->withInput()->with('error', 'Email is already in use.');
                 }
 
+                // Only one active Administrator is allowed system-wide
+                if ($role === 'Administrator' && count($this->usersModel->getUsersByRole('Administrator')) >= 1) {
+                    return redirect()->back()->withInput()->with('error', 'An Administrator account already exists. Only one Administrator is allowed.');
+                }
+
                 $now = new Timestamp(new \DateTime());
                 $data = [
                     'last_name' => $lastName,
@@ -276,6 +281,21 @@ class Staff extends BaseController
                     $existing = $this->usersModel->getUserByEmail($newEmail);
                     if ($existing && $existing['id'] !== $id) {
                         return redirect()->back()->withInput()->with('error', 'Email is already in use by another staff member.');
+                    }
+                }
+
+                // Only one active Administrator is allowed system-wide
+                if ($data['role'] === 'Administrator') {
+                    $currentAdmins = $this->usersModel->getUsersByRole('Administrator');
+                    $otherAdminExists = false;
+                    foreach ($currentAdmins as $admin) {
+                        if (($admin['id'] ?? null) !== $id) {
+                            $otherAdminExists = true;
+                            break;
+                        }
+                    }
+                    if ($otherAdminExists) {
+                        return redirect()->back()->withInput()->with('error', 'An Administrator account already exists. Only one Administrator is allowed.');
                     }
                 }
 

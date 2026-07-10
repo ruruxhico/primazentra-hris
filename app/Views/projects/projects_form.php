@@ -1072,6 +1072,12 @@ if (window.location.hostname === 'localhost') {
                     missing.push('Qty');
                     if (qtyInp) qtyInp.classList.add('pz-field-error');
                 }
+                var dateHid = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+                var datePicker = card.querySelector('.phase-card-date-picker');
+                if (!dateHid || !dateHid.value.trim()) {
+                    missing.push('Target Date');
+                    if (datePicker) datePicker.classList.add('pz-field-error');
+                }
 
                 if (missing.length > 0) {
                     if (!firstErrCard) firstErrCard = card;

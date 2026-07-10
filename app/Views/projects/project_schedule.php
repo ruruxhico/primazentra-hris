@@ -10,7 +10,8 @@
     $endDate       = $endDate       ?? '';
 
     $pName  = esc(strtoupper($project['project_name'] ?? 'PROJECT'));
-    $canEdit = pz_can('manage_milestones');
+    $canEdit      = pz_can('manage_milestones');
+    $canAddRemove = pz_can('add_remove_milestones');
 
     $units = ['pcs', 'lot', 'm', 'm²', 'm³', 'kg', 'ton', 'bag', 'set', 'unit', 'lm'];
 ?>
@@ -84,17 +85,25 @@
                         <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
                         <div class="calendar-popup" aria-hidden="true"></div>
                     </div>
+                    <?php if ($canAddRemove): ?>
                     <button type="button" class="ps-ms-del" onclick="removeRow(this)" title="Remove">
                         <span class="material-symbols-outlined">delete</span>
                     </button>
+                    <?php else: ?>
+                    <span></span>
+                    <?php endif; ?>
                 </div>
                 <?php endforeach; ?>
             </div>
 
             <div class="ps-add-row">
+                <?php if ($canAddRemove): ?>
                 <button type="button" class="ps-add-btn" onclick="addRow()">
                     <span class="material-symbols-outlined">add</span> Add Milestone
                 </button>
+                <?php else: ?>
+                <p class="ps-add-note">Only Administrators and Operations Managers can add or remove milestones. You may edit the details of existing ones below.</p>
+                <?php endif; ?>
                 <div class="ps-total-weight" id="totalWeightDisplay">
                     TOTAL WEIGHT <span id="totalWeightVal">0.0</span>%
                 </div>

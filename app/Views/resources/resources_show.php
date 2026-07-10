@@ -114,10 +114,6 @@
                     ?></span>
                 </div>
                 <div class="pd-row">
-                    <span class="pd-row-label">Specialization</span>
-                    <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['specialization'] ?? '—')) ?></span>
-                </div>
-                <div class="pd-row">
                     <span class="pd-row-label">Assigned Project</span>
                     <span class="pd-row-value"><?= esc((string)($resource['manpower_details']['assigned_project_name'] ?? $resource['manpower_details']['assigned_project_id'] ?? '—')) ?></span>
                 </div>

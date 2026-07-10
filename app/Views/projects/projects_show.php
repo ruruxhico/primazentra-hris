@@ -612,10 +612,18 @@
             var imgUrls = (msAmounts[m.id] || {}).image_urls || [];
             var pct     = m.target_quantity > 0 ? Math.min(100, base / m.target_quantity * 100) : 0;
 
-            html += '<div class="rpt-ms-row">';
+            var locked = !!m.locked;
+
+            html += '<div class="rpt-ms-row' + (locked ? ' rpt-ms-row-locked' : '') + '"' +
+                    (locked ? ' style="opacity:.55;background:rgba(0,0,0,.03)"' : '') + '>';
             html += '<input type="hidden" name="milestone_progress[' + i + '][milestone_id]" value="' + h(m.id) + '">';
             html += '<div class="rpt-ms-row-header">' + h(m.name) +
-                    (m.unit ? ' <span style="color:#999;font-weight:400">(' + h(m.unit) + ')</span>' : '') + '</div>';
+                    (m.unit ? ' <span style="color:#999;font-weight:400">(' + h(m.unit) + ')</span>' : '') +
+                    (locked ? ' <span class="rpt-ms-locked-badge" style="color:#b00;font-weight:600;font-size:.75rem"><span class="material-symbols-outlined" style="font-size:.9rem;vertical-align:middle">lock</span> Locked</span>' : '') +
+                    '</div>';
+            if (locked) {
+                html += '<div style="font-size:.75rem;color:#b00;margin-bottom:.3rem">Complete the previous milestone before logging progress here.</div>';
+            }
             html += '<div style="font-size:.75rem;color:#999;margin-bottom:.3rem">Before today: ' +
                     base.toFixed(2) + ' / ' + m.target_quantity + ' ' + h(m.unit) +
                     ' &nbsp;(' + pct.toFixed(1) + '%)</div>';
@@ -624,7 +632,8 @@
                     '<input type="number" name="milestone_progress[' + i + '][amount_done_today]"' +
                     ' min="0" step="any" value="' + logged + '"' +
                     ' data-base="' + base + '" data-target="' + m.target_quantity + '"' +
-                    ' data-row="' + i + '" class="rpt-ms-amt-input">' +
+                    ' data-row="' + i + '" class="rpt-ms-amt-input"' +
+                    (locked ? ' disabled title="Locked until the previous milestone is completed"' : '') + '>' +
                     '</div>';
             html += '<div class="rpt-ms-row-after" data-after-row="' + i + '"></div>';
             if (imgUrls.length) {

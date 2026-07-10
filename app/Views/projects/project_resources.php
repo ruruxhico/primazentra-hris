@@ -230,7 +230,7 @@
             <h3 class="pres-modal-title">Bulk Assign Manpower</h3>
             <button class="pres-modal-close" data-close="modalBulkManpower">&times;</button>
         </div>
-        <p class="pres-modal-sub">Filter available workers by role, specialization, or skill. Matching workers are randomly selected and assigned.</p>
+        <p class="pres-modal-sub">Filter available workers by role or skill. Matching workers are randomly selected and assigned.</p>
 
         <div class="pres-bulk-field">
             <label>Role (optional)</label>
@@ -238,16 +238,6 @@
                 <option value="">Any role</option>
                 <?php foreach (array_keys($mpRoles) as $r): ?>
                 <option value="<?= esc($r) ?>"><?= esc($r) ?></option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-
-        <div class="pres-bulk-field">
-            <label>Specialization (optional)</label>
-            <select class="pres-bulk-select" id="bulkSpec">
-                <option value="">Any specialization</option>
-                <?php foreach ($mpSpecs as $s): ?>
-                <option value="<?= esc($s) ?>"><?= esc($s) ?></option>
                 <?php endforeach; ?>
             </select>
         </div>
@@ -892,7 +882,6 @@
 
         post(BASE + 'projects/' + PID + '/resources/bulk-assign-manpower', {
             role:           document.getElementById('bulkRole').value,
-            specialization: document.getElementById('bulkSpec').value,
             skill:          document.getElementById('bulkSkill').value,
             quantity:       bulkQty,
         }).then(function (d) {

@@ -343,6 +343,11 @@ class Auth extends BaseController {
         if (!session()->get('isLoggedIn') || !pz_can('create_staff')) {
             return $this->response->setStatusCode(403)->setJSON(['error' => 'Forbidden']);
         }
+        // This invite flow only ever creates Administrator accounts (see processRegister) —
+        // block issuing new invites once one already exists.
+        if ($this->adminAlreadyExists()) {
+            return $this->response->setStatusCode(409)->setJSON(['error' => 'An Administrator account already exists. Only one Administrator is allowed.']);
+        }
         $token = bin2hex(random_bytes(32));
         try {
             $now = new Timestamp(new \DateTime());
@@ -365,6 +370,19 @@ class Auth extends BaseController {
 
     // ── Registration ──────────────────────────────────────────────────────
 
+    private function adminAlreadyExists(): bool
+    {
+        $admins = $this->firestore->getDb()->collection('users')
+            ->where('role', '=', 'Administrator')
+            ->documents();
+        foreach ($admins as $doc) {
+            if ($doc->exists()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public function register() {
         $token = (string)($this->request->getGet('token') ?? '');
         // A valid, unexpired invite token is required to even view this page.
@@ -378,6 +396,12 @@ class Auth extends BaseController {
         $inviteToken = (string)($this->request->getPost('invite_token') ?? '');
         if (!$this->validateInviteToken($inviteToken)) {
             return redirect()->to('/login')->with('error', 'This registration link is invalid or has expired.');
+        }
+
+        // Defense in depth: reject if an Administrator already exists, even if an
+        // invite link was generated earlier (e.g. before this restriction shipped).
+        if ($this->adminAlreadyExists()) {
+            return redirect()->to('/login')->with('error', 'An Administrator account already exists. Only one Administrator is allowed.');
         }
 
         // Logic for Administrator self-registration

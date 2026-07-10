@@ -259,6 +259,10 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
+                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases);
+                    if ($dateError) {
+                        return redirect()->back()->withInput()->with('error', $dateError);
+                    }
                     $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
                 }
 
@@ -356,7 +360,6 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
-                    $newMilestones = $this->normalizeToMilestones($rawPhases);
                     // Preserve per-milestone progress so editing a project never resets completion data.
                     // Match existing milestones by name (case-insensitive).
                     $existByName = [];
@@ -367,6 +370,11 @@ class Projects extends BaseController
                             if ($key !== '') $existByName[$key] = $d;
                         }
                     }
+                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases, array_keys($existByName));
+                    if ($dateError) {
+                        return redirect()->back()->withInput()->with('error', $dateError);
+                    }
+                    $newMilestones = $this->normalizeToMilestones($rawPhases);
                     foreach ($newMilestones as &$m) {
                         $key = strtolower(trim((string)($m['milestone_name'] ?? '')));
                         if (isset($existByName[$key])) {
@@ -1095,9 +1103,10 @@ class Projects extends BaseController
                     $existByOrder[(int)($m['order'] ?? 0)] = $m;
                 }
 
-                $rawMs      = $this->request->getPost('milestones') ?? [];
-                $milestones = [];
-                $order      = 1;
+                $rawMs        = $this->request->getPost('milestones') ?? [];
+                $milestones   = [];
+                $missingDates = [];
+                $order        = 1;
 
                 $now = new Timestamp(new \DateTime());
                 foreach ($rawMs as $m) {
@@ -1105,6 +1114,11 @@ class Projects extends BaseController
                     if ($name === '') continue;
                     $ex    = $existByOrder[$order] ?? [];
                     $tdStr = trim((string)($m['target_date'] ?? ''));
+                    // A row with no matching existing milestone at this position is new —
+                    // require a target date for it. Pre-existing undated milestones are left alone.
+                    if (empty($ex) && $tdStr === '') {
+                        $missingDates[] = $name;
+                    }
                     $milestones[] = [
                         'milestone_name'         => $name,
                         'order'                  => $order,
@@ -1120,6 +1134,19 @@ class Projects extends BaseController
                         'updated_at'             => $now,
                     ];
                     $order++;
+                }
+
+                if (!empty($missingDates)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Target date is required for new milestones: ' . implode(', ', $missingDates) . '.');
+                }
+
+                // Project Manager may edit existing milestones but not add or remove
+                // rows — the whole-list-replace design here means "add/remove" shows
+                // up as a change in count vs. what's currently stored.
+                if (!pz_can('add_remove_milestones') && count($milestones) !== count($existing)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Your role can update existing milestones but cannot add or remove them. Ask an Administrator or Operations Manager to change the milestone count.');
                 }
 
                 if (!empty($milestones)) {
@@ -1312,6 +1339,25 @@ class Projects extends BaseController
         }
     }
 
+    /** Count Foremen / Field Workers currently assigned to a project. */
+    private function projectManpowerRoleCounts(string $projectId): array
+    {
+        $foremen = 0;
+        $fieldWorkers = 0;
+        $manpowerModel = new \App\Models\Model_Manpower();
+        foreach ($manpowerModel->getAllManpower() as $m) {
+            $rawApid = $m['assigned_project_id'] ?? '';
+            $apid = $rawApid instanceof \Google\Cloud\Firestore\DocumentReference
+                ? $rawApid->id()
+                : trim((string)$rawApid);
+            if ($apid !== $projectId) continue;
+            $role = strtoupper(trim((string)($m['role'] ?? '')));
+            if ($role === 'FOREMAN') $foremen++;
+            elseif ($role === 'FIELD WORKER') $fieldWorkers++;
+        }
+        return ['foremen' => $foremen, 'field_workers' => $fieldWorkers];
+    }
+
     public function assignResource(string $id)
     {
         if (!session()->get('isLoggedIn')) {
@@ -1333,6 +1379,12 @@ class Projects extends BaseController
             $retName     = '';
             $retCategory = '';
             if ($type === 'manpower') {
+                $mpSnapCheck = $db->collection('manpower')->document($refId)->snapshot();
+                $mpRoleCheck = strtoupper(trim((string)($mpSnapCheck->exists() ? ($mpSnapCheck->data()['role'] ?? '') : '')));
+                if ($mpRoleCheck === 'FIELD WORKER' && $this->projectManpowerRoleCounts($id)['foremen'] === 0) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Assign a Foreman to this project before assigning Field Workers.']);
+                }
+
                 $db->collection('manpower')->document($refId)->set([
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
@@ -1402,6 +1454,14 @@ class Projects extends BaseController
 
             if (str_starts_with($assignmentId, 'mp:')) {
                 $mpId = substr($assignmentId, 3);
+                $mpSnap = $db->collection('manpower')->document($mpId)->snapshot();
+                $mpRole = strtoupper(trim((string)($mpSnap->exists() ? ($mpSnap->data()['role'] ?? '') : '')));
+                if ($mpRole === 'FOREMAN') {
+                    $counts = $this->projectManpowerRoleCounts($id);
+                    if ($counts['foremen'] <= 1 && $counts['field_workers'] > 0) {
+                        return $this->response->setJSON(['success' => false, 'message' => 'Cannot remove the last Foreman while Field Workers are still assigned to this project.']);
+                    }
+                }
                 $db->collection('manpower')->document($mpId)->set([
                     'assigned_project_id' => null,
                     'status'              => 'Available',
@@ -1497,6 +1557,10 @@ class Projects extends BaseController
         $spec   = trim((string)($this->request->getPost('specialization') ?? ''));
         $skill  = trim((string)($this->request->getPost('skill')          ?? ''));
         $qty    = max(1, (int)($this->request->getPost('quantity')        ?? 1));
+
+        if (strcasecmp($role, 'FIELD WORKER') === 0 && $this->projectManpowerRoleCounts($id)['foremen'] === 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Assign a Foreman to this project before bulk-assigning Field Workers.']);
+        }
 
         try {
             $db            = $this->firestore->getDb();
@@ -2064,6 +2128,28 @@ class Projects extends BaseController
         }
 
         return $milestones;
+    }
+
+    /**
+     * Require a target date for any submitted milestone that isn't already stored
+     * (matched by name). Existing undated milestones are left alone — this only
+     * stops new ones from being created without a date. Returns an error string or null.
+     */
+    private function validateNewMilestoneTargetDates(array $rawPhases, array $existingNamesLower = []): ?string
+    {
+        $missing = [];
+        foreach ($rawPhases as $phase) {
+            $name = trim((string) ($phase['name'] ?? ''));
+            if ($name === '') continue;
+            if (in_array(strtolower($name), $existingNamesLower, true)) continue;
+            if (trim((string) ($phase['site_date'] ?? '')) === '') {
+                $missing[] = $name;
+            }
+        }
+        if (!empty($missing)) {
+            return 'Target date is required for new milestones: ' . implode(', ', $missing) . '.';
+        }
+        return null;
     }
 
     /** Validate that non-empty milestone weights sum to 100 (Â±0.5%). Returns an error string or null. */

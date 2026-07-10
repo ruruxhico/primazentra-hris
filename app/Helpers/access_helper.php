@@ -46,6 +46,10 @@ if (!function_exists('pz_can')) {
             'delete_project'          => in_array($r, [$admin, $ops], true),
             'archive_project'         => in_array($r, [$admin, $ops], true),
             'manage_milestones'       => in_array($r, [$admin, $ops, $pm], true),
+            // Adding/removing milestone rows (changing the milestone count) is
+            // restricted to Admin/OM. Project Manager may edit existing milestones
+            // (via manage_milestones) but not change how many there are.
+            'add_remove_milestones'   => in_array($r, [$admin, $ops], true),
 
             // ── Reports ───────────────────────────────────────────────────
             'submit_daily_report'     => in_array($r, [$admin, $se], true),

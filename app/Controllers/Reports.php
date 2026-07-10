@@ -272,9 +272,17 @@ class Reports extends BaseController
                     'completion_percent' => (float)($m['completion_percent'] ?? 0),
                     'weight_percent'     => (float)($m['weight_percent'] ?? $m['weight'] ?? 0),
                     'order'              => (int)($m['order'] ?? 0),
+                    'status'             => (string)($m['status'] ?? 'Not Started'),
                 ];
             }
             usort($milestones, fn($a, $b) => $a['order'] <=> $b['order']);
+
+            // Locked until the milestone before it (by order) is Completed —
+            // consumed by the report form (and mobile) to disable progress entry.
+            foreach ($milestones as $idx => &$ms) {
+                $ms['locked'] = $idx > 0 && ($milestones[$idx - 1]['status'] ?? 'Not Started') !== 'Completed';
+            }
+            unset($ms);
 
             // ── Assigned manpower ────────────────────────────────────────────
             $manpower = [];
@@ -481,9 +489,21 @@ class Reports extends BaseController
             $submittedAmounts[$mid] = max(0.0, (float)($ms['amount_done_today'] ?? 0));
         }
 
+        // Order/status lookup, used below to enforce milestone sequencing
+        // (a milestone only accepts progress once the one before it is Completed).
+        $orderByMid    = [];
+        $statusByOrder = [];
+        foreach ($milestoneSnaps as $mid => $mSnap) {
+            $mData = $mSnap->data();
+            $ord   = (int)($mData['order'] ?? 0);
+            $orderByMid[$mid]    = $ord;
+            $statusByOrder[$ord] = (string)($mData['status'] ?? 'Not Started');
+        }
+
         // ── Server-side validation: unclamped overall progress ≤ 100.5% ──────
         $totalWeight        = 0.0;
         $unclampedWeightSum = 0.0;
+        $blockedBySequence  = [];
         foreach ($milestoneSnaps as $mid => $mSnap) {
             $mData     = $mSnap->data();
             $weight    = (float)($mData['weight_percent'] ?? $mData['weight'] ?? 0);
@@ -495,8 +515,20 @@ class Reports extends BaseController
             $delta     = $submitted - $logged;
             $newQty    = $currentQty + $delta;
 
+            if ($delta > 0.001) {
+                $prevOrder = ($orderByMid[$mid] ?? 0) - 1;
+                if ($prevOrder >= 1 && ($statusByOrder[$prevOrder] ?? 'Not Started') !== 'Completed') {
+                    $blockedBySequence[] = (string)($mData['milestone_name'] ?? $mid);
+                }
+            }
+
             $totalWeight        += $weight;
             $unclampedWeightSum += $weight * ($targetQty > 0 ? $newQty / $targetQty * 100.0 : 0.0);
+        }
+        if (!empty($blockedBySequence)) {
+            return $this->response->setStatusCode(400)->setJSON([
+                'error' => 'Cannot log progress for ' . implode(', ', $blockedBySequence) . ' — the previous milestone must be completed first.',
+            ]);
         }
         $unclampedOverall = $totalWeight > 0 ? $unclampedWeightSum / $totalWeight : 0.0;
         if ($unclampedOverall > 100.5) {
