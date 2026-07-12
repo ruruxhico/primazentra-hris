@@ -293,11 +293,13 @@
 
                     <div id="phasesContainer">
                         <?php
-                        $units = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm'];
+                        $units = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm','days','weeks'];
                         foreach ($phases as $pIdx => $phase):
                             $phaseQty      = $phase['qty']       ?? 1;
                             $phaseUnit     = $phase['unit']      ?? 'pcs';
-                            $phaseSiteDate = $phase['site_date'] ?? '';
+                            $phaseSiteDate      = $phase['site_date'] ?? '';
+                            $phaseSiteStartDate = $phase['site_start_date'] ?? '';
+                            $phaseMode          = $phase['tracking_mode'] ?? 'quantity';
                         ?>
                         <div class="phase-card" data-pidx="<?= $pIdx ?>" draggable="true">
                             <span class="phase-drag-handle material-symbols-outlined" title="Drag to reorder">drag_indicator</span>
@@ -333,6 +335,15 @@
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <div class="phase-field f-date-start">
+                                    <span class="phase-field-lbl">Target Start</span>
+                                    <div class="date-picker phase-card-date-picker">
+                                        <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
+                                        <input type="hidden" name="phases[<?= $pIdx ?>][site_start_date]" value="<?= esc($phaseSiteStartDate) ?>">
+                                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
+                                        <div class="calendar-popup" aria-hidden="true"></div>
+                                    </div>
+                                </div>
                                 <div class="phase-field f-date">
                                     <span class="phase-field-lbl">Target Date</span>
                                     <div class="date-picker phase-card-date-picker">
@@ -342,6 +353,13 @@
                                         <div class="calendar-popup" aria-hidden="true"></div>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="phase-row3">
+                                <span class="phase-field-lbl">Track by</span>
+                                <select name="phases[<?= $pIdx ?>][tracking_mode]" class="phase-mode-sel">
+                                    <option value="quantity"    <?= $phaseMode === 'quantity'    ? 'selected' : '' ?>>Quantity</option>
+                                    <option value="status_only" <?= $phaseMode === 'status_only' ? 'selected' : '' ?>>Status Only</option>
+                                </select>
                             </div>
                         </div>
                         <?php endforeach; ?>
@@ -640,90 +658,73 @@ if (window.location.hostname === 'localhost') {
     // ── Milestone templates keyed by tower type ────────────────
     var TEMPLATES = {
         'BUILD-TO-SUIT': [
-            { name: 'Skom',                       weight: 3  },
-            { name: 'Mobilization/Site Clearing', weight: 5  },
-            { name: 'Site Layout/Excavation',     weight: 5  },
-            { name: 'Lean Concrete',              weight: 4  },
-            { name: 'Rebars Installation',        weight: 5  },
-            { name: 'ABST Installation',          weight: 5  },
-            { name: 'Formworks Installation',     weight: 5  },
-            { name: 'Tower Foundation Casting',   weight: 6  },
-            { name: 'Backfilling',                weight: 4  },
-            { name: 'Tower On Site',              weight: 3  },
-            { name: 'Tower Erection',             weight: 8  },
-            { name: 'BTS Pad',                    weight: 4  },
-            { name: 'DG Pad',                     weight: 4  },
-            { name: 'SEP',                        weight: 4  },
-            { name: 'CEF',                        weight: 4  },
-            { name: 'Perimeter Fence',            weight: 6  },
-            { name: 'Gate',                       weight: 4  },
-            { name: 'Grounding Systems',          weight: 4  },
-            { name: 'E-Wall',                     weight: 5  },
-            { name: 'Panel Board Installation',   weight: 5  },
-            { name: 'Site Development',           weight: 5  },
-            { name: 'PrePAT',                     weight: 2  },
+            { name: 'Skom',                       weight: 3, mode: 'status_only' },
+            { name: 'Mobilization/Site Clearing', weight: 5, mode: 'status_only' },
+            { name: 'Site Layout/Excavation',     weight: 5, mode: 'quantity', unit: 'm³' },
+            { name: 'Lean Concrete',              weight: 4, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Installation',        weight: 5, mode: 'quantity', unit: 'kg' },
+            { name: 'ABST Installation',          weight: 5, mode: 'status_only' },
+            { name: 'Formworks Installation',     weight: 5, mode: 'quantity', unit: 'm²' },
+            { name: 'Tower Foundation Casting',   weight: 6, mode: 'quantity', unit: 'm³' },
+            { name: 'Backfilling',                weight: 4, mode: 'quantity', unit: 'm³' },
+            { name: 'Tower On Site',              weight: 3, mode: 'status_only' },
+            { name: 'Tower Erection',             weight: 8, mode: 'quantity', unit: 'm' },
+            { name: 'BTS Pad',                    weight: 4, mode: 'status_only' },
+            { name: 'DG Pad',                     weight: 4, mode: 'status_only' },
+            { name: 'SEP',                        weight: 4, mode: 'status_only' },
+            { name: 'CEF',                        weight: 4, mode: 'status_only' },
+            { name: 'Perimeter Fence',            weight: 6, mode: 'quantity', unit: 'lm' },
+            { name: 'Gate',                       weight: 4, mode: 'status_only' },
+            { name: 'Grounding Systems',          weight: 4, mode: 'status_only' },
+            { name: 'E-Wall',                     weight: 5, mode: 'status_only' },
+            { name: 'Panel Board Installation',   weight: 5, mode: 'status_only' },
+            { name: 'Site Development',           weight: 5, mode: 'status_only' },
+            { name: 'PrePAT',                     weight: 2, mode: 'status_only' },
         ],
         'RETROFITTING': [
-            { name: 'RM', weight: 40, qty: 14 },
-            { name: 'SP', weight: 30, qty: 6  },
-            { name: 'L',  weight: 20, qty: 1  },
-            { name: 'BP', weight: 10           },
+            { name: 'RM', weight: 40, qty: 14, mode: 'quantity', unit: 'pcs' },
+            { name: 'SP', weight: 30, qty: 6,  mode: 'quantity', unit: 'pcs' },
+            { name: 'L',  weight: 20, qty: 1,  mode: 'quantity', unit: 'pcs' },
+            { name: 'BP', weight: 10,          mode: 'status_only' },
         ],
         'COLOCATION': [
-            { name: 'Site Layout',                              weight: 4.8 },
-            { name: 'Trenching, Excavation',                    weight: 4.8 },
-            { name: 'Order of Materials and Delivery',          weight: 4.8 },
-            { name: 'Lean concrete',                            weight: 4.8 },
-            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8 },
-            { name: 'Formworks Inst',                           weight: 4.8 },
-            { name: 'Rebar Inst',                               weight: 4.8 },
-            { name: 'Casting(Bot) + Curing',                    weight: 4.8 },
-            { name: 'CHB Laying',                               weight: 4.8 },
-            { name: 'Backfill (1st and 2nd Layer)',              weight: 4.8 },
-            { name: 'Casting(Top) + Curing',                    weight: 4.8 },
-            { name: 'Plastering',                               weight: 4.8 },
-            { name: 'Trenching (Electrical +FOC)',               weight: 4.8 },
-            { name: 'Cable Tray Inst',                          weight: 4.8 },
-            { name: 'Panel Board Inst',                         weight: 4.8 },
-            { name: 'CEF',                                      weight: 4.8 },
-            { name: 'Electrical Works',                         weight: 4.8 },
-            { name: 'Grounding',                                weight: 4.8 },
-            { name: 'Wire Termination',                         weight: 4.8 },
-            { name: 'Site Clearing',                            weight: 4.8 },
-            { name: 'Site Development',                         weight: 4.0 },
+            { name: 'Site Layout',                                  weight: 4.8, mode: 'status_only' },
+            { name: 'Trenching, Excavation',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Order of Materials and Delivery',              weight: 4.8, mode: 'status_only' },
+            { name: 'Lean concrete',                                weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8, mode: 'status_only' },
+            { name: 'Formworks Inst',                               weight: 4.8, mode: 'quantity', unit: 'm²' },
+            { name: 'Rebar Inst',                                   weight: 4.8, mode: 'quantity', unit: 'kg' },
+            { name: 'Casting(Bot) + Curing',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'CHB Laying',                                   weight: 4.8, mode: 'quantity', unit: 'pcs' },
+            { name: 'Backfill (1st and 2nd Layer)',                 weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Casting(Top) + Curing',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Plastering',                                   weight: 4.8, mode: 'quantity', unit: 'm²' },
+            { name: 'Trenching (Electrical +FOC)',                  weight: 4.8, mode: 'quantity', unit: 'lm' },
+            { name: 'Cable Tray Inst',                              weight: 4.8, mode: 'quantity', unit: 'lm' },
+            { name: 'Panel Board Inst',                             weight: 4.8, mode: 'status_only' },
+            { name: 'CEF',                                          weight: 4.8, mode: 'status_only' },
+            { name: 'Electrical Works',                             weight: 4.8, mode: 'status_only' },
+            { name: 'Grounding',                                    weight: 4.8, mode: 'status_only' },
+            { name: 'Wire Termination',                             weight: 4.8, mode: 'status_only' },
+            { name: 'Site Clearing',                                weight: 4.8, mode: 'status_only' },
+            { name: 'Site Development',                             weight: 4.0, mode: 'status_only' },
         ],
         'CONVERSION': [
-            { name: 'SKOM',                      weight: 5  },
-            { name: 'Site Lay-out',              weight: 5  },
-            { name: 'Excavation',                weight: 8  },
-            { name: 'Grounding',                 weight: 7  },
-            { name: 'Lean Concrete',             weight: 7  },
-            { name: 'Rebars Installation',       weight: 8  },
-            { name: 'ABST Installation',         weight: 8  },
-            { name: 'Formworks Installation',    weight: 7  },
-            { name: 'Tower Foundation Casting',  weight: 8  },
-            { name: 'Backfilling',               weight: 6  },
-            { name: 'Tower Erection',            weight: 9  },
-            { name: 'Electrical Works',          weight: 8  },
-            { name: 'Cable Ladder Installation', weight: 7  },
-            { name: 'Site Development',          weight: 7  },
-        ],
-        '_DEFAULT': [
-            { name: 'Mobilization & Site Setup',  weight: 9.7  },
-            { name: 'Concrete Floor Polishing',   weight: 9.1  },
-            { name: 'Plumbing',                   weight: 3.3  },
-            { name: 'CHB & Drywall Works',        weight: 11.4 },
-            { name: 'HVAC',                       weight: 15.9 },
-            { name: 'FDAS',                       weight: 4.7  },
-            { name: 'Electrical',                 weight: 15.6 },
-            { name: 'Electronics',                weight: 2.4  },
-            { name: 'Ceiling Works',              weight: 10.2 },
-            { name: 'Floor Tiles',                weight: 3.1  },
-            { name: 'Painting Works',             weight: 4.5  },
-            { name: 'Doors & Glazing',            weight: 4.5  },
-            { name: 'Cabinetry',                  weight: 1.6  },
-            { name: 'Furniture Installation',     weight: 3.4  },
-            { name: 'Testing & Commissioning',    weight: 0.6  },
+            { name: 'SKOM',                      weight: 5, mode: 'status_only' },
+            { name: 'Site Lay-out',              weight: 5, mode: 'status_only' },
+            { name: 'Excavation',                weight: 8, mode: 'quantity', unit: 'm³' },
+            { name: 'Grounding',                 weight: 7, mode: 'status_only' },
+            { name: 'Lean Concrete',             weight: 7, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Installation',       weight: 8, mode: 'quantity', unit: 'kg' },
+            { name: 'ABST Installation',         weight: 8, mode: 'status_only' },
+            { name: 'Formworks Installation',    weight: 7, mode: 'quantity', unit: 'm²' },
+            { name: 'Tower Foundation Casting',  weight: 8, mode: 'quantity', unit: 'm³' },
+            { name: 'Backfilling',               weight: 6, mode: 'quantity', unit: 'm³' },
+            { name: 'Tower Erection',            weight: 9, mode: 'quantity', unit: 'm' },
+            { name: 'Electrical Works',          weight: 8, mode: 'status_only' },
+            { name: 'Cable Ladder Installation', weight: 7, mode: 'quantity', unit: 'lm' },
+            { name: 'Site Development',          weight: 7, mode: 'status_only' },
         ],
     };
 
@@ -824,6 +825,15 @@ if (window.location.hostname === 'localhost') {
                     '<span class="phase-field-lbl">Unit</span>' +
                     '<select name="phases[' + pi + '][unit]" class="phase-card-sel">' + unitOpts + '</select>' +
                 '</div>' +
+                '<div class="phase-field f-date-start">' +
+                    '<span class="phase-field-lbl">Target Start</span>' +
+                    '<div class="date-picker phase-card-date-picker">' +
+                        '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
+                        '<input type="hidden" name="phases[' + pi + '][site_start_date]" value="' + escHtml(data.site_start_date || '') + '">' +
+                        '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
+                        '<div class="calendar-popup" aria-hidden="true"></div>' +
+                    '</div>' +
+                '</div>' +
                 '<div class="phase-field f-date">' +
                     '<span class="phase-field-lbl">Target Date</span>' +
                     '<div class="date-picker phase-card-date-picker">' +
@@ -833,10 +843,19 @@ if (window.location.hostname === 'localhost') {
                         '<div class="calendar-popup" aria-hidden="true"></div>' +
                     '</div>' +
                 '</div>' +
+            '</div>' +
+            '<div class="phase-row3">' +
+                '<span class="phase-field-lbl">Track by</span>' +
+                '<select name="phases[' + pi + '][tracking_mode]" class="phase-mode-sel">' +
+                    '<option value="quantity"' + ((data.mode || 'quantity') === 'quantity' ? ' selected' : '') + '>Quantity</option>' +
+                    '<option value="status_only"' + (data.mode === 'status_only' ? ' selected' : '') + '>Status Only</option>' +
+                '</select>' +
             '</div>';
 
         if (typeof window.initPhaseDatePicker === 'function') {
-            window.initPhaseDatePicker(card.querySelector('.date-picker'));
+            card.querySelectorAll('.date-picker').forEach(function (dp) {
+                window.initPhaseDatePicker(dp);
+            });
         }
 
         attachFieldErrorClearing(card);
@@ -844,7 +863,26 @@ if (window.location.hostname === 'localhost') {
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
+        card.querySelector('.phase-mode-sel').addEventListener('change', function () {
+            applyPhaseMode(card);
+        });
+        applyPhaseMode(card);
         return card;
+    }
+
+    // ── Quantity / Status-only mode ── */
+    function applyPhaseMode(card) {
+        var modeSel = card.querySelector('.phase-mode-sel');
+        var qtyInp  = card.querySelector('.phase-card-inp');
+        var unitSel = card.querySelector('.phase-card-sel');
+        if (!modeSel) return;
+        var statusOnly = modeSel.value === 'status_only';
+        if (qtyInp) {
+            qtyInp.disabled = statusOnly;
+            if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
+            qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
+        }
+        if (unitSel) unitSel.disabled = statusOnly;
     }
 
     // ── Clear error highlight as soon as a field is touched ────
@@ -853,8 +891,8 @@ if (window.location.hostname === 'localhost') {
         var weightInp = card.querySelector('.phase-weight-inp');
         var weightGrp = card.querySelector('.phase-weight-group');
         var qtyInp    = card.querySelector('.phase-card-inp');
-        var dateDisp  = card.querySelector('.phase-card-date-picker .date-display');
         var dateHid   = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+        var dateDisp  = dateHid ? dateHid.closest('.phase-card-date-picker').querySelector('.date-display') : null;
 
         if (nameInp)   nameInp.addEventListener('input',  function () { nameInp.classList.remove('pz-field-error'); });
         if (weightInp) weightInp.addEventListener('input', function () {
@@ -873,6 +911,9 @@ if (window.location.hostname === 'localhost') {
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
+        var modeSel = card.querySelector('.phase-mode-sel');
+        if (modeSel) modeSel.addEventListener('change', function () { applyPhaseMode(card); });
+        applyPhaseMode(card);
     }
     container.querySelectorAll('.phase-card').forEach(attachExistingCard);
 
@@ -895,7 +936,7 @@ if (window.location.hostname === 'localhost') {
             if (existing > 0) {
                 if (!await window.openConfirmForm('Auto-fill will replace the current milestone schedule. Continue?', 'warning')) return;
             }
-            var template = TEMPLATES[self.value] || TEMPLATES['_DEFAULT'];
+            var template = TEMPLATES[self.value] || [];
             container.innerHTML = '';
             template.forEach(function (phase, pi) {
                 container.appendChild(buildPhaseItem(pi, phase));
@@ -1073,7 +1114,7 @@ if (window.location.hostname === 'localhost') {
                     if (qtyInp) qtyInp.classList.add('pz-field-error');
                 }
                 var dateHid = card.querySelector('input[type="hidden"][name$="[site_date]"]');
-                var datePicker = card.querySelector('.phase-card-date-picker');
+                var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
                 if (!dateHid || !dateHid.value.trim()) {
                     missing.push('Target Date');
                     if (datePicker) datePicker.classList.add('pz-field-error');
@@ -1137,6 +1178,7 @@ if (window.location.hostname === 'localhost') {
                 weight:    (card.querySelector('.phase-weight-inp')    || {}).value || '',
                 qty:       (card.querySelector('.phase-card-inp')      || {}).value || '',
                 unit:      (card.querySelector('.phase-card-sel')      || {}).value || 'pcs',
+                site_start_date: (card.querySelector('input[type="hidden"][name$="[site_start_date]"]') || {}).value || '',
                 site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || ''
             });
         });

@@ -28,6 +28,7 @@ class TrashService
             'deleted_by'     => $deletedBy ?? 'System',
             'expires_at'     => $expiresAt,
         ]);
+        audit_log("{$module}.delete", $module, $originalId, $name);
         return $ref->id();
     }
 
@@ -90,6 +91,7 @@ class TrashService
             }
 
             $this->db->collection('recently_deleted')->document($trashId)->delete();
+            audit_log("{$module}.restore", $module, $originalId, $d['name'] ?? '');
             return ['success' => true, 'module' => $module, 'name' => $d['name'] ?? '', 'id' => $originalId, 'data' => $data];
         } catch (\Throwable $e) {
             log_message('error', 'TrashService::restoreItem - ' . $e->getMessage());
@@ -99,6 +101,11 @@ class TrashService
 
     public function permanentDelete(string $trashId): void
     {
+        $snap = $this->db->collection('recently_deleted')->document($trashId)->snapshot();
+        if ($snap->exists()) {
+            $d = $snap->data();
+            audit_log(($d['module'] ?? 'unknown') . '.permanent_delete', $d['module'] ?? 'unknown', $d['original_id'] ?? null, $d['name'] ?? '');
+        }
         $this->db->collection('recently_deleted')->document($trashId)->delete();
     }
 }

@@ -125,6 +125,8 @@ class Filters extends BaseFilters
                 'users/*',
                 'profile',
                 'profile/*',
+                'audit-logs',
+                'audit-logs/*',
             ],
         ],
     ];

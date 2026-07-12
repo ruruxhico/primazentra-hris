@@ -46,6 +46,7 @@ class Manpower extends BaseController
         try {
             $data = $this->buildPayloadFromPost();
             $id = $this->manpowerModel->createManpower($data);
+            audit_log('manpower.create', 'manpower', $id, $data['name'] ?? '');
             return redirect()->to('resources')->with('success', 'Manpower created successfully!');
         } catch (\Exception $e) {
             return redirect()->back()->withInput()->with('error', 'Error creating manpower: ' . $e->getMessage());
@@ -128,6 +129,7 @@ class Manpower extends BaseController
             $data['updated_at'] = new \Google\Cloud\Core\Timestamp(new \DateTime());
 
             $this->manpowerModel->updateManpower($id, $data);
+            audit_log('manpower.update', 'manpower', $id, $data['name'] ?? '');
 
             return redirect()->to('resources')->with('success', 'Manpower updated successfully!');
         } catch (\Exception $e) {
@@ -141,12 +143,16 @@ class Manpower extends BaseController
             if (strtolower($this->request->getMethod()) === 'post') {
                 $id = $this->request->getPost('id') ?? $id;
                 if (!$id) return $this->response->setStatusCode(400)->setJSON(['success' => false, 'message' => 'Missing id']);
+                $name = $this->manpowerModel->getManpowerById($id)['name'] ?? '';
                 $this->manpowerModel->deleteManpower($id);
+                audit_log('manpower.delete', 'manpower', $id, $name);
                 return $this->response->setJSON(['success' => true, 'message' => 'Manpower deleted']);
             }
 
             if ($id) {
+                $name = $this->manpowerModel->getManpowerById($id)['name'] ?? '';
                 $this->manpowerModel->deleteManpower($id);
+                audit_log('manpower.delete', 'manpower', $id, $name);
                 return redirect()->to('resources')->with('success', 'Manpower deleted successfully!');
             }
 
@@ -185,7 +191,6 @@ class Manpower extends BaseController
             'middle_name' => $middleName !== '' ? $middleName : null,
             'last_name' => $lastName,
             'role' => trim((string) $this->request->getPost('manpower_role')),
-            'specialization' => trim((string) $this->request->getPost('specialization')),
             'assigned_project_id' => trim((string) $this->request->getPost('assigned_project_id')) ?: null,
         ];
 

@@ -10,6 +10,7 @@
     $isStaff     = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
     $isProfile   = $currentPath === 'profile' || str_starts_with($currentPath, 'profile/');
     $isMessages  = $currentPath === 'messages' || str_starts_with($currentPath, 'messages/');
+    $isAuditLogs = $currentPath === 'audit-logs' || str_starts_with($currentPath, 'audit-logs/');
 ?>
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -80,6 +81,16 @@
                 <a href="<?= base_url('staff') ?>" class="<?= $isStaff ? 'active' : '' ?>">
                     <span class="icon material-symbols-outlined" aria-hidden="true">person</span>
                     <span class="label">Staff</span>
+                </a>
+            </li>
+            <?php endif; ?>
+
+            <!-- Audit Logs — Admin only -->
+            <?php if (pz_can('view_audit_logs')): ?>
+            <li>
+                <a href="<?= base_url('audit-logs') ?>" class="<?= $isAuditLogs ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">history</span>
+                    <span class="label">Audit Logs</span>
                 </a>
             </li>
             <?php endif; ?>

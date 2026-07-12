@@ -162,10 +162,12 @@ class Auth extends BaseController {
             $signInResult = $this->firestore->getAuth()->signInWithEmailAndPassword($email, $password);
             $firebaseUid = (string) ($signInResult->firebaseUserId() ?? '');
         } catch (\Throwable $e) {
+            audit_log('auth.login_failed', 'auth', null, $email, ['reason' => 'invalid_credentials'], 'failed', ['id' => null, 'name' => $email, 'role' => 'Unknown']);
             return redirect()->back()->withInput()->with('error', 'Invalid email or password.');
         }
 
         if ($firebaseUid === '') {
+            audit_log('auth.login_failed', 'auth', null, $email, ['reason' => 'no_firebase_uid'], 'failed', ['id' => null, 'name' => $email, 'role' => 'Unknown']);
             return redirect()->back()->withInput()->with('error', 'Invalid email or password.');
         }
 
@@ -237,6 +239,8 @@ class Auth extends BaseController {
                 'profilePicture'          => $sessionPic,
             ]);
 
+            audit_log('auth.login', 'auth', $user['id'], session()->get('userName'), ['forced_password_change' => true]);
+
             return redirect()->to('/change-password');
         }
 
@@ -253,6 +257,8 @@ class Auth extends BaseController {
         ]);
 
         $this->applyRememberMeCookies($rememberMe, $email);
+
+        audit_log('auth.login', 'auth', $user['id'], session()->get('userName'));
 
         return redirect()->to('/dashboard');
     }
@@ -487,6 +493,7 @@ class Auth extends BaseController {
      * Logout user
      */
     public function logout() {
+        audit_log('auth.logout', 'auth', session()->get('userId'), session()->get('userName'));
         session()->destroy();
         return redirect()->to('auth/login')->with('success', 'Logged out successfully');
     }

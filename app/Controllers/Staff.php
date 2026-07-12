@@ -235,6 +235,7 @@ class Staff extends BaseController
                 $this->sendWelcomeEmail($email, $firstName, $tempPassword);
 
                 log_message('info', 'Staff::create success. UID: ' . $firebaseUid);
+                audit_log('staff.create', 'staff', $firebaseUid, trim($firstName . ' ' . $lastName), ['role' => $role]);
 
                 return redirect()->to('staff')->with('success', 'Staff member created. Credentials sent to ' . $email . '.');
             } catch (\Exception $e) {
@@ -321,6 +322,7 @@ class Staff extends BaseController
                 }
 
                 $this->firestore->getDb()->collection('users')->document($id)->set($data, ['merge' => true]);
+                audit_log('staff.update', 'staff', $id, trim($data['first_name'] . ' ' . $data['last_name']), ['role' => $data['role']]);
                 return redirect()->to('staff')->with('success', 'Staff member updated successfully!');
             }
 
@@ -396,6 +398,8 @@ class Staff extends BaseController
             ]);
 
             $this->sendWelcomeEmail($email, $firstName, $tempPassword);
+
+            audit_log('staff.resend_credentials', 'staff', $id, trim($firstName . ' ' . ($data['last_name'] ?? '')));
 
             return redirect()->to('staff/show/' . $id)->with('success', 'New credentials sent to ' . $email . '. The temporary password expires in 15 minutes.');
         } catch (\Throwable $e) {

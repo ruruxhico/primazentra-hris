@@ -3530,6 +3530,12 @@ td .action-btn { vertical-align: middle; }
 .phase-row2 { grid-column: 2 / 6; grid-row: 2; display: flex; gap: 8px; }
 .phase-row2 .phase-field { flex: 1; min-width: 0; }
 
+/* Row 3 — quantity vs status-only tracking mode */
+.phase-row3 { grid-column: 2 / 6; grid-row: 3; display: flex; align-items: center; gap: 8px; }
+.phase-mode-sel { border: 1px solid #ddd; border-radius: 6px; padding: 4px 6px; font-size: 0.82rem; font-family: inherit; background: #fff; }
+.phase-mode-sel:focus { outline: none; border-color: #C8A951; }
+.phase-card-inp:disabled, .phase-card-sel:disabled { opacity: 0.45; background: #f5f3ee; cursor: not-allowed; }
+
 .phase-card-name-inp {
     border: 1px solid #ddd;
     border-radius: 6px;
@@ -5649,7 +5655,7 @@ body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !importan
 .ps-card-hdr { padding:1rem 1.2rem 0.75rem; border-bottom:1px solid #f0ebe0; }
 .ps-card-hdr h2 { font-size:0.95rem; font-weight:700; color:#3b2a0e; margin:0; }
 .ps-ms-list { list-style:none; margin:0; padding:0; }
-.ps-ms-row { display:grid; grid-template-columns:28px 1fr 100px 80px 110px 130px 36px; gap:8px; align-items:center; padding:0.55rem 1rem; border-bottom:1px solid #f0ebe0; }
+.ps-ms-row { display:grid; grid-template-columns:28px 1fr 100px 80px 110px 130px 130px 36px; gap:8px; align-items:center; padding:0.55rem 1rem; border-bottom:1px solid #f0ebe0; }
 .ps-ms-row:last-child { border-bottom:none; }
 .ps-ms-drag { cursor:grab; color:#b09060; display:flex; align-items:center; font-variation-settings:'FILL' 0,'wght' 400; }
 .ps-ms-drag:active { cursor:grabbing; }
@@ -5669,7 +5675,7 @@ body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !importan
 .ps-ms-del { background:none; border:none; cursor:pointer; color:#e53e3e; padding:4px; border-radius:6px; display:flex; align-items:center; transition:background .12s; font-variation-settings:'FILL' 1; }
 .ps-ms-del:hover { background:#fff0f0; }
 .ps-ms-del .material-symbols-outlined { font-size:18px; }
-.ps-ms-col-hdr { display:grid; grid-template-columns:28px 1fr 100px 80px 110px 130px 36px; gap:8px; padding:0.3rem 1rem 0.1rem; background:#faf6ee; border-bottom:1px solid #f0ebe0; }
+.ps-ms-col-hdr { display:grid; grid-template-columns:28px 1fr 100px 80px 110px 130px 130px 36px; gap:8px; padding:0.3rem 1rem 0.1rem; background:#faf6ee; border-bottom:1px solid #f0ebe0; }
 .ps-ms-col-hdr span { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#8C701C; }
 .ps-add-row { padding:0.65rem 1rem; border-top:1px solid #f0ebe0; display:flex; justify-content:space-between; align-items:center; }
 .ps-add-btn { background:none; border:none; cursor:pointer; color:#8C701C; font-size:0.85rem; font-weight:700; padding:5px 10px; border-radius:7px; display:flex; align-items:center; gap:5px; font-family:inherit; transition:background .12s; }
@@ -5902,6 +5908,9 @@ body.pz-drag-scroll * { cursor: grabbing !important; user-select: none !importan
 .rpt-overlay[data-type="daily"] .rpt-cal-day.has-report:hover { background:#6e570f; }
 .rpt-overlay[data-type="daily"] .rpt-cal-day.is-today { border-color:#8C701C; color:#8C701C; }
 .rpt-overlay[data-type="daily"] .rpt-cal-day.has-report.is-today { color:#fff; box-shadow:inset 0 0 0 2px rgba(255,255,255,0.85); }
+.rpt-cal-day.is-clickable-empty { cursor:pointer; }
+.rpt-cal-day.is-clickable-empty:hover { background:#f0ebe0; }
+.rpt-cal-day.is-future { opacity:.35; }
 
 .rpt-legend {
     display:flex; gap:1rem; margin-top:.8rem; justify-content:center;
@@ -6261,6 +6270,9 @@ label.rpt-cause-item {
 .rpt-overlay[data-type="daily"] .rpt-cal-day.has-report:hover { background:#6e570f; }
 .rpt-overlay[data-type="daily"] .rpt-cal-day.is-today { border-color:#8C701C; color:#8C701C; }
 .rpt-overlay[data-type="daily"] .rpt-cal-day.has-report.is-today { color:#fff; box-shadow:inset 0 0 0 2px rgba(255,255,255,0.85); }
+.rpt-cal-day.is-clickable-empty { cursor:pointer; }
+.rpt-cal-day.is-clickable-empty:hover { background:#f0ebe0; }
+.rpt-cal-day.is-future { opacity:.35; }
 .rpt-legend { display:flex; gap:1rem; margin-top:.8rem; justify-content:center; font-size:.76rem; color:#666; }
 .rpt-legend-item { display:flex; align-items:center; gap:.35rem; }
 .rpt-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; }

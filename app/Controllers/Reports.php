@@ -164,6 +164,8 @@ class Reports extends BaseController
 
             $this->notifyEmergency($projectId, $reportId, $projectName, $filerName);
 
+            audit_log('report.emergency_create', 'report', $reportId, $projectName);
+
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
             log_message('error', 'Reports::emergencyCreate - ' . $e->getMessage());
@@ -209,6 +211,8 @@ class Reports extends BaseController
                     ['path' => 'has_active_emergency', 'value' => false],
                 ]);
             }
+
+            audit_log('report.emergency_resolve', 'report', $docId, $projectId);
 
             return $this->response->setJSON(['success' => true]);
         } catch (\Throwable $e) {
@@ -273,14 +277,19 @@ class Reports extends BaseController
                     'weight_percent'     => (float)($m['weight_percent'] ?? $m['weight'] ?? 0),
                     'order'              => (int)($m['order'] ?? 0),
                     'status'             => (string)($m['status'] ?? 'Not Started'),
+                    'tracking_mode'      => (string)($m['tracking_mode'] ?? 'quantity'),
                 ];
             }
             usort($milestones, fn($a, $b) => $a['order'] <=> $b['order']);
 
-            // Locked until the milestone before it (by order) is Completed —
-            // consumed by the report form (and mobile) to disable progress entry.
+            // Informational only — does NOT block progress entry (see Reports::dailyCreate()).
+            // Surfaces a heads-up when the previous milestone (by order) isn't Completed yet,
+            // since work is often genuinely done out of sequence on site.
             foreach ($milestones as $idx => &$ms) {
-                $ms['locked'] = $idx > 0 && ($milestones[$idx - 1]['status'] ?? 'Not Started') !== 'Completed';
+                $prev = $idx > 0 ? $milestones[$idx - 1] : null;
+                $ms['sequence_notice'] = ($prev && ($prev['status'] ?? 'Not Started') !== 'Completed')
+                    ? $prev['name']
+                    : null;
             }
             unset($ms);
 
@@ -384,18 +393,31 @@ class Reports extends BaseController
                 ];
             }
 
+            // Live tracking_mode per milestone — looked up fresh rather than trusting
+            // the report snapshot, so this works for reports filed before this field
+            // existed too, not just ones filed going forward.
+            $trackingModeById = [];
+            foreach ($this->firestore->getDb()->collection('project')->document($projectId)
+                        ->collection('milestones')->documents() as $mDoc) {
+                if ($mDoc->exists()) {
+                    $trackingModeById[$mDoc->id()] = (string)($mDoc->data()['tracking_mode'] ?? 'quantity');
+                }
+            }
+
             // Normalize milestone_progress array
             $milestoneProgress = [];
             foreach ((array)($d['milestone_progress'] ?? []) as $ms) {
                 if (!is_array($ms)) continue;
+                $mid = (string)($ms['milestone_id'] ?? '');
                 $milestoneProgress[] = [
-                    'milestone_id' => (string)($ms['milestone_id'] ?? ''),
-                    'name'         => (string)($ms['milestone_name'] ?? ''),
-                    'unit'         => (string)($ms['unit'] ?? ''),
-                    'today'        => (float)($ms['amount_done_today']        ?? 0),
-                    'total'        => (float)($ms['completed_quantity_after'] ?? 0),
-                    'percent'      => (float)($ms['completion_percent_after'] ?? 0),
-                    'image_urls'   => array_values(array_filter((array)($ms['image_urls'] ?? []), 'is_string')),
+                    'milestone_id'  => $mid,
+                    'name'          => (string)($ms['milestone_name'] ?? ''),
+                    'unit'          => (string)($ms['unit'] ?? ''),
+                    'today'         => (float)($ms['amount_done_today']        ?? 0),
+                    'total'         => (float)($ms['completed_quantity_after'] ?? 0),
+                    'percent'       => (float)($ms['completion_percent_after'] ?? 0),
+                    'tracking_mode' => $trackingModeById[$mid] ?? 'quantity',
+                    'image_urls'    => array_values(array_filter((array)($ms['image_urls'] ?? []), 'is_string')),
                 ];
             }
 
@@ -437,6 +459,11 @@ class Reports extends BaseController
 
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'Invalid date format']);
+        }
+
+        $todayManila = (new \DateTime('now', new \DateTimeZone('Asia/Manila')))->format('Y-m-d');
+        if ($date > $todayManila) {
+            return $this->response->setStatusCode(400)->setJSON(['error' => 'You cannot file a report for a future date.']);
         }
         if (empty($rawManpower)) {
             return $this->response->setStatusCode(400)->setJSON(['error' => 'At least one worker must be selected']);
@@ -486,24 +513,20 @@ class Reports extends BaseController
             if (!is_array($ms)) continue;
             $mid = trim((string)($ms['milestone_id'] ?? ''));
             if ($mid === '') continue;
-            $submittedAmounts[$mid] = max(0.0, (float)($ms['amount_done_today'] ?? 0));
-        }
-
-        // Order/status lookup, used below to enforce milestone sequencing
-        // (a milestone only accepts progress once the one before it is Completed).
-        $orderByMid    = [];
-        $statusByOrder = [];
-        foreach ($milestoneSnaps as $mid => $mSnap) {
-            $mData = $mSnap->data();
-            $ord   = (int)($mData['order'] ?? 0);
-            $orderByMid[$mid]    = $ord;
-            $statusByOrder[$ord] = (string)($mData['status'] ?? 'Not Started');
+            $amount = max(0.0, (float)($ms['amount_done_today'] ?? 0));
+            // Status-only milestones are a checkbox on the client — clamp server-side
+            // too, regardless of what was actually submitted.
+            $isStatusOnly = isset($milestoneSnaps[$mid])
+                && (string)($milestoneSnaps[$mid]->data()['tracking_mode'] ?? 'quantity') === 'status_only';
+            if ($isStatusOnly) {
+                $amount = $amount > 0 ? 1.0 : 0.0;
+            }
+            $submittedAmounts[$mid] = $amount;
         }
 
         // ── Server-side validation: unclamped overall progress ≤ 100.5% ──────
         $totalWeight        = 0.0;
         $unclampedWeightSum = 0.0;
-        $blockedBySequence  = [];
         foreach ($milestoneSnaps as $mid => $mSnap) {
             $mData     = $mSnap->data();
             $weight    = (float)($mData['weight_percent'] ?? $mData['weight'] ?? 0);
@@ -515,20 +538,8 @@ class Reports extends BaseController
             $delta     = $submitted - $logged;
             $newQty    = $currentQty + $delta;
 
-            if ($delta > 0.001) {
-                $prevOrder = ($orderByMid[$mid] ?? 0) - 1;
-                if ($prevOrder >= 1 && ($statusByOrder[$prevOrder] ?? 'Not Started') !== 'Completed') {
-                    $blockedBySequence[] = (string)($mData['milestone_name'] ?? $mid);
-                }
-            }
-
             $totalWeight        += $weight;
             $unclampedWeightSum += $weight * ($targetQty > 0 ? $newQty / $targetQty * 100.0 : 0.0);
-        }
-        if (!empty($blockedBySequence)) {
-            return $this->response->setStatusCode(400)->setJSON([
-                'error' => 'Cannot log progress for ' . implode(', ', $blockedBySequence) . ' — the previous milestone must be completed first.',
-            ]);
         }
         $unclampedOverall = $totalWeight > 0 ? $unclampedWeightSum / $totalWeight : 0.0;
         if ($unclampedOverall > 100.5) {
@@ -701,6 +712,8 @@ class Reports extends BaseController
         }
 
         // ── Post-commit side effects (non-critical) ───────────────────────────
+        audit_log('report.daily_create', 'report', $date, $projectName);
+
         $this->notifyProgress($projectId, $projectName, $filerName, $filerUid, $pmUid, $isUpdate);
 
         try {

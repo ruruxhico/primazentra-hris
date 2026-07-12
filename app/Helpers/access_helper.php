@@ -79,7 +79,10 @@ if (!function_exists('pz_can')) {
             'delete_request'          => in_array($r, [$admin, $ops], true),
 
             // ── Legacy alias ──────────────────────────────────────────────
-            'edit_progress_report'    => $r === $se,
+            'edit_progress_report'    => in_array($r, [$admin, $se], true),
+
+            // ── Audit logs ───────────────────────────────────────────────
+            'view_audit_logs'         => $r === $admin,
 
             default => false,
         };
