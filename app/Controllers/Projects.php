@@ -1126,8 +1126,9 @@ class Projects extends BaseController
                     $tdStr = trim((string)($m['target_date'] ?? ''));
                     $tsStr = trim((string)($m['target_start'] ?? ''));
                     // A row with no matching existing milestone at this position is new —
-                    // require a target date for it. Pre-existing undated milestones are left alone.
-                    if (empty($ex) && $tdStr === '') {
+                    // require a target start and target end for it. Pre-existing undated
+                    // milestones are left alone.
+                    if (empty($ex) && ($tdStr === '' || $tsStr === '')) {
                         $missingDates[] = $name;
                     }
 
@@ -1182,7 +1183,7 @@ class Projects extends BaseController
 
                 if (!empty($missingDates)) {
                     return redirect()->back()->withInput()
-                        ->with('error', 'Target date is required for new milestones: ' . implode(', ', $missingDates) . '.');
+                        ->with('error', 'Target start and target end are required for new milestones: ' . implode(', ', $missingDates) . '.');
                 }
 
                 if (!empty($badActivityTotals)) {
@@ -2220,9 +2221,10 @@ class Projects extends BaseController
     }
 
     /**
-     * Require a target date for any submitted milestone that isn't already stored
-     * (matched by name). Existing undated milestones are left alone — this only
-     * stops new ones from being created without a date. Returns an error string or null.
+     * Require a target start and target end for any submitted milestone that isn't
+     * already stored (matched by name). Existing undated milestones are left alone —
+     * this only stops new ones from being created without dates. Returns an error
+     * string or null.
      */
     private function validateNewMilestoneTargetDates(array $rawPhases, array $existingNamesLower = []): ?string
     {
@@ -2231,12 +2233,14 @@ class Projects extends BaseController
             $name = trim((string) ($phase['name'] ?? ''));
             if ($name === '') continue;
             if (in_array(strtolower($name), $existingNamesLower, true)) continue;
-            if (trim((string) ($phase['site_date'] ?? '')) === '') {
+            $hasStart = trim((string) ($phase['site_start_date'] ?? '')) !== '';
+            $hasEnd   = trim((string) ($phase['site_date'] ?? '')) !== '';
+            if (!$hasStart || !$hasEnd) {
                 $missing[] = $name;
             }
         }
         if (!empty($missing)) {
-            return 'Target date is required for new milestones: ' . implode(', ', $missing) . '.';
+            return 'Target start and target end are required for new milestones: ' . implode(', ', $missing) . '.';
         }
         return null;
     }
@@ -2457,14 +2461,8 @@ class Projects extends BaseController
         // Map milestone schema → flat task format that groupTasksIntoPhases() expects
         $flat = [];
         foreach ($milestones as $m) {
-            $targetDate = $m['target_date'] ?? null;
-            if ($targetDate instanceof \Google\Cloud\Core\Timestamp) {
-                $targetDate = $targetDate->get()->format('Y-m-d');
-            }
-            $targetStart = $m['target_start'] ?? null;
-            if ($targetStart instanceof \Google\Cloud\Core\Timestamp) {
-                $targetStart = $targetStart->get()->format('Y-m-d');
-            }
+            $targetDate  = $this->psTsToDate($m['target_date'] ?? null);
+            $targetStart = $this->psTsToDate($m['target_start'] ?? null);
             $qty = max(1, (int)($m['target_quantity'] ?? 1));
             $flat[] = [
                 'id'                 => $m['id'],

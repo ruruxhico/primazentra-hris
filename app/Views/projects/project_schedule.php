@@ -89,7 +89,7 @@
                 <span>Qty</span>
                 <span>Unit</span>
                 <span>Target Start</span>
-                <span>Target Date</span>
+                <span>Target End</span>
                 <span></span>
             </div>
 

@@ -345,7 +345,7 @@
                                     </div>
                                 </div>
                                 <div class="phase-field f-date">
-                                    <span class="phase-field-lbl">Target Date</span>
+                                    <span class="phase-field-lbl">Target End</span>
                                     <div class="date-picker phase-card-date-picker">
                                         <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
                                         <input type="hidden" name="phases[<?= $pIdx ?>][site_date]" value="<?= esc($phaseSiteDate) ?>">
@@ -835,7 +835,7 @@ if (window.location.hostname === 'localhost') {
                     '</div>' +
                 '</div>' +
                 '<div class="phase-field f-date">' +
-                    '<span class="phase-field-lbl">Target Date</span>' +
+                    '<span class="phase-field-lbl">Target End</span>' +
                     '<div class="date-picker phase-card-date-picker">' +
                         '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
                         '<input type="hidden" name="phases[' + pi + '][site_date]" value="' + escHtml(data.site_date || '') + '">' +
@@ -891,8 +891,10 @@ if (window.location.hostname === 'localhost') {
         var weightInp = card.querySelector('.phase-weight-inp');
         var weightGrp = card.querySelector('.phase-weight-group');
         var qtyInp    = card.querySelector('.phase-card-inp');
+        var startHid  = card.querySelector('input[type="hidden"][name$="[site_start_date]"]');
+        var startPicker = startHid ? startHid.closest('.phase-card-date-picker') : null;
         var dateHid   = card.querySelector('input[type="hidden"][name$="[site_date]"]');
-        var dateDisp  = dateHid ? dateHid.closest('.phase-card-date-picker').querySelector('.date-display') : null;
+        var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
 
         if (nameInp)   nameInp.addEventListener('input',  function () { nameInp.classList.remove('pz-field-error'); });
         if (weightInp) weightInp.addEventListener('input', function () {
@@ -900,8 +902,9 @@ if (window.location.hostname === 'localhost') {
             weightInp.classList.remove('pz-field-error');
         });
         if (qtyInp)    qtyInp.addEventListener('input',   function () { qtyInp.classList.remove('pz-field-error'); });
-        // date picker clears on hidden input change (set by the calendar)
-        if (dateHid)   dateHid.addEventListener('change', function () { if (dateDisp) dateDisp.classList.remove('pz-field-error'); });
+        // date pickers clear on hidden input change (set by the calendar)
+        if (startHid)  startHid.addEventListener('change', function () { if (startPicker) startPicker.classList.remove('pz-field-error'); });
+        if (dateHid)   dateHid.addEventListener('change', function () { if (datePicker) datePicker.classList.remove('pz-field-error'); });
     }
 
     // ── Attach events to PHP-rendered cards (edit mode) ────────
@@ -1113,10 +1116,16 @@ if (window.location.hostname === 'localhost') {
                     missing.push('Qty');
                     if (qtyInp) qtyInp.classList.add('pz-field-error');
                 }
+                var startHid = card.querySelector('input[type="hidden"][name$="[site_start_date]"]');
+                var startPicker = startHid ? startHid.closest('.phase-card-date-picker') : null;
+                if (!startHid || !startHid.value.trim()) {
+                    missing.push('Target Start');
+                    if (startPicker) startPicker.classList.add('pz-field-error');
+                }
                 var dateHid = card.querySelector('input[type="hidden"][name$="[site_date]"]');
                 var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
                 if (!dateHid || !dateHid.value.trim()) {
-                    missing.push('Target Date');
+                    missing.push('Target End');
                     if (datePicker) datePicker.classList.add('pz-field-error');
                 }
 
