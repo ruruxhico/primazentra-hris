@@ -25,6 +25,7 @@ class ArchiveService
             'archived_at'    => new \Google\Cloud\Core\Timestamp(new \DateTime()),
             'archived_by'    => $archivedBy ?? 'System',
         ]);
+        audit_log("{$module}.archive", $module, $originalId, $name);
         return $ref->id();
     }
 
@@ -89,6 +90,7 @@ class ArchiveService
             }
 
             $this->db->collection('archived')->document($archiveId)->delete();
+            audit_log("{$module}.restore", $module, $originalId, $d['name'] ?? '');
             return ['success' => true, 'module' => $module, 'name' => $d['name'] ?? '', 'id' => $originalId];
         } catch (\Throwable $e) {
             log_message('error', 'ArchiveService::restoreItem - ' . $e->getMessage());
@@ -98,6 +100,11 @@ class ArchiveService
 
     public function permanentDelete(string $archiveId): void
     {
+        $snap = $this->db->collection('archived')->document($archiveId)->snapshot();
+        if ($snap->exists()) {
+            $d = $snap->data();
+            audit_log(($d['module'] ?? 'unknown') . '.permanent_delete', $d['module'] ?? 'unknown', $d['original_id'] ?? null, $d['name'] ?? '');
+        }
         $this->db->collection('archived')->document($archiveId)->delete();
     }
 }

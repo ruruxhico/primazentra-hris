@@ -55,25 +55,16 @@
             </div>
         </div>
 
-        <!-- Role & Specialization -->
+        <!-- Role & Assignment -->
         <div class="pz-form-section">
             <p class="pz-form-section-title">Role & Assignment</p>
-            <div class="pz-form-row cols-2">
+            <div class="pz-form-row cols-1">
                 <div class="pz-form-group">
                     <label>Role *</label>
                     <select name="manpower_role" required>
                         <option value="">Select Role</option>
                         <?php foreach (['FIELD WORKER', 'FOREMAN'] as $opt): ?>
                             <option value="<?= esc($opt) ?>" <?= (($manpower['role'] ?? '') === $opt) ? 'selected' : '' ?>><?= esc($opt) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="pz-form-group">
-                    <label>Specialization *</label>
-                    <select name="specialization" required>
-                        <option value="">Select Specialization</option>
-                        <?php foreach (['BUILD-TO-SUIT', 'RETROFITTING', 'COLOCATION', 'CONVERSION'] as $opt): ?>
-                            <option value="<?= esc($opt) ?>" <?= (($manpower['specialization'] ?? '') === $opt) ? 'selected' : '' ?>><?= esc($opt) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>

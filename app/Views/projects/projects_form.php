@@ -293,11 +293,13 @@
 
                     <div id="phasesContainer">
                         <?php
-                        $units = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm'];
+                        $units = ['pcs','lot','m','m²','m³','kg','ton','bag','set','unit','lm','days','weeks'];
                         foreach ($phases as $pIdx => $phase):
                             $phaseQty      = $phase['qty']       ?? 1;
                             $phaseUnit     = $phase['unit']      ?? 'pcs';
-                            $phaseSiteDate = $phase['site_date'] ?? '';
+                            $phaseSiteDate      = $phase['site_date'] ?? '';
+                            $phaseSiteStartDate = $phase['site_start_date'] ?? '';
+                            $phaseMode          = $phase['tracking_mode'] ?? 'quantity';
                         ?>
                         <div class="phase-card" data-pidx="<?= $pIdx ?>" draggable="true">
                             <span class="phase-drag-handle material-symbols-outlined" title="Drag to reorder">drag_indicator</span>
@@ -333,13 +335,92 @@
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
+                                <div class="phase-field f-date-start">
+                                    <span class="phase-field-lbl">Target Start</span>
+                                    <div class="date-picker phase-card-date-picker">
+                                        <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
+                                        <input type="hidden" name="phases[<?= $pIdx ?>][site_start_date]" value="<?= esc($phaseSiteStartDate) ?>">
+                                        <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
+                                        <div class="calendar-popup" aria-hidden="true"></div>
+                                    </div>
+                                </div>
                                 <div class="phase-field f-date">
-                                    <span class="phase-field-lbl">Target Date</span>
+                                    <span class="phase-field-lbl">Target End</span>
                                     <div class="date-picker phase-card-date-picker">
                                         <input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>
                                         <input type="hidden" name="phases[<?= $pIdx ?>][site_date]" value="<?= esc($phaseSiteDate) ?>">
                                         <button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>
                                         <div class="calendar-popup" aria-hidden="true"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="phase-row3">
+                                <span class="phase-field-lbl">Track by</span>
+                                <select name="phases[<?= $pIdx ?>][tracking_mode]" class="phase-mode-sel">
+                                    <option value="quantity"    <?= $phaseMode === 'quantity'    ? 'selected' : '' ?>>Quantity</option>
+                                    <option value="status_only" <?= $phaseMode === 'status_only' ? 'selected' : '' ?>>Status Only</option>
+                                </select>
+                            </div>
+                            <div class="phase-act-panel">
+                                <button type="button" class="pf-act-toggle-btn">
+                                    <span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>
+                                    Activities (<span class="pf-act-count"><?= count($phase['activities'] ?? []) ?></span>)
+                                </button>
+                                <div class="pf-act-body" hidden>
+                                    <div class="pf-act-list">
+                                        <?php foreach (($phase['activities'] ?? []) as $ai => $a): ?>
+                                        <?php
+                                            $aMode  = ($a['tracking_mode'] ?? 'status_only') === 'quantity' ? 'quantity' : 'status_only';
+                                            $aIsQty = $aMode === 'quantity';
+                                        ?>
+                                        <div class="pf-act-row">
+                                            <div class="phase-field">
+                                                <span class="phase-field-lbl">Activity Name</span>
+                                                <input type="text" class="pf-act-name"
+                                                       name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][name]"
+                                                       value="<?= esc($a['activity_name'] ?? $a['name'] ?? '') ?>"
+                                                       placeholder="Activity name">
+                                            </div>
+                                            <div class="pf-act-row2">
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl">Weight %</span>
+                                                    <div class="pf-act-weight-group">
+                                                        <input type="number" class="pf-act-weight"
+                                                               name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][weight]"
+                                                               value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
+                                                               step="0.1" min="0" max="100" placeholder="0">
+                                                        <span class="pf-act-weight-unit">%</span>
+                                                    </div>
+                                                </div>
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl">Track By</span>
+                                                    <select class="pf-act-mode" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][tracking_mode]">
+                                                        <option value="status_only" <?= !$aIsQty ? 'selected' : '' ?>>Status</option>
+                                                        <option value="quantity"    <?= $aIsQty  ? 'selected' : '' ?>>Quantity</option>
+                                                    </select>
+                                                </div>
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl pf-act-value-lbl"><?= $aIsQty ? 'Qty' : 'Status' ?></span>
+                                                    <select class="pf-act-status" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][status]" <?= $aIsQty ? 'hidden disabled' : '' ?>>
+                                                        <?php foreach (['Not Started', 'In Progress', 'Completed'] as $st): ?>
+                                                        <option value="<?= esc($st) ?>" <?= ($a['status'] ?? 'Not Started') === $st ? 'selected' : '' ?>><?= esc($st) ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                    <input type="number" class="pf-act-qty"
+                                                           name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][qty]"
+                                                           value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
+                                                           <?= !$aIsQty ? 'hidden disabled' : '' ?>>
+                                                </div>
+                                                <button type="button" class="pf-act-del-btn" title="Remove activity">
+                                                    <span class="material-symbols-outlined">close</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="pf-act-add-row">
+                                        <button type="button" class="pf-act-add-btn">+ Add Activity</button>
+                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
                                     </div>
                                 </div>
                             </div>
@@ -640,90 +721,73 @@ if (window.location.hostname === 'localhost') {
     // ── Milestone templates keyed by tower type ────────────────
     var TEMPLATES = {
         'BUILD-TO-SUIT': [
-            { name: 'Skom',                       weight: 3  },
-            { name: 'Mobilization/Site Clearing', weight: 5  },
-            { name: 'Site Layout/Excavation',     weight: 5  },
-            { name: 'Lean Concrete',              weight: 4  },
-            { name: 'Rebars Installation',        weight: 5  },
-            { name: 'ABST Installation',          weight: 5  },
-            { name: 'Formworks Installation',     weight: 5  },
-            { name: 'Tower Foundation Casting',   weight: 6  },
-            { name: 'Backfilling',                weight: 4  },
-            { name: 'Tower On Site',              weight: 3  },
-            { name: 'Tower Erection',             weight: 8  },
-            { name: 'BTS Pad',                    weight: 4  },
-            { name: 'DG Pad',                     weight: 4  },
-            { name: 'SEP',                        weight: 4  },
-            { name: 'CEF',                        weight: 4  },
-            { name: 'Perimeter Fence',            weight: 6  },
-            { name: 'Gate',                       weight: 4  },
-            { name: 'Grounding Systems',          weight: 4  },
-            { name: 'E-Wall',                     weight: 5  },
-            { name: 'Panel Board Installation',   weight: 5  },
-            { name: 'Site Development',           weight: 5  },
-            { name: 'PrePAT',                     weight: 2  },
+            { name: 'Skom',                       weight: 3, mode: 'status_only' },
+            { name: 'Mobilization/Site Clearing', weight: 5, mode: 'status_only' },
+            { name: 'Site Layout/Excavation',     weight: 5, mode: 'quantity', unit: 'm³' },
+            { name: 'Lean Concrete',              weight: 4, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Installation',        weight: 5, mode: 'quantity', unit: 'kg' },
+            { name: 'ABST Installation',          weight: 5, mode: 'status_only' },
+            { name: 'Formworks Installation',     weight: 5, mode: 'quantity', unit: 'm²' },
+            { name: 'Tower Foundation Casting',   weight: 6, mode: 'quantity', unit: 'm³' },
+            { name: 'Backfilling',                weight: 4, mode: 'quantity', unit: 'm³' },
+            { name: 'Tower On Site',              weight: 3, mode: 'status_only' },
+            { name: 'Tower Erection',             weight: 8, mode: 'quantity', unit: 'm' },
+            { name: 'BTS Pad',                    weight: 4, mode: 'status_only' },
+            { name: 'DG Pad',                     weight: 4, mode: 'status_only' },
+            { name: 'SEP',                        weight: 4, mode: 'status_only' },
+            { name: 'CEF',                        weight: 4, mode: 'status_only' },
+            { name: 'Perimeter Fence',            weight: 6, mode: 'quantity', unit: 'lm' },
+            { name: 'Gate',                       weight: 4, mode: 'status_only' },
+            { name: 'Grounding Systems',          weight: 4, mode: 'status_only' },
+            { name: 'E-Wall',                     weight: 5, mode: 'status_only' },
+            { name: 'Panel Board Installation',   weight: 5, mode: 'status_only' },
+            { name: 'Site Development',           weight: 5, mode: 'status_only' },
+            { name: 'PrePAT',                     weight: 2, mode: 'status_only' },
         ],
         'RETROFITTING': [
-            { name: 'RM', weight: 40, qty: 14 },
-            { name: 'SP', weight: 30, qty: 6  },
-            { name: 'L',  weight: 20, qty: 1  },
-            { name: 'BP', weight: 10           },
+            { name: 'RM', weight: 40, qty: 14, mode: 'quantity', unit: 'pcs' },
+            { name: 'SP', weight: 30, qty: 6,  mode: 'quantity', unit: 'pcs' },
+            { name: 'L',  weight: 20, qty: 1,  mode: 'quantity', unit: 'pcs' },
+            { name: 'BP', weight: 10,          mode: 'status_only' },
         ],
         'COLOCATION': [
-            { name: 'Site Layout',                              weight: 4.8 },
-            { name: 'Trenching, Excavation',                    weight: 4.8 },
-            { name: 'Order of Materials and Delivery',          weight: 4.8 },
-            { name: 'Lean concrete',                            weight: 4.8 },
-            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8 },
-            { name: 'Formworks Inst',                           weight: 4.8 },
-            { name: 'Rebar Inst',                               weight: 4.8 },
-            { name: 'Casting(Bot) + Curing',                    weight: 4.8 },
-            { name: 'CHB Laying',                               weight: 4.8 },
-            { name: 'Backfill (1st and 2nd Layer)',              weight: 4.8 },
-            { name: 'Casting(Top) + Curing',                    weight: 4.8 },
-            { name: 'Plastering',                               weight: 4.8 },
-            { name: 'Trenching (Electrical +FOC)',               weight: 4.8 },
-            { name: 'Cable Tray Inst',                          weight: 4.8 },
-            { name: 'Panel Board Inst',                         weight: 4.8 },
-            { name: 'CEF',                                      weight: 4.8 },
-            { name: 'Electrical Works',                         weight: 4.8 },
-            { name: 'Grounding',                                weight: 4.8 },
-            { name: 'Wire Termination',                         weight: 4.8 },
-            { name: 'Site Clearing',                            weight: 4.8 },
-            { name: 'Site Development',                         weight: 4.0 },
+            { name: 'Site Layout',                                  weight: 4.8, mode: 'status_only' },
+            { name: 'Trenching, Excavation',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Order of Materials and Delivery',              weight: 4.8, mode: 'status_only' },
+            { name: 'Lean concrete',                                weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Fabrication and Formworks Preparation', weight: 4.8, mode: 'status_only' },
+            { name: 'Formworks Inst',                               weight: 4.8, mode: 'quantity', unit: 'm²' },
+            { name: 'Rebar Inst',                                   weight: 4.8, mode: 'quantity', unit: 'kg' },
+            { name: 'Casting(Bot) + Curing',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'CHB Laying',                                   weight: 4.8, mode: 'quantity', unit: 'pcs' },
+            { name: 'Backfill (1st and 2nd Layer)',                 weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Casting(Top) + Curing',                        weight: 4.8, mode: 'quantity', unit: 'm³' },
+            { name: 'Plastering',                                   weight: 4.8, mode: 'quantity', unit: 'm²' },
+            { name: 'Trenching (Electrical +FOC)',                  weight: 4.8, mode: 'quantity', unit: 'lm' },
+            { name: 'Cable Tray Inst',                              weight: 4.8, mode: 'quantity', unit: 'lm' },
+            { name: 'Panel Board Inst',                             weight: 4.8, mode: 'status_only' },
+            { name: 'CEF',                                          weight: 4.8, mode: 'status_only' },
+            { name: 'Electrical Works',                             weight: 4.8, mode: 'status_only' },
+            { name: 'Grounding',                                    weight: 4.8, mode: 'status_only' },
+            { name: 'Wire Termination',                             weight: 4.8, mode: 'status_only' },
+            { name: 'Site Clearing',                                weight: 4.8, mode: 'status_only' },
+            { name: 'Site Development',                             weight: 4.0, mode: 'status_only' },
         ],
         'CONVERSION': [
-            { name: 'SKOM',                      weight: 5  },
-            { name: 'Site Lay-out',              weight: 5  },
-            { name: 'Excavation',                weight: 8  },
-            { name: 'Grounding',                 weight: 7  },
-            { name: 'Lean Concrete',             weight: 7  },
-            { name: 'Rebars Installation',       weight: 8  },
-            { name: 'ABST Installation',         weight: 8  },
-            { name: 'Formworks Installation',    weight: 7  },
-            { name: 'Tower Foundation Casting',  weight: 8  },
-            { name: 'Backfilling',               weight: 6  },
-            { name: 'Tower Erection',            weight: 9  },
-            { name: 'Electrical Works',          weight: 8  },
-            { name: 'Cable Ladder Installation', weight: 7  },
-            { name: 'Site Development',          weight: 7  },
-        ],
-        '_DEFAULT': [
-            { name: 'Mobilization & Site Setup',  weight: 9.7  },
-            { name: 'Concrete Floor Polishing',   weight: 9.1  },
-            { name: 'Plumbing',                   weight: 3.3  },
-            { name: 'CHB & Drywall Works',        weight: 11.4 },
-            { name: 'HVAC',                       weight: 15.9 },
-            { name: 'FDAS',                       weight: 4.7  },
-            { name: 'Electrical',                 weight: 15.6 },
-            { name: 'Electronics',                weight: 2.4  },
-            { name: 'Ceiling Works',              weight: 10.2 },
-            { name: 'Floor Tiles',                weight: 3.1  },
-            { name: 'Painting Works',             weight: 4.5  },
-            { name: 'Doors & Glazing',            weight: 4.5  },
-            { name: 'Cabinetry',                  weight: 1.6  },
-            { name: 'Furniture Installation',     weight: 3.4  },
-            { name: 'Testing & Commissioning',    weight: 0.6  },
+            { name: 'SKOM',                      weight: 5, mode: 'status_only' },
+            { name: 'Site Lay-out',              weight: 5, mode: 'status_only' },
+            { name: 'Excavation',                weight: 8, mode: 'quantity', unit: 'm³' },
+            { name: 'Grounding',                 weight: 7, mode: 'status_only' },
+            { name: 'Lean Concrete',             weight: 7, mode: 'quantity', unit: 'm³' },
+            { name: 'Rebars Installation',       weight: 8, mode: 'quantity', unit: 'kg' },
+            { name: 'ABST Installation',         weight: 8, mode: 'status_only' },
+            { name: 'Formworks Installation',    weight: 7, mode: 'quantity', unit: 'm²' },
+            { name: 'Tower Foundation Casting',  weight: 8, mode: 'quantity', unit: 'm³' },
+            { name: 'Backfilling',               weight: 6, mode: 'quantity', unit: 'm³' },
+            { name: 'Tower Erection',            weight: 9, mode: 'quantity', unit: 'm' },
+            { name: 'Electrical Works',          weight: 8, mode: 'status_only' },
+            { name: 'Cable Ladder Installation', weight: 7, mode: 'quantity', unit: 'lm' },
+            { name: 'Site Development',          weight: 7, mode: 'status_only' },
         ],
     };
 
@@ -793,6 +857,44 @@ if (window.location.hostname === 'localhost') {
         });
     }
 
+    // ── Build a single activity row's HTML (used both for initial render and "+ Add Activity") ──
+    function activityRowHtml(pi, ai, a) {
+        a = a || {};
+        var isQty = a.tracking_mode === 'quantity';
+        var statusVal = a.status || 'Not Started';
+        var statusOpts = ['Not Started', 'In Progress', 'Completed'].map(function (st) {
+            return '<option value="' + st + '"' + (statusVal === st ? ' selected' : '') + '>' + st + '</option>';
+        }).join('');
+        return '<div class="pf-act-row">' +
+            '<div class="phase-field">' +
+                '<span class="phase-field-lbl">Activity Name</span>' +
+                '<input type="text" class="pf-act-name" name="phases[' + pi + '][activities][' + ai + '][name]" placeholder="Activity name" value="' + escHtml(a.name || '') + '">' +
+            '</div>' +
+            '<div class="pf-act-row2">' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl">Weight %</span>' +
+                    '<div class="pf-act-weight-group">' +
+                        '<input type="number" class="pf-act-weight" name="phases[' + pi + '][activities][' + ai + '][weight]" step="0.1" min="0" max="100" placeholder="0" value="' + (a.weight != null ? a.weight : 0) + '">' +
+                        '<span class="pf-act-weight-unit">%</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl">Track By</span>' +
+                    '<select class="pf-act-mode" name="phases[' + pi + '][activities][' + ai + '][tracking_mode]">' +
+                        '<option value="status_only"' + (!isQty ? ' selected' : '') + '>Status</option>' +
+                        '<option value="quantity"' + (isQty ? ' selected' : '') + '>Quantity</option>' +
+                    '</select>' +
+                '</div>' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl pf-act-value-lbl">' + (isQty ? 'Qty' : 'Status') + '</span>' +
+                    '<select class="pf-act-status" name="phases[' + pi + '][activities][' + ai + '][status]"' + (isQty ? ' hidden disabled' : '') + '>' + statusOpts + '</select>' +
+                    '<input type="number" class="pf-act-qty" name="phases[' + pi + '][activities][' + ai + '][qty]" min="1" step="1" placeholder="Qty" value="' + (a.qty != null ? a.qty : 1) + '"' + (!isQty ? ' hidden disabled' : '') + '>' +
+                '</div>' +
+                '<button type="button" class="pf-act-del-btn" title="Remove activity"><span class="material-symbols-outlined">close</span></button>' +
+            '</div>' +
+        '</div>';
+    }
+
     // ── Build a milestone card element ─────────────────────────
     function buildPhaseItem(pi, data) {
         data = data || {};
@@ -824,8 +926,17 @@ if (window.location.hostname === 'localhost') {
                     '<span class="phase-field-lbl">Unit</span>' +
                     '<select name="phases[' + pi + '][unit]" class="phase-card-sel">' + unitOpts + '</select>' +
                 '</div>' +
+                '<div class="phase-field f-date-start">' +
+                    '<span class="phase-field-lbl">Target Start</span>' +
+                    '<div class="date-picker phase-card-date-picker">' +
+                        '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
+                        '<input type="hidden" name="phases[' + pi + '][site_start_date]" value="' + escHtml(data.site_start_date || '') + '">' +
+                        '<button type="button" class="date-toggle"><span class="material-symbols-outlined">calendar_month</span></button>' +
+                        '<div class="calendar-popup" aria-hidden="true"></div>' +
+                    '</div>' +
+                '</div>' +
                 '<div class="phase-field f-date">' +
-                    '<span class="phase-field-lbl">Target Date</span>' +
+                    '<span class="phase-field-lbl">Target End</span>' +
                     '<div class="date-picker phase-card-date-picker">' +
                         '<input type="text" class="date-display" placeholder="DD/MM/YYYY" readonly>' +
                         '<input type="hidden" name="phases[' + pi + '][site_date]" value="' + escHtml(data.site_date || '') + '">' +
@@ -833,10 +944,34 @@ if (window.location.hostname === 'localhost') {
                         '<div class="calendar-popup" aria-hidden="true"></div>' +
                     '</div>' +
                 '</div>' +
+            '</div>' +
+            '<div class="phase-row3">' +
+                '<span class="phase-field-lbl">Track by</span>' +
+                '<select name="phases[' + pi + '][tracking_mode]" class="phase-mode-sel">' +
+                    '<option value="quantity"' + ((data.mode || 'quantity') === 'quantity' ? ' selected' : '') + '>Quantity</option>' +
+                    '<option value="status_only"' + (data.mode === 'status_only' ? ' selected' : '') + '>Status Only</option>' +
+                '</select>' +
+            '</div>' +
+            '<div class="phase-act-panel">' +
+                '<button type="button" class="pf-act-toggle-btn">' +
+                    '<span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>' +
+                    'Activities (<span class="pf-act-count">' + ((data.activities || []).length) + '</span>)' +
+                '</button>' +
+                '<div class="pf-act-body" hidden>' +
+                    '<div class="pf-act-list">' +
+                        (data.activities || []).map(function (a, ai) { return activityRowHtml(pi, ai, a); }).join('') +
+                    '</div>' +
+                    '<div class="pf-act-add-row">' +
+                        '<button type="button" class="pf-act-add-btn">+ Add Activity</button>' +
+                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>' +
+                    '</div>' +
+                '</div>' +
             '</div>';
 
         if (typeof window.initPhaseDatePicker === 'function') {
-            window.initPhaseDatePicker(card.querySelector('.date-picker'));
+            card.querySelectorAll('.date-picker').forEach(function (dp) {
+                window.initPhaseDatePicker(dp);
+            });
         }
 
         attachFieldErrorClearing(card);
@@ -844,7 +979,125 @@ if (window.location.hostname === 'localhost') {
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
+        card.querySelector('.phase-mode-sel').addEventListener('change', function () {
+            applyPhaseMode(card);
+        });
+        wireActivitiesPanel(card);
+        applyPhaseMode(card);
         return card;
+    }
+
+    // ── Quantity / Status-only mode ── */
+    function applyPhaseMode(card) {
+        var modeSel  = card.querySelector('.phase-mode-sel');
+        var qtyField = card.querySelector('.phase-field.f-qty');
+        var qtyInp   = card.querySelector('.phase-card-inp');
+        var unitField = card.querySelector('.phase-field.f-unit');
+        if (!modeSel) return;
+        var statusOnly = modeSel.value === 'status_only';
+        var hasQtyActivity = Array.prototype.some.call(card.querySelectorAll('.pf-act-mode'), function (sel) {
+            return sel.value === 'quantity';
+        });
+        var hideQty = statusOnly || hasQtyActivity;
+        if (qtyInp) {
+            qtyInp.disabled = hideQty;
+            if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
+            qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
+        }
+        // Fully remove the Qty (and paired Unit) field — not just disable it — so
+        // there's no dangling "Qty" label with nothing under it once it no longer applies.
+        if (qtyField)  qtyField.style.display  = hideQty ? 'none' : '';
+        if (unitField) {
+            unitField.style.display = hideQty ? 'none' : '';
+            var unitSel = unitField.querySelector('.phase-card-sel');
+            if (unitSel) unitSel.disabled = hideQty;
+        }
+    }
+
+    // ── Activity-level status-only / quantity mode ──
+    function applyPhaseActivityMode(actRow) {
+        var modeSel   = actRow.querySelector('.pf-act-mode');
+        var statusSel = actRow.querySelector('.pf-act-status');
+        var qtyInp    = actRow.querySelector('.pf-act-qty');
+        var valueLbl  = actRow.querySelector('.pf-act-value-lbl');
+        if (!modeSel) return;
+        var isQty = modeSel.value === 'quantity';
+        if (statusSel) { statusSel.hidden = isQty;  statusSel.disabled = isQty; }
+        if (qtyInp)    { qtyInp.hidden    = !isQty; qtyInp.disabled    = !isQty; }
+        if (valueLbl)  valueLbl.textContent = isQty ? 'Qty' : 'Status';
+    }
+
+    // ── Re-index a card's activity rows after add/remove ────────
+    function reindexPhaseActivities(card) {
+        var pi = card.dataset.pidx;
+        var actKeys = ['name', 'weight', 'tracking_mode', 'status', 'qty'];
+        card.querySelectorAll('.pf-act-row').forEach(function (row, ai) {
+            row.querySelectorAll('.pf-act-name, .pf-act-weight, .pf-act-mode, .pf-act-status, .pf-act-qty')
+               .forEach(function (el, k) { el.name = 'phases[' + pi + '][activities][' + ai + '][' + actKeys[k] + ']'; });
+        });
+        var countEl = card.querySelector('.pf-act-count');
+        if (countEl) countEl.textContent = card.querySelectorAll('.pf-act-row').length;
+    }
+
+    // ── Recompute an activities weight-total indicator ──────────
+    function recomputePhaseActTotal(card) {
+        var total = 0;
+        card.querySelectorAll('.pf-act-weight').forEach(function (inp) {
+            total += parseFloat(inp.value || 0);
+        });
+        total = Math.round(total * 10) / 10;
+        var totValEl = card.querySelector('.pf-act-total-val');
+        var totEl    = card.querySelector('.pf-act-total');
+        if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totEl) {
+            totEl.classList.toggle('exact', Math.abs(total - 100) < 0.5);
+            totEl.classList.toggle('over',  total > 100.5);
+        }
+    }
+
+    // ── Wire the Activities sub-panel for a card (new or PHP-rendered) ──
+    function wireActivitiesPanel(card) {
+        card.addEventListener('click', function (e) {
+            var toggleBtn = e.target.closest('.pf-act-toggle-btn');
+            if (toggleBtn) {
+                var body = toggleBtn.parentElement.querySelector('.pf-act-body');
+                var icon = toggleBtn.querySelector('.pf-act-toggle-icon');
+                var open = body.hidden;
+                body.hidden = !open;
+                if (icon) icon.textContent = open ? 'expand_less' : 'expand_more';
+                return;
+            }
+            var addBtn = e.target.closest('.pf-act-add-btn');
+            if (addBtn) {
+                var list = card.querySelector('.pf-act-list');
+                var ai   = list.querySelectorAll('.pf-act-row').length;
+                list.insertAdjacentHTML('beforeend', activityRowHtml(card.dataset.pidx, ai, {}));
+                reindexPhaseActivities(card);
+                recomputePhaseActTotal(card);
+                applyPhaseMode(card);
+                return;
+            }
+            var delBtn = e.target.closest('.pf-act-del-btn');
+            if (delBtn) {
+                delBtn.closest('.pf-act-row').remove();
+                reindexPhaseActivities(card);
+                recomputePhaseActTotal(card);
+                applyPhaseMode(card);
+                return;
+            }
+        });
+        card.addEventListener('change', function (e) {
+            if (e.target.classList.contains('pf-act-mode')) {
+                applyPhaseActivityMode(e.target.closest('.pf-act-row'));
+                applyPhaseMode(card);
+            }
+        });
+        card.addEventListener('input', function (e) {
+            if (e.target.classList.contains('pf-act-weight')) {
+                recomputePhaseActTotal(card);
+            }
+        });
+        recomputePhaseActTotal(card);
     }
 
     // ── Clear error highlight as soon as a field is touched ────
@@ -853,8 +1106,10 @@ if (window.location.hostname === 'localhost') {
         var weightInp = card.querySelector('.phase-weight-inp');
         var weightGrp = card.querySelector('.phase-weight-group');
         var qtyInp    = card.querySelector('.phase-card-inp');
-        var dateDisp  = card.querySelector('.phase-card-date-picker .date-display');
+        var startHid  = card.querySelector('input[type="hidden"][name$="[site_start_date]"]');
+        var startPicker = startHid ? startHid.closest('.phase-card-date-picker') : null;
         var dateHid   = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+        var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
 
         if (nameInp)   nameInp.addEventListener('input',  function () { nameInp.classList.remove('pz-field-error'); });
         if (weightInp) weightInp.addEventListener('input', function () {
@@ -862,8 +1117,9 @@ if (window.location.hostname === 'localhost') {
             weightInp.classList.remove('pz-field-error');
         });
         if (qtyInp)    qtyInp.addEventListener('input',   function () { qtyInp.classList.remove('pz-field-error'); });
-        // date picker clears on hidden input change (set by the calendar)
-        if (dateHid)   dateHid.addEventListener('change', function () { if (dateDisp) dateDisp.classList.remove('pz-field-error'); });
+        // date pickers clear on hidden input change (set by the calendar)
+        if (startHid)  startHid.addEventListener('change', function () { if (startPicker) startPicker.classList.remove('pz-field-error'); });
+        if (dateHid)   dateHid.addEventListener('change', function () { if (datePicker) datePicker.classList.remove('pz-field-error'); });
     }
 
     // ── Attach events to PHP-rendered cards (edit mode) ────────
@@ -873,6 +1129,10 @@ if (window.location.hostname === 'localhost') {
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
+        var modeSel = card.querySelector('.phase-mode-sel');
+        if (modeSel) modeSel.addEventListener('change', function () { applyPhaseMode(card); });
+        wireActivitiesPanel(card);
+        applyPhaseMode(card);
     }
     container.querySelectorAll('.phase-card').forEach(attachExistingCard);
 
@@ -895,7 +1155,7 @@ if (window.location.hostname === 'localhost') {
             if (existing > 0) {
                 if (!await window.openConfirmForm('Auto-fill will replace the current milestone schedule. Continue?', 'warning')) return;
             }
-            var template = TEMPLATES[self.value] || TEMPLATES['_DEFAULT'];
+            var template = TEMPLATES[self.value] || [];
             container.innerHTML = '';
             template.forEach(function (phase, pi) {
                 container.appendChild(buildPhaseItem(pi, phase));
@@ -1072,6 +1332,18 @@ if (window.location.hostname === 'localhost') {
                     missing.push('Qty');
                     if (qtyInp) qtyInp.classList.add('pz-field-error');
                 }
+                var startHid = card.querySelector('input[type="hidden"][name$="[site_start_date]"]');
+                var startPicker = startHid ? startHid.closest('.phase-card-date-picker') : null;
+                if (!startHid || !startHid.value.trim()) {
+                    missing.push('Target Start');
+                    if (startPicker) startPicker.classList.add('pz-field-error');
+                }
+                var dateHid = card.querySelector('input[type="hidden"][name$="[site_date]"]');
+                var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
+                if (!dateHid || !dateHid.value.trim()) {
+                    missing.push('Target End');
+                    if (datePicker) datePicker.classList.add('pz-field-error');
+                }
 
                 if (missing.length > 0) {
                     if (!firstErrCard) firstErrCard = card;
@@ -1126,12 +1398,25 @@ if (window.location.hostname === 'localhost') {
         var xk = 'pz_as_projectForm' + location.pathname + '_x';
         var phData = [];
         container.querySelectorAll('.phase-card').forEach(function (card) {
+            var activities = [];
+            card.querySelectorAll('.ps-act-row').forEach(function (row) {
+                activities.push({
+                    name:          (row.querySelector('.ps-act-name')   || {}).value || '',
+                    weight:        (row.querySelector('.ps-act-weight') || {}).value || '',
+                    tracking_mode: (row.querySelector('.ps-act-mode')   || {}).value || 'status_only',
+                    status:        (row.querySelector('.ps-act-status')|| {}).value || 'Not Started',
+                    qty:           (row.querySelector('.ps-act-qty')   || {}).value || ''
+                });
+            });
             phData.push({
                 name:      (card.querySelector('.phase-card-name-inp') || {}).value || '',
                 weight:    (card.querySelector('.phase-weight-inp')    || {}).value || '',
                 qty:       (card.querySelector('.phase-card-inp')      || {}).value || '',
                 unit:      (card.querySelector('.phase-card-sel')      || {}).value || 'pcs',
-                site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || ''
+                mode:      (card.querySelector('.phase-mode-sel')      || {}).value || 'quantity',
+                site_start_date: (card.querySelector('input[type="hidden"][name$="[site_start_date]"]') || {}).value || '',
+                site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || '',
+                activities: activities
             });
         });
         try {

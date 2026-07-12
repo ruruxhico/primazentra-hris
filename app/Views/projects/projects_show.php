@@ -377,12 +377,16 @@
         for (var i = 0; i < firstDay; i++) html += '<div></div>';
         var days = new Date(year, month + 1, 0).getDate();
         for (var d = 1; d <= days; d++) {
-            var ds     = year + '-' + pad(month + 1) + '-' + pad(d);
-            var hasRpt = _dates.indexOf(ds) !== -1;
-            var isTd   = new Date(year, month, d).getTime() === today.getTime();
-            var cls    = 'rpt-cal-day' + (hasRpt ? ' has-report' : '') + (isTd ? ' is-today' : '');
+            var ds        = year + '-' + pad(month + 1) + '-' + pad(d);
+            var hasRpt    = _dates.indexOf(ds) !== -1;
+            var cellTime  = new Date(year, month, d).getTime();
+            var isTd      = cellTime === today.getTime();
+            var isFuture  = cellTime > today.getTime();
+            var cls       = 'rpt-cal-day' + (hasRpt ? ' has-report' : '') + (isTd ? ' is-today' : '') + (isFuture ? ' is-future' : '');
             if (hasRpt) {
                 html += '<div class="' + cls + '" onclick="viewReport(\'' + ds + '\')">' + d + '</div>';
+            } else if (!isFuture && _type === 'daily' && CAN_EDIT_PROGRESS) {
+                html += '<div class="' + cls + ' is-clickable-empty" onclick="createReportForDate(\'' + ds + '\')" title="File a report for this date">' + d + '</div>';
             } else {
                 html += '<div class="' + cls + '">' + d + '</div>';
             }
@@ -495,14 +499,24 @@
                 html += '<hr class="rpt-daily-divider">';
                 html += '<div class="rpt-daily-section-title">Milestone Progress</div>';
                 ms.forEach(function (m) {
-                    var label = h(m.name) + (m.unit ? ' (' + h(m.unit) + ')' : '');
-                    var todayVal = (m.today >= 0 ? '+' : '') + m.today;
+                    var statusOnly = m.tracking_mode === 'status_only';
+                    var label = h(m.name) + (!statusOnly && m.unit ? ' (' + h(m.unit) + ')' : '');
                     var pct = Math.min(100, Math.max(0, parseFloat(m.percent) || 0));
                     html += '<div class="rpt-daily-milestone">';
                     html += '<div class="rpt-daily-ms-name">' + label + '</div>';
-                    html += '<div class="rpt-daily-ms-meta">Today: ' + todayVal +
-                            ' &bull; Total: ' + m.total +
-                            ' &bull; ' + m.percent + '%</div>';
+                    if (statusOnly) {
+                        var isDone = pct >= 100;
+                        html += '<div class="rpt-daily-ms-meta">' +
+                                (isDone
+                                    ? '<span style="color:#2f7d4f;font-weight:600">&#10003; Marked as Done</span>'
+                                    : '<span style="color:#999">Not yet done</span>') +
+                                '</div>';
+                    } else {
+                        var todayVal = (m.today >= 0 ? '+' : '') + m.today;
+                        html += '<div class="rpt-daily-ms-meta">Today: ' + todayVal +
+                                ' &bull; Total: ' + m.total +
+                                ' &bull; ' + m.percent + '%</div>';
+                    }
                     html += '<div class="rpt-daily-ms-bar-wrap"><div class="rpt-daily-ms-bar" style="width:' + pct + '%"></div></div>';
                     var imgs = m.image_urls || [];
                     if (imgs.length) {
@@ -612,20 +626,41 @@
             var imgUrls = (msAmounts[m.id] || {}).image_urls || [];
             var pct     = m.target_quantity > 0 ? Math.min(100, base / m.target_quantity * 100) : 0;
 
+            var statusOnly = m.tracking_mode === 'status_only';
+
             html += '<div class="rpt-ms-row">';
             html += '<input type="hidden" name="milestone_progress[' + i + '][milestone_id]" value="' + h(m.id) + '">';
             html += '<div class="rpt-ms-row-header">' + h(m.name) +
-                    (m.unit ? ' <span style="color:#999;font-weight:400">(' + h(m.unit) + ')</span>' : '') + '</div>';
-            html += '<div style="font-size:.75rem;color:#999;margin-bottom:.3rem">Before today: ' +
-                    base.toFixed(2) + ' / ' + m.target_quantity + ' ' + h(m.unit) +
-                    ' &nbsp;(' + pct.toFixed(1) + '%)</div>';
-            html += '<div class="rpt-ms-row-qty">' +
-                    '<span class="rpt-ms-row-qty-label">Done today</span>' +
-                    '<input type="number" name="milestone_progress[' + i + '][amount_done_today]"' +
-                    ' min="0" step="any" value="' + logged + '"' +
-                    ' data-base="' + base + '" data-target="' + m.target_quantity + '"' +
-                    ' data-row="' + i + '" class="rpt-ms-amt-input">' +
+                    (!statusOnly && m.unit ? ' <span style="color:#999;font-weight:400">(' + h(m.unit) + ')</span>' : '') +
                     '</div>';
+            if (m.sequence_notice) {
+                html += '<div style="font-size:.72rem;color:#8a6d1f;margin-bottom:.3rem">' +
+                        '<span class="material-symbols-outlined" style="font-size:.85rem;vertical-align:middle">info</span> ' +
+                        '"' + h(m.sequence_notice) + '" isn\'t marked Completed yet — you can still log progress here.' +
+                        '</div>';
+            }
+            if (statusOnly) {
+                var isDone = (base >= 1) || (logged >= 1);
+                html += '<div class="rpt-ms-row-qty">' +
+                        '<label style="display:flex;align-items:center;gap:6px;font-size:.85rem;cursor:pointer">' +
+                        '<input type="checkbox" name="milestone_progress[' + i + '][amount_done_today]" value="1"' +
+                        (isDone ? ' checked' : '') +
+                        ' data-row="' + i + '" class="rpt-ms-done-checkbox">' +
+                        ' Mark as Done' +
+                        '</label>' +
+                        '</div>';
+            } else {
+                html += '<div style="font-size:.75rem;color:#999;margin-bottom:.3rem">Before today: ' +
+                        base.toFixed(2) + ' / ' + m.target_quantity + ' ' + h(m.unit) +
+                        ' &nbsp;(' + pct.toFixed(1) + '%)</div>';
+                html += '<div class="rpt-ms-row-qty">' +
+                        '<span class="rpt-ms-row-qty-label">Done today</span>' +
+                        '<input type="number" name="milestone_progress[' + i + '][amount_done_today]"' +
+                        ' min="0" step="any" value="' + logged + '"' +
+                        ' data-base="' + base + '" data-target="' + m.target_quantity + '"' +
+                        ' data-row="' + i + '" class="rpt-ms-amt-input">' +
+                        '</div>';
+            }
             html += '<div class="rpt-ms-row-after" data-after-row="' + i + '"></div>';
             if (imgUrls.length) {
                 html += '<div class="rpt-ms-existing-photos">';
@@ -788,6 +823,12 @@
     window.showEditReportForm = function (d, dateStr) {
         if (!d || !dateStr) return;
         _loadAndRenderReportForm(dateStr, 'Edit Progress Report — ' + _pname);
+    };
+
+    // Fill in a report for a past (or today's) date that doesn't have one yet —
+    // clicked directly from an empty calendar day.
+    window.createReportForDate = function (dateStr) {
+        _loadAndRenderReportForm(dateStr, 'Progress Report — ' + _pname);
     };
 
     window.submitReport = function () {
@@ -1147,7 +1188,7 @@
                 html += '<div class="rpt-sum-empty">No milestones defined.</div>';
             } else {
                 html += '<table class="rpt-sum-table" id="rptMsTable"><thead><tr style="background:#b8d4e8">' +
-                        '<th>MILESTONE</th><th>TARGET DATE</th><th>COMPLETION DATE</th>' +
+                        '<th>MILESTONE</th><th>TARGET START</th><th>TARGET END</th><th>COMPLETION DATE</th>' +
                         '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>' +
                         '<th class="num">VARIANCE</th><th>STATUS</th>' +
                         '</tr></thead><tbody>';
@@ -1167,6 +1208,7 @@
 
                     html += '<tr data-target-date="' + (m.target_date || '') + '" data-completion-date="' + (m.actual_completion_date || '') + '" data-ms-status="' + stLow + '">';
                     html += '<td>' + h(m.milestone_name) + '</td>';
+                    html += '<td>' + _fmtDate(m.target_start) + '</td>';
                     html += '<td>' + _fmtDate(m.target_date) + '</td>';
                     html += '<td>' + completionDate + '</td>';
                     html += '<td class="num">' + (plannedRow !== null ? _pct(plannedRow, 1) : '—') + '</td>';

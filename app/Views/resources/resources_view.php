@@ -360,21 +360,12 @@
         <form id="mpFilterForm" method="get" action="<?= base_url('resources') ?>">
             <input type="hidden" name="tab" value="manpower">
             <input type="hidden" id="mpRoleInput"   name="mp_role"   value="<?= esc($activeManpowerFilters['mp_role']   ?? '') ?>">
-            <input type="hidden" id="mpSpecInput"   name="mp_spec"   value="<?= esc($activeManpowerFilters['mp_spec']   ?? '') ?>">
             <input type="hidden" id="mpStatusInput" name="mp_status" value="<?= esc($activeManpowerFilters['mp_status'] ?? '') ?>">
             <div class="rv-filter-row">
                 <span class="rv-filter-label">Role</span>
                 <div class="rv-chip-row">
                     <?php foreach (['FIELD WORKER' => 'Field Worker', 'FOREMAN' => 'Foreman'] as $val => $label): ?>
                     <button type="button" class="rv-chip mp-role-chip <?= strcasecmp(($activeManpowerFilters['mp_role'] ?? ''), $val) === 0 ? 'active' : '' ?>" data-val="<?= esc($val) ?>"><?= esc($label) ?></button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <div class="rv-filter-row">
-                <span class="rv-filter-label">Specialization</span>
-                <div class="rv-chip-row">
-                    <?php foreach (['BUILD-TO-SUIT' => 'Build-to-Suit', 'RETROFITTING' => 'Retrofitting', 'COLOCATION' => 'Colocation', 'CONVERSION' => 'Conversion'] as $val => $label): ?>
-                    <button type="button" class="rv-chip mp-spec-chip <?= strcasecmp(($activeManpowerFilters['mp_spec'] ?? ''), $val) === 0 ? 'active' : '' ?>" data-val="<?= esc($val) ?>"><?= esc($label) ?></button>
                     <?php endforeach; ?>
                 </div>
             </div>
@@ -400,14 +391,13 @@
                         <th>NAME</th>
                         <th>ROLE</th>
                         <th>SKILLS</th>
-                        <th>SPECIALIZATION</th>
                         <th class="text-center">STATUS</th>
                         <th class="text-center">ACTIONS</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php if (empty($manpower)): ?>
-                    <tr><td colspan="8" class="empty-state">No manpower records found.</td></tr>
+                    <tr><td colspan="7" class="empty-state">No manpower records found.</td></tr>
                 <?php else: ?>
                 <?php foreach ($manpower as $idx => $person):
                     $mpStatusRaw = (string)($person['status'] ?? 'Available');
@@ -436,7 +426,6 @@
                     <td data-mp-name><strong><?= esc(strtoupper((string)($person['name'] ?? 'N/A'))) ?></strong></td>
                     <td data-mp-role><?= esc($role) ?></td>
                     <td data-mp-skills><?= esc(implode(', ', $skills)) ?></td>
-                    <td data-mp-spec><?= esc($spec) ?></td>
                     <td class="text-center">
                         <span class="mp-status-badge <?= $stClass ?>" data-mp-status><?= esc($mpStatusRaw) ?></span>
                     </td>

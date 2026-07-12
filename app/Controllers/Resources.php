@@ -222,6 +222,7 @@ class Resources extends BaseController
                     $this->syncResourceItems($resourceId, $this->request->getPost('items') ?? []);
                     $this->syncResourceCounts($resourceId);
                 }
+                audit_log('resource.create', 'resource', $resourceId, $data['name'] ?? null);
             }
 
             return redirect()->to('resources')->with('success', 'Resource created successfully!');
@@ -312,6 +313,7 @@ class Resources extends BaseController
                         ['path' => 'name',       'value' => $newName],
                         ['path' => 'updated_at', 'value' => new \Google\Cloud\Core\Timestamp(new \DateTime())],
                     ]);
+                audit_log('resource.update', 'resource', $id, $newName);
                 return redirect()->to('resources')->with('success', 'Resource updated successfully!');
             }
 
@@ -344,6 +346,7 @@ class Resources extends BaseController
                 }
             }
 
+            audit_log('resource.update', 'resource', $id, $data['name'] ?? null);
             return redirect()->to('resources')->with('success', 'Resource updated successfully!');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error updating resource: ' . $e->getMessage());
@@ -807,6 +810,7 @@ class Resources extends BaseController
             }
 
             $this->syncResourceCounts($resourceId);
+            audit_log('resource.item_add', 'resource', $resourceId, $serial ?: null, ['quantity' => $qty]);
             $msg = $qty > 1 ? "{$qty} units added successfully!" : 'Unit added successfully!';
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', $msg);
         } catch (\Exception $e) {
@@ -865,6 +869,7 @@ class Resources extends BaseController
                 ->set($data, ['merge' => true]);
 
             $this->syncResourceCounts($resourceId);
+            audit_log('resource.item_update', 'resource', $itemId, $serial ?: ($brand ?: null));
             return redirect()->to('resources/viewItems/' . $resourceId)->with('success', 'Unit updated successfully!');
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Error updating unit: ' . $e->getMessage());
@@ -1097,7 +1102,6 @@ class Resources extends BaseController
             $data['last_name']     = $lastName;
             $data['status']        = trim((string) ($this->request->getPost('status') ?: $this->request->getPost('manpower_status')));
             $data['role']          = trim((string) $this->request->getPost('manpower_role'));
-            $data['specialization'] = trim((string) $this->request->getPost('specialization'));
             // contact_number dropped from mobile schema — not written
             $data['assigned_project_id'] = trim((string) $this->request->getPost('assigned_project_id')) ?: null;
             $data['next_availability']   = trim((string) $this->request->getPost('next_availability')) ?: null;
@@ -2025,6 +2029,7 @@ class Resources extends BaseController
             $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
             $existing[] = ['name' => $name !== '' ? $name : $address, 'address' => $address];
             $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            audit_log('resource.warehouse_location_save', 'resource', null, $name !== '' ? $name : $address);
             return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
         } catch (\Exception $e) {
             log_message('error', 'Resources::saveWarehouseLocation - ' . $e->getMessage());
@@ -2045,6 +2050,7 @@ class Resources extends BaseController
             if (!is_array($existing)) $existing = [];
             $existing = array_values(array_filter($existing, fn($l) => ($l['address'] ?? '') !== $address));
             $docRef->set(['saved_locations' => $existing], ['merge' => true]);
+            audit_log('resource.warehouse_location_delete', 'resource', null, $address ?: null);
             return $this->response->setJSON(['success' => true, 'saved_locations' => $existing]);
         } catch (\Exception $e) {
             log_message('error', 'Resources::deleteWarehouseLocation - ' . $e->getMessage());
@@ -2063,6 +2069,7 @@ class Resources extends BaseController
                 ->collection('app_settings')
                 ->document('warehouse')
                 ->set(['default_address' => $address, 'updated_at' => time()], ['merge' => true]);
+            audit_log('resource.warehouse_default_save', 'resource', null, $address);
             return $this->response->setJSON(['success' => true, 'address' => $address]);
         } catch (\Exception $e) {
             log_message('error', 'Resources::saveWarehouseDefault - ' . $e->getMessage());

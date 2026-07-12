@@ -87,7 +87,9 @@
                     <select name="role" required>
                         <option value="">Select Role</option>
                         <?php $staffRoleOld = old('role', $staff['role'] ?? ''); ?>
-                        <option value="Administrator"     <?= $staffRoleOld === 'Administrator'     ? 'selected' : '' ?>>Administrator</option>
+                        <?php if ($staffRoleOld === 'Administrator'): ?>
+                        <option value="Administrator" selected>Administrator</option>
+                        <?php endif; ?>
                         <option value="Operations Manager"<?= $staffRoleOld === 'Operations Manager'? 'selected' : '' ?>>Operations Manager</option>
                         <option value="Project Manager"   <?= $staffRoleOld === 'Project Manager'  ? 'selected' : '' ?>>Project Manager</option>
                         <option value="Site Engineer"     <?= $staffRoleOld === 'Site Engineer'    ? 'selected' : '' ?>>Site Engineer</option>

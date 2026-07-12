@@ -227,6 +227,11 @@ class Projects extends BaseController
                     ->document($projectId)
                     ->set($projectData);
 
+                audit_log('project.create', 'project', $projectId, (string)($projectData['project_name'] ?? ''), [
+                    'project_type' => $projectData['project_type'] ?? null,
+                    'status'       => $projectData['status'] ?? null,
+                ]);
+
                 $this->notifyAssigned(
                     $projectId,
                     (string)($projectData['project_name'] ?? ''),
@@ -258,6 +263,14 @@ class Projects extends BaseController
                     $weightError = $this->validateMilestoneWeights($rawPhases);
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
+                    }
+                    $activityError = $this->validateActivityWeights($rawPhases);
+                    if ($activityError) {
+                        return redirect()->back()->withInput()->with('error', $activityError);
+                    }
+                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases);
+                    if ($dateError) {
+                        return redirect()->back()->withInput()->with('error', $dateError);
                     }
                     $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
                 }
@@ -338,6 +351,8 @@ class Projects extends BaseController
 
                 log_message('info', 'Projects::update - Firestore set() completed for id: ' . $id);
 
+                audit_log('project.update', 'project', $id, (string)($projectData['project_name'] ?? ''));
+
                 // Notify only if PM or SE assignment changed
                 $newPmId = $this->docRefId($projectData['project_manager_id'] ?? null);
                 $newSeId = $this->docRefId($projectData['site_engineer_id']   ?? null);
@@ -356,7 +371,10 @@ class Projects extends BaseController
                     if ($weightError) {
                         return redirect()->back()->withInput()->with('error', $weightError);
                     }
-                    $newMilestones = $this->normalizeToMilestones($rawPhases);
+                    $activityError = $this->validateActivityWeights($rawPhases);
+                    if ($activityError) {
+                        return redirect()->back()->withInput()->with('error', $activityError);
+                    }
                     // Preserve per-milestone progress so editing a project never resets completion data.
                     // Match existing milestones by name (case-insensitive).
                     $existByName = [];
@@ -367,6 +385,11 @@ class Projects extends BaseController
                             if ($key !== '') $existByName[$key] = $d;
                         }
                     }
+                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases, array_keys($existByName));
+                    if ($dateError) {
+                        return redirect()->back()->withInput()->with('error', $dateError);
+                    }
+                    $newMilestones = $this->normalizeToMilestones($rawPhases);
                     foreach ($newMilestones as &$m) {
                         $key = strtolower(trim((string)($m['milestone_name'] ?? '')));
                         if (isset($existByName[$key])) {
@@ -702,6 +725,7 @@ class Projects extends BaseController
                     'completed_quantity'     => (float)($m['completed_quantity'] ?? 0),
                     'completion_percent'     => (float)($m['completion_percent'] ?? 0),
                     'status'                 => (string)($m['status']            ?? 'Not Started'),
+                    'target_start'           => $this->psTsToDate($m['target_start'] ?? null),
                     'target_date'            => $this->psTsToDate($m['target_date']            ?? null),
                     'actual_completion_date' => $this->psTsToDate($m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null),
                     'unit'                   => (string)($m['unit']              ?? ''),
@@ -770,6 +794,7 @@ class Projects extends BaseController
                     'weight_percent'         => (float)($m['weight_percent'] ?? 0),
                     'completion_percent'     => (float)($m['completion_percent'] ?? 0),
                     'status'                 => (string)($m['status'] ?? 'Not Started'),
+                    'target_start'           => $this->psTsToDate($m['target_start'] ?? null),
                     'target_date'            => $this->psTsToDate($m['target_date'] ?? null),
                     'actual_completion_date' => $this->psTsToDate($m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null),
                 ];
@@ -1001,6 +1026,7 @@ class Projects extends BaseController
 
             $msRows .= '<tr>'
                 . '<td>' . htmlspecialchars($m['milestone_name']) . '</td>'
+                . '<td>' . $fmtDate($m['target_start'] ?? null) . '</td>'
                 . '<td>' . $fmtDate($m['target_date']) . '</td>'
                 . '<td>' . $completionDate . '</td>'
                 . '<td class="num">' . ($planned !== null ? $fmtPct($planned, 1) : '—') . '</td>'
@@ -1012,11 +1038,11 @@ class Projects extends BaseController
 
         $msTable = '<p style="font-weight:700;font-size:9px;text-transform:uppercase;color:#8C701C;margin:8px 0 4px;">Milestone Summary</p>'
             . '<table><thead><tr style="background:#b8d4e8">'
-            . '<th>MILESTONE</th><th>TARGET DATE</th><th>COMPLETION DATE</th>'
+            . '<th>MILESTONE</th><th>TARGET START</th><th>TARGET END</th><th>COMPLETION DATE</th>'
             . '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>'
             . '<th class="num">VARIANCE</th><th>STATUS</th>'
             . '</tr></thead><tbody>'
-            . ($msRows ?: '<tr><td colspan="7" style="text-align:center;color:#aaa">No milestones.</td></tr>')
+            . ($msRows ?: '<tr><td colspan="8" style="text-align:center;color:#aaa">No milestones.</td></tr>')
             . '</tbody></table>';
 
         return $this->wrapPdfHtml(
@@ -1095,9 +1121,10 @@ class Projects extends BaseController
                     $existByOrder[(int)($m['order'] ?? 0)] = $m;
                 }
 
-                $rawMs      = $this->request->getPost('milestones') ?? [];
-                $milestones = [];
-                $order      = 1;
+                $rawMs             = $this->request->getPost('milestones') ?? [];
+                $milestones        = [];
+                $missingDates      = [];
+                $order             = 1;
 
                 $now = new Timestamp(new \DateTime());
                 foreach ($rawMs as $m) {
@@ -1105,21 +1132,63 @@ class Projects extends BaseController
                     if ($name === '') continue;
                     $ex    = $existByOrder[$order] ?? [];
                     $tdStr = trim((string)($m['target_date'] ?? ''));
+                    $tsStr = trim((string)($m['target_start'] ?? ''));
+                    // A row with no matching existing milestone at this position is new —
+                    // require a target start and target end for it. Pre-existing undated
+                    // milestones are left alone.
+                    if (empty($ex) && ($tdStr === '' || $tsStr === '')) {
+                        $missingDates[] = $name;
+                    }
+
+                    // Optional per-milestone activities: name + weight (must sum to 100% of
+                    // this milestone if any are present), each independently tracked by
+                    // either a manually-set status or its own quantity (see buildActivities()).
+                    $activities = $this->buildActivities((array)($m['activities'] ?? []));
+
+                    // Status-only milestones are quantity-based under the hood with a fixed
+                    // target of 1 — one report entry of "1" completes them. Enforced here
+                    // server-side regardless of what the (hidden, client-disabled) qty/unit
+                    // inputs actually submitted.
+                    $trackingMode = ($m['tracking_mode'] ?? '') === 'status_only' ? 'status_only' : 'quantity';
+                    $targetQty    = $trackingMode === 'status_only' ? 1.0 : (float)max(1, (int)($m['qty'] ?? 1));
+                    $unitVal      = $trackingMode === 'status_only' ? 'status' : (trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs');
+
                     $milestones[] = [
                         'milestone_name'         => $name,
                         'order'                  => $order,
                         'weight_percent'         => (float)($m['weight'] ?? 0),
-                        'target_quantity'        => (float)max(1, (int)($m['qty'] ?? 1)),
+                        'tracking_mode'          => $trackingMode,
+                        'target_quantity'        => $targetQty,
                         'completed_quantity'     => (float)($ex['completed_quantity'] ?? 0),
                         'completion_percent'     => (float)($ex['completion_percent'] ?? 0),
-                        'unit'                   => trim((string)($m['unit'] ?? 'pcs')) ?: 'pcs',
+                        'unit'                   => $unitVal,
+                        'target_start'           => $tsStr !== '' ? $this->toTimestamp($tsStr) : null,
                         'target_date'            => $tdStr !== '' ? $this->toTimestamp($tdStr) : null,
                         'actual_completion_date' => $ex['actual_completion_date'] ?? null,
                         'status'                 => $ex['status'] ?? 'Not Started',
+                        'activities'             => $activities,
                         'created_at'             => $ex['created_at'] ?? $now,
                         'updated_at'             => $now,
                     ];
                     $order++;
+                }
+
+                if (!empty($missingDates)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Target start and target end are required for new milestones: ' . implode(', ', $missingDates) . '.');
+                }
+
+                $activityError = $this->validateActivityWeights($rawMs);
+                if ($activityError) {
+                    return redirect()->back()->withInput()->with('error', $activityError);
+                }
+
+                // Project Manager may edit existing milestones but not add or remove
+                // rows — the whole-list-replace design here means "add/remove" shows
+                // up as a change in count vs. what's currently stored.
+                if (!pz_can('add_remove_milestones') && count($milestones) !== count($existing)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Your role can update existing milestones but cannot add or remove them. Ask an Administrator or Operations Manager to change the milestone count.');
                 }
 
                 if (!empty($milestones)) {
@@ -1139,6 +1208,8 @@ class Projects extends BaseController
                     $ref->document(bin2hex(random_bytes(8)))->set($m);
                 }
 
+                audit_log('project.schedule_update', 'project', $id, $project['project_name'] ?? null);
+
                 return redirect()->to("projects/{$id}/schedule")->with('success', 'Schedule saved successfully.');
             }
 
@@ -1147,6 +1218,9 @@ class Projects extends BaseController
                 $raw = $ms['target_date'] ?? $ms['targetDate'] ?? null;
                 $ms['target_date'] = $this->psTsToDate($raw) ?? (is_string($raw) ? substr($raw, 0, 10) : '');
                 unset($ms['targetDate']);
+
+                $rawStart = $ms['target_start'] ?? null;
+                $ms['target_start'] = $this->psTsToDate($rawStart) ?? (is_string($rawStart) ? substr($rawStart, 0, 10) : '');
             }
             unset($ms);
             $startDate     = (string)($project['start_date_value'] ?? '');
@@ -1312,6 +1386,25 @@ class Projects extends BaseController
         }
     }
 
+    /** Count Foremen / Field Workers currently assigned to a project. */
+    private function projectManpowerRoleCounts(string $projectId): array
+    {
+        $foremen = 0;
+        $fieldWorkers = 0;
+        $manpowerModel = new \App\Models\Model_Manpower();
+        foreach ($manpowerModel->getAllManpower() as $m) {
+            $rawApid = $m['assigned_project_id'] ?? '';
+            $apid = $rawApid instanceof \Google\Cloud\Firestore\DocumentReference
+                ? $rawApid->id()
+                : trim((string)$rawApid);
+            if ($apid !== $projectId) continue;
+            $role = strtoupper(trim((string)($m['role'] ?? '')));
+            if ($role === 'FOREMAN') $foremen++;
+            elseif ($role === 'FIELD WORKER') $fieldWorkers++;
+        }
+        return ['foremen' => $foremen, 'field_workers' => $fieldWorkers];
+    }
+
     public function assignResource(string $id)
     {
         if (!session()->get('isLoggedIn')) {
@@ -1333,6 +1426,12 @@ class Projects extends BaseController
             $retName     = '';
             $retCategory = '';
             if ($type === 'manpower') {
+                $mpSnapCheck = $db->collection('manpower')->document($refId)->snapshot();
+                $mpRoleCheck = strtoupper(trim((string)($mpSnapCheck->exists() ? ($mpSnapCheck->data()['role'] ?? '') : '')));
+                if ($mpRoleCheck === 'FIELD WORKER' && $this->projectManpowerRoleCounts($id)['foremen'] === 0) {
+                    return $this->response->setJSON(['success' => false, 'message' => 'Assign a Foreman to this project before assigning Field Workers.']);
+                }
+
                 $db->collection('manpower')->document($refId)->set([
                     'assigned_project_id' => $id,
                     'status'              => 'Deployed',
@@ -1376,6 +1475,15 @@ class Projects extends BaseController
             }
 
             $assignmentId = $type === 'manpower' ? 'mp:' . $refId : 'unit:' . $refId . ':' . $unitId;
+
+            audit_log('project.assign_resource', 'project', $id, (string)($projSnap->exists() ? ($projSnap->data()['project_name'] ?? '') : ''), [
+                'type'     => $type,
+                'ref_id'   => $refId,
+                'unit_id'  => $unitId,
+                'name'     => $retName,
+                'category' => $retCategory,
+            ]);
+
             return $this->response->setJSON([
                 'success'       => true,
                 'csrf_hash'     => csrf_hash(),
@@ -1399,15 +1507,30 @@ class Projects extends BaseController
 
         try {
             $db = $this->firestore->getDb();
+            $unassignProjSnap = $db->collection('project')->document($id)->snapshot();
+            $unassignProjName = (string)($unassignProjSnap->exists() ? ($unassignProjSnap->data()['project_name'] ?? '') : '');
 
             if (str_starts_with($assignmentId, 'mp:')) {
                 $mpId = substr($assignmentId, 3);
+                $mpSnap = $db->collection('manpower')->document($mpId)->snapshot();
+                $mpRole = strtoupper(trim((string)($mpSnap->exists() ? ($mpSnap->data()['role'] ?? '') : '')));
+                if ($mpRole === 'FOREMAN') {
+                    $counts = $this->projectManpowerRoleCounts($id);
+                    if ($counts['foremen'] <= 1 && $counts['field_workers'] > 0) {
+                        return $this->response->setJSON(['success' => false, 'message' => 'Cannot remove the last Foreman while Field Workers are still assigned to this project.']);
+                    }
+                }
                 $db->collection('manpower')->document($mpId)->set([
                     'assigned_project_id' => null,
                     'status'              => 'Available',
                     'location'            => ['type' => 'WAREHOUSE', 'address' => '', 'geopoint' => null],
                 ], ['merge' => true]);
                 $this->removeFromProjectResources($db, $id, $mpId, '');
+
+                audit_log('project.unassign_resource', 'project', $id, $unassignProjName, [
+                    'type'   => 'manpower',
+                    'ref_id' => $mpId,
+                ]);
             } elseif (str_starts_with($assignmentId, 'unit:')) {
                 [, $resId, $unitId] = explode(':', $assignmentId, 3);
                 $db->collection('resource')->document($resId)->collection('items')->document($unitId)->set([
@@ -1417,6 +1540,12 @@ class Projects extends BaseController
                 ], ['merge' => true]);
                 $this->syncEquipmentCounts($resId);
                 $this->removeFromProjectResources($db, $id, $resId, $unitId);
+
+                audit_log('project.unassign_resource', 'project', $id, $unassignProjName, [
+                    'type'    => 'equipment',
+                    'ref_id'  => $resId,
+                    'unit_id' => $unitId,
+                ]);
             } else {
                 return $this->response->setJSON(['success' => false, 'message' => 'Invalid assignment ID']);
             }
@@ -1498,6 +1627,10 @@ class Projects extends BaseController
         $skill  = trim((string)($this->request->getPost('skill')          ?? ''));
         $qty    = max(1, (int)($this->request->getPost('quantity')        ?? 1));
 
+        if (strcasecmp($role, 'FIELD WORKER') === 0 && $this->projectManpowerRoleCounts($id)['foremen'] === 0) {
+            return $this->response->setJSON(['success' => false, 'message' => 'Assign a Foreman to this project before bulk-assigning Field Workers.']);
+        }
+
         try {
             $db            = $this->firestore->getDb();
             $projSnap      = $db->collection('project')->document($id)->snapshot();
@@ -1567,6 +1700,10 @@ class Projects extends BaseController
                     ['merge' => true]
                 );
             }
+
+            audit_log('project.bulk_assign_manpower', 'project', $id, (string)($projSnap->exists() ? ($projSnap->data()['project_name'] ?? '') : ''), [
+                'count' => count($toAssign),
+            ]);
 
             return $this->response->setJSON([
                 'success'   => true,
@@ -1672,6 +1809,10 @@ class Projects extends BaseController
                     ['merge' => true]
                 );
             }
+
+            audit_log('project.bulk_assign_equipment', 'project', $id, (string)($beProjSnap->exists() ? ($beProjSnap->data()['project_name'] ?? '') : ''), [
+                'count' => $assigned,
+            ]);
 
             return $this->response->setJSON(['success' => true, 'assigned' => $assigned, 'csrf_hash' => csrf_hash()]);
         } catch (\Throwable $e) {
@@ -2047,23 +2188,56 @@ class Projects extends BaseController
             $name = trim((string) ($phase['name'] ?? ''));
             if ($name === '') continue;
 
-            $targetDate = trim((string) ($phase['site_date'] ?? ''));
+            $targetDate  = trim((string) ($phase['site_date'] ?? ''));
+            $targetStart = trim((string) ($phase['site_start_date'] ?? ''));
+
+            $trackingMode = ($phase['tracking_mode'] ?? '') === 'status_only' ? 'status_only' : 'quantity';
+            $targetQty    = $trackingMode === 'status_only' ? 1.0 : (float)max(1, (int) ($phase['qty'] ?? 1));
+            $unitVal      = $trackingMode === 'status_only' ? 'status' : (trim((string) ($phase['unit'] ?? 'pcs')) ?: 'pcs');
 
             $milestones[] = [
                 'milestone_name'         => $name,
                 'order'                  => $order++,
                 'weight_percent'         => (float) ($phase['weight'] ?? 0),
-                'target_quantity'        => (float)max(1, (int) ($phase['qty'] ?? 1)),
+                'tracking_mode'          => $trackingMode,
+                'target_quantity'        => $targetQty,
                 'completed_quantity'     => 0.0,
                 'completion_percent'     => 0.0,
-                'unit'                   => trim((string) ($phase['unit'] ?? 'pcs')) ?: 'pcs',
+                'unit'                   => $unitVal,
+                'target_start'           => $targetStart !== '' ? $targetStart : null,
                 'target_date'            => $targetDate !== '' ? $targetDate : null,
                 'actual_completion_date' => null,
                 'status'                 => 'Not Started',
+                'activities'             => $this->buildActivities((array)($phase['activities'] ?? [])),
             ];
         }
 
         return $milestones;
+    }
+
+    /**
+     * Require a target start and target end for any submitted milestone that isn't
+     * already stored (matched by name). Existing undated milestones are left alone —
+     * this only stops new ones from being created without dates. Returns an error
+     * string or null.
+     */
+    private function validateNewMilestoneTargetDates(array $rawPhases, array $existingNamesLower = []): ?string
+    {
+        $missing = [];
+        foreach ($rawPhases as $phase) {
+            $name = trim((string) ($phase['name'] ?? ''));
+            if ($name === '') continue;
+            if (in_array(strtolower($name), $existingNamesLower, true)) continue;
+            $hasStart = trim((string) ($phase['site_start_date'] ?? '')) !== '';
+            $hasEnd   = trim((string) ($phase['site_date'] ?? '')) !== '';
+            if (!$hasStart || !$hasEnd) {
+                $missing[] = $name;
+            }
+        }
+        if (!empty($missing)) {
+            return 'Target start and target end are required for new milestones: ' . implode(', ', $missing) . '.';
+        }
+        return null;
     }
 
     /** Validate that non-empty milestone weights sum to 100 (Â±0.5%). Returns an error string or null. */
@@ -2077,6 +2251,63 @@ class Projects extends BaseController
         $total = round($total, 1);
         if (abs($total - 100.0) > 0.5) {
             return 'Milestone weights must sum to 100%. Current total: ' . number_format($total, 1) . '%.';
+        }
+        return null;
+    }
+
+    /**
+     * Build a milestone's activity sub-list from raw POST rows. Each activity is
+     * tracked independently by either a manually-set status or its own quantity —
+     * status-only activities keep {activity_name, weight_percent, tracking_mode, status};
+     * quantity activities get {activity_name, weight_percent, tracking_mode, target_quantity}
+     * instead. Blank-named rows are dropped.
+     */
+    private function buildActivities(array $rawActs): array
+    {
+        $activities = [];
+        foreach ($rawActs as $a) {
+            $actName = trim((string)($a['name'] ?? ''));
+            if ($actName === '') continue;
+
+            $trackingMode = ($a['tracking_mode'] ?? '') === 'quantity' ? 'quantity' : 'status_only';
+            $activity = [
+                'activity_name'  => $actName,
+                'weight_percent' => (float)($a['weight'] ?? 0),
+                'tracking_mode'  => $trackingMode,
+            ];
+            if ($trackingMode === 'quantity') {
+                $activity['target_quantity'] = (float)max(1, (int)($a['qty'] ?? 1));
+            } else {
+                $activity['status'] = in_array($a['status'] ?? '', ['Not Started', 'In Progress', 'Completed'], true)
+                    ? $a['status'] : 'Not Started';
+            }
+            $activities[] = $activity;
+        }
+        return $activities;
+    }
+
+    /** Validate that each milestone's activity weights (if any) sum to 100%. */
+    private function validateActivityWeights(array $rawPhases): ?string
+    {
+        $bad = [];
+        foreach ($rawPhases as $phase) {
+            $name = trim((string)($phase['name'] ?? ''));
+            if ($name === '') continue;
+            $hasAny = false;
+            $total  = 0.0;
+            foreach ((array)($phase['activities'] ?? []) as $a) {
+                if (trim((string)($a['name'] ?? '')) === '') continue;
+                $hasAny = true;
+                $total += (float)($a['weight'] ?? 0);
+            }
+            if (!$hasAny) continue;
+            $total = round($total, 1);
+            if (abs($total - 100.0) > 0.5) {
+                $bad[] = $name . ' (' . number_format($total, 1) . '%)';
+            }
+        }
+        if (!empty($bad)) {
+            return 'Activity weights must sum to 100% within each milestone: ' . implode('; ', $bad) . '.';
         }
         return null;
     }
@@ -2102,9 +2333,11 @@ class Projects extends BaseController
                 'completed_quantity'     => (float)  ($m['completed_quantity'] ?? 0),
                 'completion_percent'     => (float)  ($m['completion_percent'] ?? 0),
                 'unit'                   => (string) ($m['unit'] ?? 'pcs') ?: 'pcs',
+                'target_start'           => $this->toTimestamp($m['target_start'] ?? null),
                 'target_date'            => $this->toTimestamp($m['target_date'] ?? $m['targetDate'] ?? null),
                 'actual_completion_date' => $m['actual_completion_date'] ?? $m['actualCompletionDate'] ?? null,
                 'status'                 => (string) ($m['status'] ?? 'Not Started'),
+                'activities'             => $m['activities'] ?? [],
                 'created_at'             => $m['created_at'] ?? $now,
                 'updated_at'             => $now,
             ]);
@@ -2236,12 +2469,15 @@ class Projects extends BaseController
             if (!isset($phaseMap[$phaseName])) {
                 $phaseMap[$phaseName] = count($phases);
                 $phases[] = [
-                    'name'      => $phaseName,
-                    'weight'    => 0.0,
-                    'tasks'     => [],
-                    'qty'       => isset($task['phase_qty'])      ? $task['phase_qty']      : ($task['qty'] ?? 1),
-                    'unit'      => isset($task['phase_unit'])     ? $task['phase_unit']     : ($task['unit'] ?? 'pcs'),
-                    'site_date' => isset($task['phase_site_date']) ? $task['phase_site_date'] : '',
+                    'name'          => $phaseName,
+                    'weight'        => 0.0,
+                    'tasks'         => [],
+                    'qty'           => isset($task['phase_qty'])      ? $task['phase_qty']      : ($task['qty'] ?? 1),
+                    'unit'          => isset($task['phase_unit'])     ? $task['phase_unit']     : ($task['unit'] ?? 'pcs'),
+                    'site_date'       => isset($task['phase_site_date']) ? $task['phase_site_date'] : '',
+                    'site_start_date' => isset($task['phase_site_start_date']) ? $task['phase_site_start_date'] : '',
+                    'tracking_mode' => isset($task['phase_tracking_mode']) ? $task['phase_tracking_mode'] : 'quantity',
+                    'activities'    => isset($task['phase_activities']) ? $task['phase_activities'] : [],
                 ];
             }
 
@@ -2279,10 +2515,8 @@ class Projects extends BaseController
         // Map milestone schema → flat task format that groupTasksIntoPhases() expects
         $flat = [];
         foreach ($milestones as $m) {
-            $targetDate = $m['target_date'] ?? null;
-            if ($targetDate instanceof \Google\Cloud\Core\Timestamp) {
-                $targetDate = $targetDate->get()->format('Y-m-d');
-            }
+            $targetDate  = $this->psTsToDate($m['target_date'] ?? null);
+            $targetStart = $this->psTsToDate($m['target_start'] ?? null);
             $qty = max(1, (int)($m['target_quantity'] ?? 1));
             $flat[] = [
                 'id'                 => $m['id'],
@@ -2293,7 +2527,10 @@ class Projects extends BaseController
                 'qty'                => $qty,
                 'phase_unit'         => (string)($m['unit'] ?? 'pcs'),
                 'unit'               => (string)($m['unit'] ?? 'pcs'),
+                'phase_site_start_date' => (string)($targetStart ?? ''),
                 'phase_site_date'    => (string)($targetDate ?? ''),
+                'phase_tracking_mode' => (string)($m['tracking_mode'] ?? 'quantity'),
+                'phase_activities'   => $m['activities'] ?? [],
                 'completion_percent' => 0.0,
                 'status'             => (string)($m['status'] ?? 'Pending'),
             ];

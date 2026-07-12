@@ -57,9 +57,6 @@
     <a href="<?= base_url('staff/create') ?>" class="rv-btn rv-btn-add">
         <span class="material-symbols-outlined">add</span> Add
     </a>
-    <button type="button" class="rv-btn rv-btn-invite" id="inviteLinkBtn">
-        <span class="material-symbols-outlined">link</span> Invite Admin
-    </button>
     <?php endif; ?>
 
     <button class="rv-btn rv-btn-export" data-module="staff" onclick="openStaffExportModal()">
@@ -569,82 +566,6 @@ function openStaffExportModal() {
 document.getElementById('exportModal')?.addEventListener('click', function(e) {
   if (e.target === this) { this.hidden = true; this.style.display = 'none'; }
 });
-</script>
-
-<!-- Invite Admin Modal -->
-<div id="inviteModal" class="invite-modal-backdrop" style="display:none">
-    <div class="invite-modal">
-        <div class="invite-modal-head">
-            <span class="material-symbols-outlined">link</span>
-            Admin Invite Link
-        </div>
-        <p class="invite-modal-desc">Share this link with the person you want to register as Administrator. It expires in <strong>48 hours</strong> and can only be used once.</p>
-        <div class="invite-url-wrap">
-            <input type="text" id="inviteUrlInput" class="invite-url-input" readonly>
-            <button type="button" class="invite-copy-btn" id="inviteCopyBtn">
-                <span class="material-symbols-outlined">content_copy</span>
-            </button>
-        </div>
-        <p id="inviteCopied" class="invite-copied" style="display:none">Copied to clipboard!</p>
-        <div class="invite-modal-foot">
-            <button type="button" class="invite-close-btn" id="inviteCloseBtn">Close</button>
-        </div>
-    </div>
-</div>
-
-<script>
-(function () {
-    var btn       = document.getElementById('inviteLinkBtn');
-    var modal     = document.getElementById('inviteModal');
-    var urlInput  = document.getElementById('inviteUrlInput');
-    var copyBtn   = document.getElementById('inviteCopyBtn');
-    var closeBtn  = document.getElementById('inviteCloseBtn');
-    var copied    = document.getElementById('inviteCopied');
-    var csrfName  = (document.querySelector('meta[name="csrf-name"]') || {}).content;
-    var csrfHash  = (document.querySelector('meta[name="csrf-hash"]') || {}).content;
-
-    if (!btn) return;
-
-    btn.addEventListener('click', function () {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="material-symbols-outlined">hourglass_empty</span> Generating…';
-        var fd = new FormData();
-        if (csrfName && csrfHash) fd.append(csrfName, csrfHash);
-        fetch('<?= base_url('auth/generateInvite') ?>', { method:'POST', body:fd, credentials:'same-origin' })
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                btn.disabled = false;
-                btn.innerHTML = '<span class="material-symbols-outlined">link</span> Invite Admin';
-                if (d.url) {
-                    urlInput.value = d.url;
-                    copied.style.display = 'none';
-                    modal.style.display = 'flex';
-                } else {
-                    showToast(d.error || 'Could not generate invite link.', 'error');
-                }
-            })
-            .catch(function () {
-                btn.disabled = false;
-                btn.innerHTML = '<span class="material-symbols-outlined">link</span> Invite Admin';
-                showToast('Network error. Please try again.', 'error');
-            });
-    });
-
-    copyBtn.addEventListener('click', function () {
-        navigator.clipboard.writeText(urlInput.value).then(function () {
-            copied.style.display = 'block';
-            setTimeout(function () { copied.style.display = 'none'; }, 2500);
-        }).catch(function () {
-            urlInput.select();
-            document.execCommand('copy');
-            copied.style.display = 'block';
-            setTimeout(function () { copied.style.display = 'none'; }, 2500);
-        });
-    });
-
-    closeBtn.addEventListener('click', function () { modal.style.display = 'none'; });
-    modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
-}());
 </script>
 
 <?= $this->endSection() ?>

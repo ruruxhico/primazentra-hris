@@ -874,6 +874,11 @@ class ResourceRequests extends BaseController
                 excludeUserId: $uid
             );
 
+            audit_log('request.create', 'request', $id, "{$cat}: {$resName} → {$destName}", [
+                'resource_category' => $cat,
+                'requested_quantity' => $qty,
+            ]);
+
             return $this->response->setJSON(['success' => true, 'id' => $id]);
         } catch (\Throwable $e) {
             log_message('error', 'ResourceRequests::store - ' . $e->getMessage());
@@ -989,6 +994,10 @@ class ResourceRequests extends BaseController
                 );
             }
 
+            audit_log('request.approve', 'request', $id, $resName, [
+                'bypass_secondary' => $bypassSecond,
+            ]);
+
             $msg = $bypassSecond ? 'Request approved.' : 'Request approved — awaiting secondary approval.';
             return redirect()->to('requests/' . $id)->with('success', $msg);
         } catch (\Throwable $e) {
@@ -1024,6 +1033,7 @@ class ResourceRequests extends BaseController
                 'rejected_by_role'=> $role,
                 'rejected_at'     => new Timestamp(new \DateTime()),
             ]);
+            audit_log('request.reject', 'request', $id, $req['requested_model_name'] ?? $req['resource_name'] ?? null);
             $this->_autoArchiveRequest($id);
             return redirect()->to('requests')->with('success', 'Request rejected.');
         } catch (\Throwable $e) {
@@ -1060,6 +1070,7 @@ class ResourceRequests extends BaseController
                 'cancelled_by_name' => session()->get('userName') ?? '',
                 'cancelled_at'      => new Timestamp(new \DateTime()),
             ]);
+            audit_log('request.cancel', 'request', $id, $req['requested_model_name'] ?? $req['resource_name'] ?? null);
             $this->_autoArchiveRequest($id);
             return redirect()->to('requests')->with('success', 'Request cancelled successfully.');
         } catch (\Throwable $e) {
@@ -1113,6 +1124,8 @@ class ResourceRequests extends BaseController
                     ['request_id' => $id]
                 );
             }
+
+            audit_log('request.approve_secondary', 'request', $id, $req['requested_model_name'] ?? $req['resource_name'] ?? null);
 
             return redirect()->to('requests/' . $id)->with('success', 'Request fully approved.');
         } catch (\Throwable $e) {
@@ -1693,6 +1706,7 @@ class ResourceRequests extends BaseController
                 'accepted_at'      => $now,
                 'updated_at'       => $now,
             ]);
+            audit_log('request.accept_delivery', 'request', $id, $req['requested_model_name'] ?? $req['resource_name'] ?? null);
             $this->_autoArchiveRequest($id);
 
             return redirect()->to('requests')->with('success', 'Delivery accepted — resource is now active at the destination project.');

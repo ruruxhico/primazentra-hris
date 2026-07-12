@@ -167,6 +167,11 @@ class Staff extends BaseController
                     return redirect()->back()->withInput()->with('error', 'Email is already in use.');
                 }
 
+                // Only one active Administrator is allowed system-wide
+                if ($role === 'Administrator' && count($this->usersModel->getUsersByRole('Administrator')) >= 1) {
+                    return redirect()->back()->withInput()->with('error', 'An Administrator account already exists. Only one Administrator is allowed.');
+                }
+
                 $now = new Timestamp(new \DateTime());
                 $data = [
                     'last_name' => $lastName,
@@ -230,6 +235,7 @@ class Staff extends BaseController
                 $this->sendWelcomeEmail($email, $firstName, $tempPassword);
 
                 log_message('info', 'Staff::create success. UID: ' . $firebaseUid);
+                audit_log('staff.create', 'staff', $firebaseUid, trim($firstName . ' ' . $lastName), ['role' => $role]);
 
                 return redirect()->to('staff')->with('success', 'Staff member created. Credentials sent to ' . $email . '.');
             } catch (\Exception $e) {
@@ -279,6 +285,21 @@ class Staff extends BaseController
                     }
                 }
 
+                // Only one active Administrator is allowed system-wide
+                if ($data['role'] === 'Administrator') {
+                    $currentAdmins = $this->usersModel->getUsersByRole('Administrator');
+                    $otherAdminExists = false;
+                    foreach ($currentAdmins as $admin) {
+                        if (($admin['id'] ?? null) !== $id) {
+                            $otherAdminExists = true;
+                            break;
+                        }
+                    }
+                    if ($otherAdminExists) {
+                        return redirect()->back()->withInput()->with('error', 'An Administrator account already exists. Only one Administrator is allowed.');
+                    }
+                }
+
                 // Handle profile picture upload
                 $pic = $this->request->getFile('profile_picture');
                 if ($pic && $pic->isValid() && !$pic->hasMoved()) {
@@ -301,6 +322,7 @@ class Staff extends BaseController
                 }
 
                 $this->firestore->getDb()->collection('users')->document($id)->set($data, ['merge' => true]);
+                audit_log('staff.update', 'staff', $id, trim($data['first_name'] . ' ' . $data['last_name']), ['role' => $data['role']]);
                 return redirect()->to('staff')->with('success', 'Staff member updated successfully!');
             }
 
@@ -376,6 +398,8 @@ class Staff extends BaseController
             ]);
 
             $this->sendWelcomeEmail($email, $firstName, $tempPassword);
+
+            audit_log('staff.resend_credentials', 'staff', $id, trim($firstName . ' ' . ($data['last_name'] ?? '')));
 
             return redirect()->to('staff/show/' . $id)->with('success', 'New credentials sent to ' . $email . '. The temporary password expires in 15 minutes.');
         } catch (\Throwable $e) {

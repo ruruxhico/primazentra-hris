@@ -114,22 +114,13 @@
                     </select>
                 </div>
             </div>
-            <div class="pz-form-row cols-2" style="margin-top:.65rem">
+            <div class="pz-form-row cols-1" style="margin-top:.65rem">
                 <div class="pz-form-group">
                     <label for="manpower_role">Role *</label>
                     <select id="manpower_role" name="manpower_role" required>
                         <option value="">Select Role</option>
                         <option value="FIELD WORKER" <?= strcasecmp((string)($resource['manpower_details']['role'] ?? ''), 'FIELD WORKER') === 0 ? 'selected' : '' ?>>Field Worker</option>
                         <option value="FOREMAN"      <?= strcasecmp((string)($resource['manpower_details']['role'] ?? ''), 'FOREMAN')      === 0 ? 'selected' : '' ?>>Foreman</option>
-                    </select>
-                </div>
-                <div class="pz-form-group">
-                    <label for="specialization">Specialization *</label>
-                    <select id="specialization" name="specialization" required>
-                        <option value="">Select Specialization</option>
-                        <?php foreach (['BUILD-TO-SUIT' => 'Build-to-Suit', 'RETROFITTING' => 'Retrofitting', 'COLOCATION' => 'Colocation', 'CONVERSION' => 'Conversion'] as $val => $label): ?>
-                        <option value="<?= esc($val) ?>" <?= strcasecmp((string)($resource['manpower_details']['specialization'] ?? ''), $val) === 0 ? 'selected' : '' ?>><?= esc($label) ?></option>
-                        <?php endforeach; ?>
                     </select>
                 </div>
             </div>

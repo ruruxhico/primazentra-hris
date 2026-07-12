@@ -81,14 +81,6 @@ class Validation extends BaseConfig
             ]
         ],
 
-        'specialization' => [
-            'label' => 'Specialization',
-            'rules' => 'required',
-            'errors' => [
-                'required' => 'Specialization is required.'
-            ]
-        ],
-
     ];
 
     // --------------------------------------------------------------------

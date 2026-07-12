@@ -121,10 +121,6 @@ $routes->post('resources/bulkArchiveItems/(:segment)', 'Resources::bulkArchiveIt
 $routes->post('resources/warehouse-default', 'Resources::saveWarehouseDefault');
 $routes->post('resources/warehouse-saved-location', 'Resources::saveWarehouseLocation');
 $routes->post('resources/warehouse-saved-location-delete', 'Resources::deleteWarehouseLocation');
-// Equipment CRUD
-$routes->post('resources/equipment/create', 'Resources::createEquipment');
-$routes->post('resources/equipment/update/(:segment)', 'Resources::updateEquipment/$1');
-$routes->get('resources/equipment/delete/(:segment)', 'Resources::deleteEquipment/$1');
 // Manpower CRUD (moved to dedicated controller)
 $routes->post('resources/manpower/create', 'Manpower::store');
 $routes->post('resources/manpower/update/(:segment)', 'Manpower::update/$1');
@@ -167,6 +163,9 @@ $routes->post('archive/permanent-delete', 'Archive::permanentDelete');
 $routes->post('staff/archive',            'Staff::archive');
 $routes->post('projects/archive',         'Projects::archive');
 $routes->post('resources/archive',        'Resources::archive');
+
+// Audit Logs (Administrator only — enforced in AuditLogs::guard())
+$routes->get('audit-logs', 'AuditLogs::index');
 
 // Notifications
 $routes->get('notifications',               'Notifications::index');

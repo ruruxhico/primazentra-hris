@@ -46,6 +46,10 @@ if (!function_exists('pz_can')) {
             'delete_project'          => in_array($r, [$admin, $ops], true),
             'archive_project'         => in_array($r, [$admin, $ops], true),
             'manage_milestones'       => in_array($r, [$admin, $ops, $pm], true),
+            // Adding/removing milestone rows (changing the milestone count) is
+            // restricted to Admin/OM. Project Manager may edit existing milestones
+            // (via manage_milestones) but not change how many there are.
+            'add_remove_milestones'   => in_array($r, [$admin, $ops], true),
 
             // ── Reports ───────────────────────────────────────────────────
             'submit_daily_report'     => in_array($r, [$admin, $se], true),
@@ -75,7 +79,14 @@ if (!function_exists('pz_can')) {
             'delete_request'          => in_array($r, [$admin, $ops], true),
 
             // ── Legacy alias ──────────────────────────────────────────────
-            'edit_progress_report'    => $r === $se,
+            'edit_progress_report'    => in_array($r, [$admin, $se], true),
+
+            // ── Audit logs ───────────────────────────────────────────────
+            // Administrator: full system-wide log, all modules.
+            // Operations Manager: full system-wide log, minus staff-module entries.
+            // Project Manager: trail scoped to just the project(s) they manage.
+            // Enforced in AuditLogs::index() — this only gates page access.
+            'view_audit_logs'         => in_array($r, [$admin, $ops, $pm], true),
 
             default => false,
         };
