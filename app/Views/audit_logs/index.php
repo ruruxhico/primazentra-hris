@@ -1,8 +1,12 @@
 <?= $this->extend('layouts/main') ?>
 <?= $this->section('content') ?>
 <?php
-$items   = $items   ?? [];
-$filters = $filters  ?? [];
+$items            = $items            ?? [];
+$filters          = $filters          ?? [];
+$availableModules = $availableModules ?? ['project','manpower','resource','staff','request','report','auth'];
+$pageTitle        = $pageTitle        ?? 'Audit Logs';
+$pageSub          = $pageSub          ?? 'Full trail of create, update, delete, and access-control actions across every role.';
+$scopeNotice      = $scopeNotice      ?? null;
 $count   = count($items);
 
 $ts2int = fn($v, $d = 0) => $v instanceof \Google\Cloud\Core\Timestamp
@@ -18,10 +22,17 @@ $statusClass = fn($s) => $s === 'failed' ? 'pz-badge-rejected' : 'pz-badge-compl
             <span class="material-symbols-outlined">arrow_back</span>
         </a>
         <div>
-            <h1 class="del-title">Audit Logs</h1>
-            <p class="del-sub">Full trail of create, update, delete, and access-control actions across every role.</p>
+            <h1 class="del-title"><?= esc($pageTitle) ?></h1>
+            <p class="del-sub"><?= esc($pageSub) ?></p>
         </div>
     </div>
+
+    <?php if ($scopeNotice): ?>
+    <div class="del-flash del-flash-ok">
+        <span class="material-symbols-outlined" style="font-size:16px;vertical-align:-3px;">info</span>
+        <?= esc($scopeNotice) ?>
+    </div>
+    <?php endif; ?>
 
     <div class="del-meta-row">
         <span class="del-count-badge">
@@ -36,7 +47,7 @@ $statusClass = fn($s) => $s === 'failed' ? 'pz-badge-rejected' : 'pz-badge-compl
 
         <select name="module" style="padding:.5rem .6rem;border:1px solid #d9dde3;border-radius:.5rem;">
             <option value="">All modules</option>
-            <?php foreach (['project','manpower','resource','staff','request','report','auth','profile'] as $m): ?>
+            <?php foreach ($availableModules as $m): ?>
             <option value="<?= $m ?>" <?= ($filters['module'] ?? '') === $m ? 'selected' : '' ?>><?= ucfirst($m) ?></option>
             <?php endforeach; ?>
         </select>

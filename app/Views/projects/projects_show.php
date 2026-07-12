@@ -1188,7 +1188,7 @@
                 html += '<div class="rpt-sum-empty">No milestones defined.</div>';
             } else {
                 html += '<table class="rpt-sum-table" id="rptMsTable"><thead><tr style="background:#b8d4e8">' +
-                        '<th>MILESTONE</th><th>TARGET DATE</th><th>COMPLETION DATE</th>' +
+                        '<th>MILESTONE</th><th>TARGET START</th><th>TARGET END</th><th>COMPLETION DATE</th>' +
                         '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>' +
                         '<th class="num">VARIANCE</th><th>STATUS</th>' +
                         '</tr></thead><tbody>';
@@ -1208,6 +1208,7 @@
 
                     html += '<tr data-target-date="' + (m.target_date || '') + '" data-completion-date="' + (m.actual_completion_date || '') + '" data-ms-status="' + stLow + '">';
                     html += '<td>' + h(m.milestone_name) + '</td>';
+                    html += '<td>' + _fmtDate(m.target_start) + '</td>';
                     html += '<td>' + _fmtDate(m.target_date) + '</td>';
                     html += '<td>' + completionDate + '</td>';
                     html += '<td class="num">' + (plannedRow !== null ? _pct(plannedRow, 1) : '—') + '</td>';

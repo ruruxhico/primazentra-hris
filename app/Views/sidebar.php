@@ -85,12 +85,12 @@
             </li>
             <?php endif; ?>
 
-            <!-- Audit Logs — Admin only -->
+            <!-- Audit Logs — Admin / OpsMgr full log, PM gets a project-scoped trail -->
             <?php if (pz_can('view_audit_logs')): ?>
             <li>
                 <a href="<?= base_url('audit-logs') ?>" class="<?= $isAuditLogs ? 'active' : '' ?>">
                     <span class="icon material-symbols-outlined" aria-hidden="true">history</span>
-                    <span class="label">Audit Logs</span>
+                    <span class="label"><?= pz_is('Project Manager') ? 'Audit Trail' : 'Audit Logs' ?></span>
                 </a>
             </li>
             <?php endif; ?>

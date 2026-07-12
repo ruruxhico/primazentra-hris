@@ -82,7 +82,11 @@ if (!function_exists('pz_can')) {
             'edit_progress_report'    => in_array($r, [$admin, $se], true),
 
             // ── Audit logs ───────────────────────────────────────────────
-            'view_audit_logs'         => $r === $admin,
+            // Administrator: full system-wide log, all modules.
+            // Operations Manager: full system-wide log, minus staff-module entries.
+            // Project Manager: trail scoped to just the project(s) they manage.
+            // Enforced in AuditLogs::index() — this only gates page access.
+            'view_audit_logs'         => in_array($r, [$admin, $ops, $pm], true),
 
             default => false,
         };

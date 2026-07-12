@@ -2,8 +2,9 @@
 
 namespace App\Controllers;
 
+use App\Libraries\FirestoreService;
 use App\Services\AuditLogService;
-use Google\Cloud\Core\Timestamp;
+use Google\Cloud\Firestore\DocumentReference;
 
 class AuditLogs extends BaseController
 {
@@ -20,7 +21,7 @@ class AuditLogs extends BaseController
             return redirect()->to('/auth/login');
         }
         if (!pz_can('view_audit_logs')) {
-            return redirect()->to('/dashboard')->with('error', 'Access restricted to administrators.');
+            return redirect()->to('/dashboard')->with('error', 'Access restricted.');
         }
         return null;
     }
@@ -28,6 +29,8 @@ class AuditLogs extends BaseController
     public function index()
     {
         if ($blocked = $this->guard()) return $blocked;
+
+        $role = (string) (session()->get('role') ?? '');
 
         $filters = [
             'module'     => trim((string) ($this->request->getGet('module') ?? '')),
@@ -42,22 +45,89 @@ class AuditLogs extends BaseController
         if ($dateFrom !== '') $filters['date_from'] = strtotime($dateFrom . ' 00:00:00');
         if ($dateTo   !== '') $filters['date_to']   = strtotime($dateTo   . ' 23:59:59');
 
-        $items = $this->audit->query(array_filter($filters, fn($v) => $v !== '' && $v !== null));
+        $pageTitle   = 'Audit Logs';
+        $pageSub     = 'Full trail of create, update, delete, and access-control actions across every role.';
+        $scopeNotice = null;
+        $availableModules = ['project', 'manpower', 'resource', 'staff', 'request', 'report', 'auth'];
+
+        $scanLimit = 1000;
+
+        if ($role === 'Operations Manager') {
+            // Staff records (hiring, roles, credential resets) are Admin-only —
+            // an OM sees everything else so a single-admin system still has a
+            // second set of eyes on activity, without exposing HR-adjacent data.
+            $filters['exclude_modules'] = ['staff'];
+            if ($filters['module'] === 'staff') $filters['module'] = '';
+            $availableModules = array_values(array_diff($availableModules, ['staff']));
+            $pageSub = 'Full trail across every role, excluding staff-record changes (Administrator only).';
+        } elseif ($role === 'Project Manager') {
+            $projectIds = $this->managedProjectIds();
+
+            if (empty($projectIds)) {
+                return view('audit_logs/index', [
+                    'pageTitle' => 'Project Audit Trail',
+                    'pageSub'   => 'You are not currently assigned as manager on any project.',
+                    'userName'  => session()->get('userName') ?? 'User',
+                    'role'      => $role,
+                    'items'     => [],
+                    'scopeNotice'      => null,
+                    'availableModules' => ['project', 'report'],
+                    'filters'   => $this->filtersForView($filters, $dateFrom, $dateTo),
+                ]);
+            }
+
+            unset($filters['module']);
+            $filters['modules']    = ['project', 'report'];
+            $filters['target_ids'] = $projectIds;
+            $availableModules      = ['project', 'report'];
+            $scanLimit   = 3000; // narrower result set (own projects only) — safe to widen the scan
+            $pageTitle   = 'Project Audit Trail';
+            $pageSub     = 'History of what changed on the project(s) you manage.';
+            $scopeNotice = 'Showing activity for ' . count($projectIds) . ' project(s) you manage.';
+        }
+
+        $items = $this->audit->query(array_filter($filters, fn($v) => $v !== '' && $v !== null), $scanLimit);
 
         return view('audit_logs/index', [
-            'pageTitle' => 'Audit Logs',
+            'pageTitle' => $pageTitle,
+            'pageSub'   => $pageSub,
             'userName'  => session()->get('userName') ?? 'User',
-            'role'      => session()->get('role') ?? 'User',
+            'role'      => $role,
             'items'     => $items,
-            'filters'   => [
-                'module'     => $filters['module'],
-                'action'     => $filters['action'],
-                'actor_role' => $filters['actor_role'],
-                'status'     => $filters['status'],
-                'q'          => $filters['q'],
-                'date_from'  => $dateFrom,
-                'date_to'    => $dateTo,
-            ],
+            'scopeNotice'      => $scopeNotice,
+            'availableModules' => $availableModules,
+            'filters'   => $this->filtersForView($filters, $dateFrom, $dateTo),
         ]);
+    }
+
+    private function filtersForView(array $filters, string $dateFrom, string $dateTo): array
+    {
+        return [
+            'module'     => $filters['module'] ?? '',
+            'action'     => $filters['action'] ?? '',
+            'actor_role' => $filters['actor_role'] ?? '',
+            'status'     => $filters['status'] ?? '',
+            'q'          => $filters['q'] ?? '',
+            'date_from'  => $dateFrom,
+            'date_to'    => $dateTo,
+        ];
+    }
+
+    /** Firestore doc IDs of projects where project_manager_id resolves to the current session user. */
+    private function managedProjectIds(): array
+    {
+        $uid = (string) (session()->get('userId') ?? '');
+        if ($uid === '') return [];
+
+        $db  = FirestoreService::getInstance()->getDb();
+        $ids = [];
+        foreach ($db->collection('project')->documents() as $doc) {
+            if (!$doc->exists()) continue;
+            $d     = $doc->data();
+            $pmRaw = $d['project_manager_id'] ?? null;
+            $pmUid = $pmRaw instanceof DocumentReference ? $pmRaw->id() : (string) ($pmRaw ?? '');
+            if ($pmUid === $uid) $ids[] = $doc->id();
+        }
+        return $ids;
     }
 }

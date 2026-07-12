@@ -1534,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '<div class="rpt-sum-empty">No milestones defined.</div>';
             } else {
                 html += '<table class="rpt-sum-table" id="rptMsTable"><thead><tr style="background:#b8d4e8">' +
-                        '<th>MILESTONE</th><th>TARGET DATE</th><th>DATE OF COMPLETION</th>' +
+                        '<th>MILESTONE</th><th>TARGET START</th><th>TARGET END</th><th>DATE OF COMPLETION</th>' +
                         '<th class="num">PLANNED %</th><th class="num">ACTUAL %</th>' +
                         '<th class="num">VARIANCE</th><th>STATUS</th>' +
                         '</tr></thead><tbody>';
@@ -1550,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     var plannedR  = hasTD ? m.weight_percent : null;
                     var varRow    = (tdPassed && plannedR !== null) ? actualPct - plannedR : null;
                     var completionDate = m.actual_completion_date ? _fmtDate(m.actual_completion_date) : '<span class="muted">—</span>';
-                    html += '<tr data-target-date="' + (m.target_date || '') + '"><td>' + h(m.milestone_name) + '</td><td>' + _fmtDate(m.target_date) + '</td>' +
+                    html += '<tr data-target-date="' + (m.target_date || '') + '"><td>' + h(m.milestone_name) + '</td><td>' + _fmtDate(m.target_start) + '</td><td>' + _fmtDate(m.target_date) + '</td>' +
                             '<td>' + completionDate + '</td>' +
                             '<td class="num">' + (plannedR !== null ? _pct(plannedR, 1) : '—') + '</td>' +
                             '<td class="num">' + _pct(actualPct, 1) + '</td>' +

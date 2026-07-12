@@ -35,15 +35,16 @@
 .ps-act-toggle-btn:hover { background:#faf6ee; }
 .ps-act-toggle-icon { font-size:1rem; }
 .ps-act-body { margin:0.4rem 0 0.2rem 1.75rem; border-left:2px solid #f0ebe0; padding-left:0.75rem; }
-.ps-act-col-hdr { display:grid; grid-template-columns:1fr 90px 140px 32px; gap:8px; padding:0 0 0.3rem; }
+.ps-act-col-hdr { display:grid; grid-template-columns:1fr 90px 96px 140px 32px; gap:8px; padding:0 0 0.3rem; }
 .ps-act-col-hdr span { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#8C701C; }
-.ps-act-row { display:grid; grid-template-columns:1fr 90px 140px 32px; gap:8px; align-items:center; margin-bottom:0.4rem; }
+.ps-act-row { display:grid; grid-template-columns:1fr 90px 96px 140px 32px; gap:8px; align-items:center; margin-bottom:0.4rem; }
 .ps-act-name { font-size:0.82rem; padding:5px 8px; border:1px solid #e0dbd0; border-radius:6px; font-family:inherit; }
 .ps-act-weight-wrap { position:relative; }
 .ps-act-weight { width:100%; padding:5px 22px 5px 8px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.82rem; text-align:right; font-family:inherit; }
 .ps-act-weight-suffix { position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:0.76rem; color:#999; pointer-events:none; }
-.ps-act-status { padding:5px 6px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.78rem; background:#fff; font-family:inherit; }
-.ps-act-name:focus, .ps-act-weight:focus, .ps-act-status:focus { outline:none; border-color:#C47A0F; }
+.ps-act-mode, .ps-act-status, .ps-act-qty { padding:5px 6px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.78rem; background:#fff; font-family:inherit; width:100%; box-sizing:border-box; }
+.ps-act-qty { text-align:right; }
+.ps-act-name:focus, .ps-act-weight:focus, .ps-act-mode:focus, .ps-act-status:focus, .ps-act-qty:focus { outline:none; border-color:#C47A0F; }
 .ps-act-del { background:none; border:none; cursor:pointer; color:#e53e3e; padding:4px; border-radius:6px; display:flex; align-items:center; justify-content:center; }
 .ps-act-del:hover { background:#fff0f0; }
 .ps-act-del .material-symbols-outlined { font-size:16px; }
@@ -159,11 +160,13 @@
                             <div class="ps-act-col-hdr">
                                 <span>Activity Name</span>
                                 <span>Weight %</span>
+                                <span>Track By</span>
                                 <span>Status</span>
                                 <span></span>
                             </div>
                             <div class="ps-act-list">
                                 <?php foreach (($m['activities'] ?? []) as $ai => $a): ?>
+                                <?php $aMode = ($a['tracking_mode'] ?? 'status_only') === 'quantity' ? 'quantity' : 'status_only'; ?>
                                 <div class="ps-act-row">
                                     <input type="text" class="ps-act-name"
                                            name="milestones[<?= $i ?>][activities][<?= $ai ?>][name]"
@@ -176,11 +179,19 @@
                                                step="0.1" min="0" max="100" placeholder="0">
                                         <span class="ps-act-weight-suffix">%</span>
                                     </div>
-                                    <select class="ps-act-status" name="milestones[<?= $i ?>][activities][<?= $ai ?>][status]">
+                                    <select class="ps-act-mode" name="milestones[<?= $i ?>][activities][<?= $ai ?>][tracking_mode]">
+                                        <option value="status_only" <?= $aMode === 'status_only' ? 'selected' : '' ?>>Status</option>
+                                        <option value="quantity"    <?= $aMode === 'quantity'    ? 'selected' : '' ?>>Quantity</option>
+                                    </select>
+                                    <select class="ps-act-status" name="milestones[<?= $i ?>][activities][<?= $ai ?>][status]" <?= $aMode === 'quantity' ? 'hidden disabled' : '' ?>>
                                         <?php foreach (['Not Started', 'In Progress', 'Completed'] as $st): ?>
                                         <option value="<?= esc($st) ?>" <?= ($a['status'] ?? 'Not Started') === $st ? 'selected' : '' ?>><?= esc($st) ?></option>
                                         <?php endforeach; ?>
                                     </select>
+                                    <input type="number" class="ps-act-qty"
+                                           name="milestones[<?= $i ?>][activities][<?= $ai ?>][qty]"
+                                           value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
+                                           <?= $aMode === 'status_only' ? 'hidden disabled' : '' ?>>
                                     <button type="button" class="ps-act-del" title="Remove activity">
                                         <span class="material-symbols-outlined">close</span>
                                     </button>
@@ -286,11 +297,16 @@
             <input type="number" class="ps-act-weight" value="0" step="0.1" min="0" max="100" placeholder="0">
             <span class="ps-act-weight-suffix">%</span>
         </div>
+        <select class="ps-act-mode">
+            <option value="status_only" selected>Status</option>
+            <option value="quantity">Quantity</option>
+        </select>
         <select class="ps-act-status">
             <option value="Not Started">Not Started</option>
             <option value="In Progress">In Progress</option>
             <option value="Completed">Completed</option>
         </select>
+        <input type="number" class="ps-act-qty" value="1" min="1" step="1" placeholder="Qty" hidden disabled>
         <button type="button" class="ps-act-del" title="Remove activity">
             <span class="material-symbols-outlined">close</span>
         </button>
@@ -332,6 +348,7 @@
         newRow.querySelectorAll('.ps-ms-date-picker').forEach(function (dp) {
             if (window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
         });
+        applyMode(newRow);
     };
 
     window.removeRow = function (btn) {
@@ -371,16 +388,36 @@
         var unitSel = row.querySelector('.ps-ms-select');
         if (!modeSel) return;
         var statusOnly = modeSel.value === 'status_only';
+        var hasQtyActivity = Array.prototype.some.call(row.querySelectorAll('.ps-act-mode'), function (sel) {
+            return sel.value === 'quantity';
+        });
+        var hideQty = statusOnly || hasQtyActivity;
         if (qtyInp) {
-            qtyInp.disabled = statusOnly;
+            qtyInp.disabled = hideQty;
+            qtyInp.style.visibility = hideQty ? 'hidden' : '';
             if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
             qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
         }
         if (unitSel) unitSel.disabled = statusOnly;
     }
 
+    /* ── Activity-level status-only / quantity mode ── */
+    function applyActivityMode(actRow) {
+        var modeSel   = actRow.querySelector('.ps-act-mode');
+        var statusSel = actRow.querySelector('.ps-act-status');
+        var qtyInp    = actRow.querySelector('.ps-act-qty');
+        if (!modeSel) return;
+        var isQty = modeSel.value === 'quantity';
+        if (statusSel) { statusSel.hidden = isQty;  statusSel.disabled = isQty; }
+        if (qtyInp)    { qtyInp.hidden    = !isQty; qtyInp.disabled    = !isQty; }
+    }
+
     list.addEventListener('change', function (e) {
         if (e.target.classList.contains('ps-mode-select')) {
+            applyMode(e.target.closest('.ps-ms-row'));
+        }
+        if (e.target.classList.contains('ps-act-mode')) {
+            applyActivityMode(e.target.closest('.ps-act-row'));
             applyMode(e.target.closest('.ps-ms-row'));
         }
     });
@@ -389,9 +426,9 @@
     var actTpl = document.getElementById('actRowTpl');
 
     function reindexActivities(msRow, msIndex) {
-        var actKeys = ['name', 'weight', 'status'];
+        var actKeys = ['name', 'weight', 'tracking_mode', 'status', 'qty'];
         msRow.querySelectorAll('.ps-act-row').forEach(function (row, j) {
-            row.querySelectorAll('.ps-act-name, .ps-act-weight, .ps-act-status')
+            row.querySelectorAll('.ps-act-name, .ps-act-weight, .ps-act-mode, .ps-act-status, .ps-act-qty')
                .forEach(function (el, k) { el.name = 'milestones[' + msIndex + '][activities][' + j + '][' + actKeys[k] + ']'; });
         });
         var count = msRow.querySelectorAll('.ps-act-row').length;
@@ -433,6 +470,7 @@
             var msIndex = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow);
             reindexActivities(msRow, msIndex);
             recomputeActTotal(msRow);
+            applyMode(msRow);
             return;
         }
 
@@ -443,6 +481,7 @@
             var msIndex2 = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow2);
             reindexActivities(msRow2, msIndex2);
             recomputeActTotal(msRow2);
+            applyMode(msRow2);
             return;
         }
     });

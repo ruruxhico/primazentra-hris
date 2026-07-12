@@ -54,6 +54,12 @@ class AuditLogService
      * Fetch recent entries and filter/paginate in PHP rather than composing
      * Firestore where()+orderBy() combos, which require composite indexes
      * that can't be provisioned from here. Matches TrashService/ArchiveService.
+     *
+     * Role-scoping filters (enforced server-side by AuditLogs::index(), not
+     * user-selectable): 'modules' (whitelist, e.g. a Project Manager's trail
+     * restricted to project/report entries), 'exclude_modules' (blacklist,
+     * e.g. hiding staff entries from Operations Manager), and 'target_ids'
+     * (restrict to entries about specific records, e.g. a PM's own projects).
      */
     public function query(array $filters = [], int $scanLimit = 1000): array
     {
@@ -68,6 +74,9 @@ class AuditLogService
             $d = $doc->data();
 
             if (!empty($filters['module']) && ($d['module'] ?? '') !== $filters['module']) continue;
+            if (!empty($filters['modules']) && !in_array($d['module'] ?? '', $filters['modules'], true)) continue;
+            if (!empty($filters['exclude_modules']) && in_array($d['module'] ?? '', $filters['exclude_modules'], true)) continue;
+            if (!empty($filters['target_ids']) && !in_array((string)($d['target_id'] ?? ''), $filters['target_ids'], true)) continue;
             if (!empty($filters['action']) && ($d['action'] ?? '') !== $filters['action']) continue;
             if (!empty($filters['actor_role']) && ($d['actor_role'] ?? '') !== $filters['actor_role']) continue;
             if (!empty($filters['status']) && ($d['status'] ?? '') !== $filters['status']) continue;

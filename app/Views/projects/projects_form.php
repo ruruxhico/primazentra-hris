@@ -361,6 +361,69 @@
                                     <option value="status_only" <?= $phaseMode === 'status_only' ? 'selected' : '' ?>>Status Only</option>
                                 </select>
                             </div>
+                            <div class="phase-act-panel">
+                                <button type="button" class="pf-act-toggle-btn">
+                                    <span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>
+                                    Activities (<span class="pf-act-count"><?= count($phase['activities'] ?? []) ?></span>)
+                                </button>
+                                <div class="pf-act-body" hidden>
+                                    <div class="pf-act-list">
+                                        <?php foreach (($phase['activities'] ?? []) as $ai => $a): ?>
+                                        <?php
+                                            $aMode  = ($a['tracking_mode'] ?? 'status_only') === 'quantity' ? 'quantity' : 'status_only';
+                                            $aIsQty = $aMode === 'quantity';
+                                        ?>
+                                        <div class="pf-act-row">
+                                            <div class="phase-field">
+                                                <span class="phase-field-lbl">Activity Name</span>
+                                                <input type="text" class="pf-act-name"
+                                                       name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][name]"
+                                                       value="<?= esc($a['activity_name'] ?? $a['name'] ?? '') ?>"
+                                                       placeholder="Activity name">
+                                            </div>
+                                            <div class="pf-act-row2">
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl">Weight %</span>
+                                                    <div class="pf-act-weight-group">
+                                                        <input type="number" class="pf-act-weight"
+                                                               name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][weight]"
+                                                               value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
+                                                               step="0.1" min="0" max="100" placeholder="0">
+                                                        <span class="pf-act-weight-unit">%</span>
+                                                    </div>
+                                                </div>
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl">Track By</span>
+                                                    <select class="pf-act-mode" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][tracking_mode]">
+                                                        <option value="status_only" <?= !$aIsQty ? 'selected' : '' ?>>Status</option>
+                                                        <option value="quantity"    <?= $aIsQty  ? 'selected' : '' ?>>Quantity</option>
+                                                    </select>
+                                                </div>
+                                                <div class="phase-field">
+                                                    <span class="phase-field-lbl pf-act-value-lbl"><?= $aIsQty ? 'Qty' : 'Status' ?></span>
+                                                    <select class="pf-act-status" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][status]" <?= $aIsQty ? 'hidden disabled' : '' ?>>
+                                                        <?php foreach (['Not Started', 'In Progress', 'Completed'] as $st): ?>
+                                                        <option value="<?= esc($st) ?>" <?= ($a['status'] ?? 'Not Started') === $st ? 'selected' : '' ?>><?= esc($st) ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                    <input type="number" class="pf-act-qty"
+                                                           name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][qty]"
+                                                           value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
+                                                           <?= !$aIsQty ? 'hidden disabled' : '' ?>>
+                                                </div>
+                                                <button type="button" class="pf-act-del-btn" title="Remove activity">
+                                                    <span class="material-symbols-outlined">close</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="pf-act-add-row">
+                                        <button type="button" class="pf-act-add-btn">+ Add Activity</button>
+                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <?php endforeach; ?>
                     </div>
@@ -794,6 +857,44 @@ if (window.location.hostname === 'localhost') {
         });
     }
 
+    // ── Build a single activity row's HTML (used both for initial render and "+ Add Activity") ──
+    function activityRowHtml(pi, ai, a) {
+        a = a || {};
+        var isQty = a.tracking_mode === 'quantity';
+        var statusVal = a.status || 'Not Started';
+        var statusOpts = ['Not Started', 'In Progress', 'Completed'].map(function (st) {
+            return '<option value="' + st + '"' + (statusVal === st ? ' selected' : '') + '>' + st + '</option>';
+        }).join('');
+        return '<div class="pf-act-row">' +
+            '<div class="phase-field">' +
+                '<span class="phase-field-lbl">Activity Name</span>' +
+                '<input type="text" class="pf-act-name" name="phases[' + pi + '][activities][' + ai + '][name]" placeholder="Activity name" value="' + escHtml(a.name || '') + '">' +
+            '</div>' +
+            '<div class="pf-act-row2">' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl">Weight %</span>' +
+                    '<div class="pf-act-weight-group">' +
+                        '<input type="number" class="pf-act-weight" name="phases[' + pi + '][activities][' + ai + '][weight]" step="0.1" min="0" max="100" placeholder="0" value="' + (a.weight != null ? a.weight : 0) + '">' +
+                        '<span class="pf-act-weight-unit">%</span>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl">Track By</span>' +
+                    '<select class="pf-act-mode" name="phases[' + pi + '][activities][' + ai + '][tracking_mode]">' +
+                        '<option value="status_only"' + (!isQty ? ' selected' : '') + '>Status</option>' +
+                        '<option value="quantity"' + (isQty ? ' selected' : '') + '>Quantity</option>' +
+                    '</select>' +
+                '</div>' +
+                '<div class="phase-field">' +
+                    '<span class="phase-field-lbl pf-act-value-lbl">' + (isQty ? 'Qty' : 'Status') + '</span>' +
+                    '<select class="pf-act-status" name="phases[' + pi + '][activities][' + ai + '][status]"' + (isQty ? ' hidden disabled' : '') + '>' + statusOpts + '</select>' +
+                    '<input type="number" class="pf-act-qty" name="phases[' + pi + '][activities][' + ai + '][qty]" min="1" step="1" placeholder="Qty" value="' + (a.qty != null ? a.qty : 1) + '"' + (!isQty ? ' hidden disabled' : '') + '>' +
+                '</div>' +
+                '<button type="button" class="pf-act-del-btn" title="Remove activity"><span class="material-symbols-outlined">close</span></button>' +
+            '</div>' +
+        '</div>';
+    }
+
     // ── Build a milestone card element ─────────────────────────
     function buildPhaseItem(pi, data) {
         data = data || {};
@@ -850,6 +951,21 @@ if (window.location.hostname === 'localhost') {
                     '<option value="quantity"' + ((data.mode || 'quantity') === 'quantity' ? ' selected' : '') + '>Quantity</option>' +
                     '<option value="status_only"' + (data.mode === 'status_only' ? ' selected' : '') + '>Status Only</option>' +
                 '</select>' +
+            '</div>' +
+            '<div class="phase-act-panel">' +
+                '<button type="button" class="pf-act-toggle-btn">' +
+                    '<span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>' +
+                    'Activities (<span class="pf-act-count">' + ((data.activities || []).length) + '</span>)' +
+                '</button>' +
+                '<div class="pf-act-body" hidden>' +
+                    '<div class="pf-act-list">' +
+                        (data.activities || []).map(function (a, ai) { return activityRowHtml(pi, ai, a); }).join('') +
+                    '</div>' +
+                    '<div class="pf-act-add-row">' +
+                        '<button type="button" class="pf-act-add-btn">+ Add Activity</button>' +
+                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>' +
+                    '</div>' +
+                '</div>' +
             '</div>';
 
         if (typeof window.initPhaseDatePicker === 'function') {
@@ -866,23 +982,122 @@ if (window.location.hostname === 'localhost') {
         card.querySelector('.phase-mode-sel').addEventListener('change', function () {
             applyPhaseMode(card);
         });
+        wireActivitiesPanel(card);
         applyPhaseMode(card);
         return card;
     }
 
     // ── Quantity / Status-only mode ── */
     function applyPhaseMode(card) {
-        var modeSel = card.querySelector('.phase-mode-sel');
-        var qtyInp  = card.querySelector('.phase-card-inp');
-        var unitSel = card.querySelector('.phase-card-sel');
+        var modeSel  = card.querySelector('.phase-mode-sel');
+        var qtyField = card.querySelector('.phase-field.f-qty');
+        var qtyInp   = card.querySelector('.phase-card-inp');
+        var unitField = card.querySelector('.phase-field.f-unit');
         if (!modeSel) return;
         var statusOnly = modeSel.value === 'status_only';
+        var hasQtyActivity = Array.prototype.some.call(card.querySelectorAll('.pf-act-mode'), function (sel) {
+            return sel.value === 'quantity';
+        });
+        var hideQty = statusOnly || hasQtyActivity;
         if (qtyInp) {
-            qtyInp.disabled = statusOnly;
+            qtyInp.disabled = hideQty;
             if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
             qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
         }
-        if (unitSel) unitSel.disabled = statusOnly;
+        // Fully remove the Qty (and paired Unit) field — not just disable it — so
+        // there's no dangling "Qty" label with nothing under it once it no longer applies.
+        if (qtyField)  qtyField.style.display  = hideQty ? 'none' : '';
+        if (unitField) {
+            unitField.style.display = hideQty ? 'none' : '';
+            var unitSel = unitField.querySelector('.phase-card-sel');
+            if (unitSel) unitSel.disabled = hideQty;
+        }
+    }
+
+    // ── Activity-level status-only / quantity mode ──
+    function applyPhaseActivityMode(actRow) {
+        var modeSel   = actRow.querySelector('.pf-act-mode');
+        var statusSel = actRow.querySelector('.pf-act-status');
+        var qtyInp    = actRow.querySelector('.pf-act-qty');
+        var valueLbl  = actRow.querySelector('.pf-act-value-lbl');
+        if (!modeSel) return;
+        var isQty = modeSel.value === 'quantity';
+        if (statusSel) { statusSel.hidden = isQty;  statusSel.disabled = isQty; }
+        if (qtyInp)    { qtyInp.hidden    = !isQty; qtyInp.disabled    = !isQty; }
+        if (valueLbl)  valueLbl.textContent = isQty ? 'Qty' : 'Status';
+    }
+
+    // ── Re-index a card's activity rows after add/remove ────────
+    function reindexPhaseActivities(card) {
+        var pi = card.dataset.pidx;
+        var actKeys = ['name', 'weight', 'tracking_mode', 'status', 'qty'];
+        card.querySelectorAll('.pf-act-row').forEach(function (row, ai) {
+            row.querySelectorAll('.pf-act-name, .pf-act-weight, .pf-act-mode, .pf-act-status, .pf-act-qty')
+               .forEach(function (el, k) { el.name = 'phases[' + pi + '][activities][' + ai + '][' + actKeys[k] + ']'; });
+        });
+        var countEl = card.querySelector('.pf-act-count');
+        if (countEl) countEl.textContent = card.querySelectorAll('.pf-act-row').length;
+    }
+
+    // ── Recompute an activities weight-total indicator ──────────
+    function recomputePhaseActTotal(card) {
+        var total = 0;
+        card.querySelectorAll('.pf-act-weight').forEach(function (inp) {
+            total += parseFloat(inp.value || 0);
+        });
+        total = Math.round(total * 10) / 10;
+        var totValEl = card.querySelector('.pf-act-total-val');
+        var totEl    = card.querySelector('.pf-act-total');
+        if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totEl) {
+            totEl.classList.toggle('exact', Math.abs(total - 100) < 0.5);
+            totEl.classList.toggle('over',  total > 100.5);
+        }
+    }
+
+    // ── Wire the Activities sub-panel for a card (new or PHP-rendered) ──
+    function wireActivitiesPanel(card) {
+        card.addEventListener('click', function (e) {
+            var toggleBtn = e.target.closest('.pf-act-toggle-btn');
+            if (toggleBtn) {
+                var body = toggleBtn.parentElement.querySelector('.pf-act-body');
+                var icon = toggleBtn.querySelector('.pf-act-toggle-icon');
+                var open = body.hidden;
+                body.hidden = !open;
+                if (icon) icon.textContent = open ? 'expand_less' : 'expand_more';
+                return;
+            }
+            var addBtn = e.target.closest('.pf-act-add-btn');
+            if (addBtn) {
+                var list = card.querySelector('.pf-act-list');
+                var ai   = list.querySelectorAll('.pf-act-row').length;
+                list.insertAdjacentHTML('beforeend', activityRowHtml(card.dataset.pidx, ai, {}));
+                reindexPhaseActivities(card);
+                recomputePhaseActTotal(card);
+                applyPhaseMode(card);
+                return;
+            }
+            var delBtn = e.target.closest('.pf-act-del-btn');
+            if (delBtn) {
+                delBtn.closest('.pf-act-row').remove();
+                reindexPhaseActivities(card);
+                recomputePhaseActTotal(card);
+                applyPhaseMode(card);
+                return;
+            }
+        });
+        card.addEventListener('change', function (e) {
+            if (e.target.classList.contains('pf-act-mode')) {
+                applyPhaseActivityMode(e.target.closest('.pf-act-row'));
+                applyPhaseMode(card);
+            }
+        });
+        card.addEventListener('input', function (e) {
+            if (e.target.classList.contains('pf-act-weight')) {
+                recomputePhaseActTotal(card);
+            }
+        });
+        recomputePhaseActTotal(card);
     }
 
     // ── Clear error highlight as soon as a field is touched ────
@@ -916,6 +1131,7 @@ if (window.location.hostname === 'localhost') {
         });
         var modeSel = card.querySelector('.phase-mode-sel');
         if (modeSel) modeSel.addEventListener('change', function () { applyPhaseMode(card); });
+        wireActivitiesPanel(card);
         applyPhaseMode(card);
     }
     container.querySelectorAll('.phase-card').forEach(attachExistingCard);
@@ -1182,13 +1398,25 @@ if (window.location.hostname === 'localhost') {
         var xk = 'pz_as_projectForm' + location.pathname + '_x';
         var phData = [];
         container.querySelectorAll('.phase-card').forEach(function (card) {
+            var activities = [];
+            card.querySelectorAll('.ps-act-row').forEach(function (row) {
+                activities.push({
+                    name:          (row.querySelector('.ps-act-name')   || {}).value || '',
+                    weight:        (row.querySelector('.ps-act-weight') || {}).value || '',
+                    tracking_mode: (row.querySelector('.ps-act-mode')   || {}).value || 'status_only',
+                    status:        (row.querySelector('.ps-act-status')|| {}).value || 'Not Started',
+                    qty:           (row.querySelector('.ps-act-qty')   || {}).value || ''
+                });
+            });
             phData.push({
                 name:      (card.querySelector('.phase-card-name-inp') || {}).value || '',
                 weight:    (card.querySelector('.phase-weight-inp')    || {}).value || '',
                 qty:       (card.querySelector('.phase-card-inp')      || {}).value || '',
                 unit:      (card.querySelector('.phase-card-sel')      || {}).value || 'pcs',
+                mode:      (card.querySelector('.phase-mode-sel')      || {}).value || 'quantity',
                 site_start_date: (card.querySelector('input[type="hidden"][name$="[site_start_date]"]') || {}).value || '',
-                site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || ''
+                site_date: (card.querySelector('input[type="hidden"][name$="[site_date]"]') || {}).value || '',
+                activities: activities
             });
         });
         try {
