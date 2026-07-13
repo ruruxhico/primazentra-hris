@@ -1247,81 +1247,110 @@ class ResourceRequests extends BaseController
             ];
 
             if ($category === 'manpower') {
-                $mpId   = $unitId ?: $modelId; // manpower doc ID is in source_resource_id
-                $mpData = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
-                $fn     = strtoupper(trim((string)($mpData['first_name']  ?? '')));
-                $mn     = strtoupper(trim((string)($mpData['middle_name'] ?? '')));
-                $ln     = strtoupper(trim((string)($mpData['last_name']   ?? '')));
-                $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
-                       ?: strtoupper(trim((string)($mpData['name'] ?? '')));
-                $empId  = strtolower(trim((string)($mpData['employee_id'] ?? '')));
+                $mpId = $unitId ?: $modelId; // manpower doc ID is in source_resource_id
 
-                // match_tokens: employee_id + full name (lower) + first+last (lower, if differs)
-                $fullLower      = strtolower($mpName);
-                $firstLastLower = strtolower(implode(' ', array_filter([$fn, $ln], fn($p) => $p !== '')));
-                $tokens = array_values(array_unique(array_filter(
-                    [$empId, $fullLower, $firstLastLower !== $fullLower ? $firstLastLower : ''],
-                    fn($t) => $t !== ''
-                )));
-
-                $reservedResources[] = [
-                    'kind'                  => 'manpower',
-                    'resource_id'           => $mpId,
-                    'model_id'              => null,
-                    'equipment_type'        => '',
-                    'source_site_id'        => $srcPid,
-                    'source_site_name'      => $srcName,
-                    'destination_site_id'   => $destPid,
-                    'destination_site_name' => $destName,
-                    'display_name'          => $mpName,
-                    'match_tokens'          => $tokens,
-                    'scanned'               => false,
-                    'scanned_at'            => null,
-                    'scanned_by'            => null,
-                ];
-
-                // Part C: lock manpower doc + move assigned_project_id immediately
-                $db->collection('manpower')->document($mpId)->update(array_merge($lockFields, [
-                    ['path' => 'assigned_project_id', 'value' => $destPid],
-                    ['path' => 'location', 'value' => [
-                        'address' => strtoupper($destName),
-                        'type'    => 'PROJECT SITE',
-                    ]],
-                ]));
-
-                // Part D (manpower): sync project.resources arrays
-                // Remove from source project immediately so it doesn't show in both places
-                if ($srcPid) {
-                    $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
-                    $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
-                    $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
-                        (string)($r['ref_id'] ?? '') !== $mpId
-                    ));
-                    if (count($srcFiltered) !== count($srcCurrent)) {
-                        $db->collection('project')->document($srcPid)->update([
-                            ['path' => 'resources', 'value' => $srcFiltered],
-                        ]);
+                $mpIds = [];
+                if ($mpId !== '') {
+                    // Specific worker (drag-drop, or a resolved model id)
+                    $mpIds[] = $mpId;
+                } else {
+                    // Type-based request (e.g. "Request Manpower" modal) — no specific
+                    // worker was chosen at creation time. Auto-select up to $qty
+                    // AVAILABLE workers whose role/skills match the requested type.
+                    $manpowerType = strtoupper(trim((string)($req['manpower_type'] ?? '')));
+                    if ($manpowerType !== '') {
+                        foreach ($db->collection('manpower')->documents() as $mpDoc) {
+                            if (count($mpIds) >= $qty) break;
+                            if (!$mpDoc->exists()) continue;
+                            $d = $mpDoc->data();
+                            if (strtoupper(trim((string)($d['status'] ?? ''))) !== 'AVAILABLE') continue;
+                            $dRole   = strtoupper(trim((string)($d['role'] ?? '')));
+                            $dSkills = array_map('strtoupper', (array)($d['skills'] ?? []));
+                            $matches = $manpowerType === 'FOREMAN'
+                                ? $dRole === 'FOREMAN'
+                                : in_array($manpowerType, $dSkills, true);
+                            if (!$matches) continue;
+                            $mpIds[] = $mpDoc->id();
+                        }
                     }
                 }
 
-                // Add to destination project with transit flags (mirrors equipment pattern)
-                $destSnap    = $db->collection('project')->document($destPid)->snapshot();
-                $destCurrent = (array)($destSnap->data()['resources'] ?? []);
-                $destCurrent = array_values(array_filter($destCurrent, fn($r) =>
-                    (string)($r['ref_id'] ?? '') !== $mpId && (string)($r['unit_id'] ?? '') !== $mpId
-                ));
-                $destCurrent[] = [
-                    'ref_id'              => $mpId,
-                    'unit_id'             => '',
-                    'name'                => $mpName,
-                    'category'            => 'manpower',
-                    'transit'             => true,
-                    'transit_incoming'    => true,
-                    'transfer_request_id' => $reqId,
-                ];
-                $db->collection('project')->document($destPid)->update([
-                    ['path' => 'resources', 'value' => array_values($destCurrent)],
-                ]);
+                foreach ($mpIds as $mpId) {
+                    $mpData = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
+                    $fn     = strtoupper(trim((string)($mpData['first_name']  ?? '')));
+                    $mn     = strtoupper(trim((string)($mpData['middle_name'] ?? '')));
+                    $ln     = strtoupper(trim((string)($mpData['last_name']   ?? '')));
+                    $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                           ?: strtoupper(trim((string)($mpData['name'] ?? '')));
+                    $empId  = strtolower(trim((string)($mpData['employee_id'] ?? '')));
+
+                    // match_tokens: employee_id + full name (lower) + first+last (lower, if differs)
+                    $fullLower      = strtolower($mpName);
+                    $firstLastLower = strtolower(implode(' ', array_filter([$fn, $ln], fn($p) => $p !== '')));
+                    $tokens = array_values(array_unique(array_filter(
+                        [$empId, $fullLower, $firstLastLower !== $fullLower ? $firstLastLower : ''],
+                        fn($t) => $t !== ''
+                    )));
+
+                    $reservedResources[] = [
+                        'kind'                  => 'manpower',
+                        'resource_id'           => $mpId,
+                        'model_id'              => null,
+                        'equipment_type'        => '',
+                        'source_site_id'        => $srcPid,
+                        'source_site_name'      => $srcName,
+                        'destination_site_id'   => $destPid,
+                        'destination_site_name' => $destName,
+                        'display_name'          => $mpName,
+                        'match_tokens'          => $tokens,
+                        'scanned'               => false,
+                        'scanned_at'            => null,
+                        'scanned_by'            => null,
+                    ];
+
+                    // Part C: lock manpower doc + move assigned_project_id immediately
+                    $db->collection('manpower')->document($mpId)->update(array_merge($lockFields, [
+                        ['path' => 'assigned_project_id', 'value' => $destPid],
+                        ['path' => 'location', 'value' => [
+                            'address' => strtoupper($destName),
+                            'type'    => 'PROJECT SITE',
+                        ]],
+                    ]));
+
+                    // Part D (manpower): sync project.resources arrays
+                    // Remove from source project immediately so it doesn't show in both places
+                    if ($srcPid) {
+                        $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
+                        $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
+                        $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
+                            (string)($r['ref_id'] ?? '') !== $mpId
+                        ));
+                        if (count($srcFiltered) !== count($srcCurrent)) {
+                            $db->collection('project')->document($srcPid)->update([
+                                ['path' => 'resources', 'value' => $srcFiltered],
+                            ]);
+                        }
+                    }
+
+                    // Add to destination project with transit flags (mirrors equipment pattern)
+                    $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                    $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                    $destCurrent = array_values(array_filter($destCurrent, fn($r) =>
+                        (string)($r['ref_id'] ?? '') !== $mpId && (string)($r['unit_id'] ?? '') !== $mpId
+                    ));
+                    $destCurrent[] = [
+                        'ref_id'              => $mpId,
+                        'unit_id'             => '',
+                        'name'                => $mpName,
+                        'category'            => 'manpower',
+                        'transit'             => true,
+                        'transit_incoming'    => true,
+                        'transfer_request_id' => $reqId,
+                    ];
+                    $db->collection('project')->document($destPid)->update([
+                        ['path' => 'resources', 'value' => array_values($destCurrent)],
+                    ]);
+                }
 
             } elseif (in_array($category, ['equipment', 'tools'])) {
                 $resData  = $db->collection('resource')->document($modelId)->snapshot()->data() ?? [];
