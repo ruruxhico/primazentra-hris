@@ -370,11 +370,11 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 <div style="margin-bottom:.85rem;">
                     <div style="font-size:.72rem;font-weight:700;color:#8a6420;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.4rem;">Resource/s Requested</div>
                     <table class="pz-table" style="font-size:.84rem;margin-bottom:0;background:#fff;">
-                        <thead><tr><th>Resource</th><th>Model</th><th>Quantity</th></tr></thead>
+                        <thead><tr><th>Resource</th><th><?= strtolower($category) === 'manpower' ? 'Skill/Type Requested' : 'Model' ?></th><th>Quantity</th></tr></thead>
                         <tbody>
                             <tr>
                                 <td style="font-weight:600;"><?= esc(strtoupper($category)) ?></td>
-                                <td><?= esc($resName ?: '—') ?></td>
+                                <td><?= esc(strtolower($category) === 'manpower' ? (strtoupper((string)($req['manpower_type'] ?? '')) ?: '—') : ($resName ?: '—')) ?></td>
                                 <td><?= esc($qty) ?></td>
                             </tr>
                         </tbody>
@@ -382,8 +382,10 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 </div>
 
                 <?php
-                    // ML filter summary badges
-                    $nExcluded = count($mcdaExcludedSites);
+                    // ML filter summary badges — split by the actual exclusion reason so
+                    // "no stock at that site" is never mislabeled as an ML risk call.
+                    $nExcludedMl    = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'ML predicted delay/blocker'));
+                    $nExcludedUnits = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'No allocatable units'));
                 ?>
 
                 <?php if ($mcdaMlAvailable): ?>
@@ -392,12 +394,19 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                         <span class="material-symbols-outlined" style="font-size:.88rem;">psychology</span>
                         ML Risk Filter Active
                     </span>
-                    <?php if ($nExcluded > 0): ?>
+                    <?php if ($nExcludedMl > 0): ?>
                     <span style="display:inline-flex;align-items:center;gap:.28rem;background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #fde68a;">
                         <span class="material-symbols-outlined" style="font-size:.88rem;">warning</span>
-                        <?= $nExcluded ?> project<?= $nExcluded > 1 ? 's' : '' ?> excluded (predicted delay / blocker)
+                        <?= $nExcludedMl ?> project<?= $nExcludedMl > 1 ? 's' : '' ?> excluded (predicted delay / blocker)
                     </span>
-                    <?php else: ?>
+                    <?php endif; ?>
+                    <?php if ($nExcludedUnits > 0): ?>
+                    <span style="display:inline-flex;align-items:center;gap:.28rem;background:#f3f4f6;color:#4b5563;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #e5e7eb;">
+                        <span class="material-symbols-outlined" style="font-size:.88rem;">inventory_2</span>
+                        <?= $nExcludedUnits ?> site<?= $nExcludedUnits > 1 ? 's' : '' ?> with no stock of this resource
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($nExcludedMl === 0 && $nExcludedUnits === 0): ?>
                     <span style="display:inline-flex;align-items:center;gap:.28rem;background:#dcfce7;color:#166534;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #bbf7d0;">
                         <span class="material-symbols-outlined" style="font-size:.88rem;">check_circle</span>
                         All candidates on track
@@ -471,6 +480,23 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                                 <?php if ($isTop): ?>
                                 <div style="font-size:.68rem;color:#c07000;font-weight:700;margin-top:.15rem;letter-spacing:.04em;">★ BEST MATCH</div>
                                 <?php endif; ?>
+                                <?php
+                                    $siteUnits = array_values(array_filter((array)($site['unit_list'] ?? []), fn($u) => trim((string)($u['serial'] ?? $u['name'] ?? '')) !== ''));
+                                    $unitsShown = array_slice($siteUnits, 0, 8);
+                                    $unitsExtra = count($siteUnits) - count($unitsShown);
+                                ?>
+                                <?php if (!empty($siteUnits)): ?>
+                                <div style="display:flex;flex-wrap:wrap;gap:.22rem;margin-top:.4rem;max-width:230px;">
+                                    <?php foreach ($unitsShown as $u): ?>
+                                    <span style="display:inline-flex;align-items:center;gap:.15rem;background:#eff6ff;color:#1d4ed8;font-size:.62rem;font-weight:600;padding:.08rem .32rem;border-radius:99px;border:1px solid #bfdbfe;">
+                                        <span class="material-symbols-outlined" style="font-size:.68rem;">inventory_2</span><?= esc($u['serial'] ?? $u['name'] ?? '') ?>
+                                    </span>
+                                    <?php endforeach; ?>
+                                    <?php if ($unitsExtra > 0): ?>
+                                    <span style="font-size:.62rem;color:#9ca3af;font-weight:600;padding:.08rem .32rem;">+<?= $unitsExtra ?> more</span>
+                                    <?php endif; ?>
+                                </div>
+                                <?php endif; ?>
                             </td>
                             <td style="padding:8px;text-align:center;color:#374151;font-size:.8rem;"><?= esc($site['distance_km']) ?> km</td>
                             <td style="padding:8px;text-align:center;color:#374151;font-size:.8rem;"><?= esc($site['eta_min'] ?? $site['travel_time_min'] ?? '—') ?> min</td>
@@ -505,19 +531,28 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 <details style="margin-top:.4rem;">
                     <summary style="font-size:.72rem;color:#92400e;font-weight:700;cursor:pointer;padding:.3rem 0;user-select:none;">
                         <span class="material-symbols-outlined" style="font-size:.85rem;vertical-align:middle;">expand_more</span>
-                        <?= count($mcdaExcludedSites) ?> site<?= count($mcdaExcludedSites)>1?'s':'' ?> excluded by ML prediction
+                        <?= count($mcdaExcludedSites) ?> site<?= count($mcdaExcludedSites)>1?'s':'' ?> excluded
                     </summary>
                     <div style="margin-top:.35rem;overflow-x:auto;">
                     <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:.78rem;background:#fffbf0;border-radius:6px;border:1px solid #fde68a;opacity:.8;">
                         <thead><tr style="background:#fef3c7;">
                             <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #fde68a;font-size:.68rem;color:#92400e;">PROJECT SITE</th>
+                            <th style="padding:5px 8px;text-align:center;width:150px;border-bottom:1px solid #fde68a;font-size:.68rem;color:#92400e;">REASON</th>
                             <th style="padding:5px 8px;text-align:center;width:100px;border-bottom:1px solid #fde68a;font-size:.68rem;color:#92400e;">ML DELAY PRED.</th>
                             <th style="padding:5px 8px;text-align:center;width:120px;border-bottom:1px solid #fde68a;font-size:.68rem;color:#92400e;">PREDICTED BLOCKER</th>
                         </tr></thead>
                         <tbody>
                         <?php foreach ($mcdaExcludedSites as $ex): ?>
+                        <?php $exReason = $ex['exclude_reason'] ?? 'ML predicted delay/blocker'; ?>
                         <tr style="border-bottom:1px solid #fef3c7;">
                             <td style="padding:5px 8px;color:#78350f;font-weight:600;"><?= esc($ex['project_name'] ?? $ex['project_id']) ?></td>
+                            <td style="padding:5px 8px;text-align:center;">
+                                <?php if ($exReason === 'No allocatable units'): ?>
+                                <span style="background:#f3f4f6;color:#4b5563;font-size:.68rem;font-weight:600;padding:.12rem .35rem;border-radius:4px;">No stock here</span>
+                                <?php else: ?>
+                                <span style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:600;padding:.12rem .35rem;border-radius:4px;">ML risk</span>
+                                <?php endif; ?>
+                            </td>
                             <td style="padding:5px 8px;text-align:center;">
                                 <?php $exDelay = (int)($ex['ml_delay_days'] ?? 0); ?>
                                 <?php if ($exDelay > 0): ?>
@@ -541,13 +576,19 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 <p style="margin:.5rem 0 0;font-size:.72rem;color:#9a7b3a;">
                     <span class="material-symbols-outlined" style="font-size:.78rem;vertical-align:middle;">touch_app</span>
                     Click a row to select that site as the transfer source. <strong>WSM Score</strong> combines 5 criteria: distance (25%) · ETA (25%) · traffic (15%) · allocatable units (20%) · next availability (15%).
-                    Excluded sites are predicted by ML to have insufficient resource capacity.
+                    Excluded sites either had no stock of this resource, or were flagged by ML as an active-project risk.
                 </p>
 
                 <?php else: ?>
                 <div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.83rem;color:#8a6420;padding:.5rem 0;">
                     <span class="material-symbols-outlined" style="font-size:1rem;flex-shrink:0;margin-top:.05rem;">info</span>
-                    <span>No eligible source sites found. MCDA only considers <strong>On-going</strong> projects with no active emergency and a registered location<?= $mcdaMlAvailable ? ', and passes ML delay/blocker prediction' : '' ?>. Please select a source site manually.</span>
+                    <span>
+                        <?php if ($nExcludedUnits > 0 && $nExcludedMl === 0): ?>
+                        No eligible source sites found — none of the candidate <strong>On-going</strong> project sites currently have stock of this resource. Please select a source site manually.
+                        <?php else: ?>
+                        No eligible source sites found. MCDA only considers <strong>On-going</strong> projects with no active emergency and a registered location<?= $mcdaMlAvailable ? ', and passes ML delay/blocker prediction' : '' ?>. Please select a source site manually.
+                        <?php endif; ?>
+                    </span>
                 </div>
                 <?php endif; ?>
             </div>
@@ -556,6 +597,7 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 <label style="font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5a4020;display:block;margin-bottom:.4rem;">Select Source Site</label>
                 <?php $mcdaBestId = $recommended_best['project_id'] ?? ''; ?>
                 <select name="approved_source_project_id" id="source_site_input" required
+                        onchange="window.pzRenderUnitChecklist(this.value)"
                         style="width:100%;max-width:420px;padding:.52rem .7rem;border:1px solid #d5c68a;border-radius:7px;font-size:.93rem;background:#fdf9f0;color:#2c1a00;appearance:auto;">
                     <option value="">Choose a source site</option>
                     <?php foreach ($projects as $proj): ?>
@@ -565,6 +607,48 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                     <?php endforeach; ?>
                 </select>
             </div>
+
+            <?php
+                // Per-site unit data for the JS checklist below — only sites that appeared
+                // in the MCDA ranking carry known unit-level detail.
+                $mcdaUnitsById = [];
+                foreach ($recommendedSites as $s) {
+                    $mcdaUnitsById[$s['project_id']] = array_values(array_filter(
+                        (array)($s['unit_list'] ?? []),
+                        fn($u) => trim((string)($u['id'] ?? '')) !== ''
+                    ));
+                }
+            ?>
+            <div id="pzAvailableUnitsPanel" style="margin-bottom:.85rem;display:none;padding:.85rem;background:#fdf7e6;border:1px solid #e8d89a;border-radius:10px;">
+                <div style="font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#5a4020;margin-bottom:.3rem;">Available Units</div>
+                <div style="font-size:.78rem;color:#7a6040;margin-bottom:.55rem;">
+                    Select exactly <strong><?= (int)$qty ?></strong> unit<?= (int)$qty > 1 ? 's' : '' ?> to transfer —
+                    <span id="pzUnitSelectedCount">0</span> of <?= (int)$qty ?> selected.
+                </div>
+                <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:.82rem;background:#fff;border-radius:8px;border:1px solid #e8d89a;overflow:hidden;">
+                    <thead>
+                        <tr style="background:#f4ead1;">
+                            <th style="padding:6px 8px;width:32px;border-bottom:2px solid #e8d89a;"></th>
+                            <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #e8d89a;font-size:.7rem;letter-spacing:.05em;color:#5a4020;">NAME</th>
+                            <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #e8d89a;font-size:.7rem;letter-spacing:.05em;color:#5a4020;">SERIAL NO.</th>
+                            <?php if (strtolower($category) === 'manpower'): ?>
+                            <th style="padding:6px 8px;text-align:left;border-bottom:2px solid #e8d89a;font-size:.7rem;letter-spacing:.05em;color:#5a4020;">SKILLS</th>
+                            <?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody id="pzAvailableUnitsBody"></tbody>
+                </table>
+                <div id="pzUnitSelectError" style="display:none;color:#991b1b;font-size:.75rem;font-weight:600;margin-top:.5rem;">
+                    <span class="material-symbols-outlined" style="font-size:.85rem;vertical-align:middle;">error</span>
+                    Please select exactly <?= (int)$qty ?> unit<?= (int)$qty > 1 ? 's' : '' ?> before approving.
+                </div>
+            </div>
+            <script>
+                window.pzMcdaUnits    = <?= json_encode($mcdaUnitsById) ?>;
+                window.pzRequiredQty  = <?= (int)$qty ?>;
+                window.pzShowSkills   = <?= strtolower($category) === 'manpower' ? 'true' : 'false' ?>;
+            </script>
+
             <?php else: ?>
             <input type="hidden" name="approved_source_project_id" value="<?= esc($req['source_project_id']) ?>">
             <div style="margin-bottom:.85rem;">
@@ -678,6 +762,49 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         }
+        window.pzRenderUnitChecklist(projectId);
+    };
+
+    // Available-units checklist — rebuilt whenever the source site changes.
+    // Requires exactly the requested quantity to be checked before Approve submits.
+    window.pzRenderUnitChecklist = function (projectId) {
+        var panel = document.getElementById('pzAvailableUnitsPanel');
+        var body  = document.getElementById('pzAvailableUnitsBody');
+        var count = document.getElementById('pzUnitSelectedCount');
+        var err   = document.getElementById('pzUnitSelectError');
+        if (!panel || !body) return;
+
+        var units = (window.pzMcdaUnits || {})[projectId] || [];
+        body.innerHTML = '';
+        if (err) err.style.display = 'none';
+
+        if (!units.length) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.style.display = '';
+        units.forEach(function (u) {
+            var tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid #f0e6cd';
+            tr.innerHTML =
+                '<td style="padding:6px 8px;text-align:center;"><input type="checkbox" name="selected_unit_ids[]" value="' +
+                String(u.id).replace(/"/g, '&quot;') + '"></td>' +
+                '<td style="padding:6px 8px;color:#1c1a17;">' + (u.name || '') + '</td>' +
+                '<td style="padding:6px 8px;color:#5a4020;">' + (u.serial || '') + '</td>' +
+                (window.pzShowSkills ? '<td style="padding:6px 8px;color:#5a4020;">' + (u.skills || '—') + '</td>' : '');
+            body.appendChild(tr);
+        });
+
+        var updateCount = function () {
+            var checked = body.querySelectorAll('input[type="checkbox"]:checked').length;
+            if (count) count.textContent = String(checked);
+            if (err) err.style.display = 'none';
+        };
+        body.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+            cb.addEventListener('change', updateCount);
+        });
+        updateCount();
     };
 
     // Auto-select the top MCDA row on page load
@@ -686,8 +813,26 @@ document.addEventListener('DOMContentLoaded', function () {
         if (sel && sel.value) {
             var topRow = document.getElementById('mcda-row-' + sel.value);
             if (topRow) topRow.style.outline = '2px solid #c07000';
+            window.pzRenderUnitChecklist(sel.value);
         }
     })();
+
+    // Block submit unless the required quantity is checked (only when unit-level
+    // data is available for the chosen site — plain manual picks fall back server-side).
+    document.querySelectorAll('form[action*="/requests/approve/"]').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            var panel = document.getElementById('pzAvailableUnitsPanel');
+            var err   = document.getElementById('pzUnitSelectError');
+            if (!panel || panel.style.display === 'none') return;
+            var body  = document.getElementById('pzAvailableUnitsBody');
+            var checked = body ? body.querySelectorAll('input[type="checkbox"]:checked').length : 0;
+            if (checked !== window.pzRequiredQty) {
+                e.preventDefault();
+                if (err) err.style.display = '';
+                panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    });
 });
 </script>
 <?php $this->endSection() ?>
