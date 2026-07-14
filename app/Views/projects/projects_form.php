@@ -367,7 +367,6 @@
                                     Activities (<span class="pf-act-count"><?= count($phase['activities'] ?? []) ?></span>)
                                 </button>
                                 <div class="pf-act-body" hidden>
-                                    <?php $onlyAct = count($phase['activities'] ?? []) === 1; ?>
                                     <div class="pf-act-list">
                                         <?php foreach (($phase['activities'] ?? []) as $ai => $a): ?>
                                         <?php
@@ -388,9 +387,8 @@
                                                     <div class="pf-act-weight-group">
                                                         <input type="number" class="pf-act-weight"
                                                                name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][weight]"
-                                                               value="<?= esc($onlyAct ? 100 : ($a['weight_percent'] ?? $a['weight'] ?? 0)) ?>"
-                                                               step="0.1" min="0" max="100" placeholder="0"
-                                                               <?= $onlyAct ? 'readonly title="A single activity always covers 100% of its milestone"' : '' ?>>
+                                                               value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
+                                                               step="0.1" min="0" placeholder="0">
                                                         <span class="pf-act-weight-unit">%</span>
                                                     </div>
                                                 </div>
@@ -426,7 +424,7 @@
                                     </div>
                                     <div class="pf-act-add-row">
                                         <button type="button" class="pf-act-add-btn">+ Add Activity</button>
-                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
+                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                                     </div>
                                 </div>
                             </div>
@@ -973,7 +971,7 @@ if (window.location.hostname === 'localhost') {
                     '</div>' +
                     '<div class="pf-act-add-row">' +
                         '<button type="button" class="pf-act-add-btn">+ Add Activity</button>' +
-                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>' +
+                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>' +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -986,6 +984,9 @@ if (window.location.hostname === 'localhost') {
 
         attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        // The activities target is the milestone's own weight, so it must
+        // refresh when that weight changes too, not just the activities.
+        card.querySelector('.phase-weight-inp').addEventListener('input', function () { recomputePhaseActTotal(card); });
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
@@ -1057,52 +1058,27 @@ if (window.location.hostname === 'localhost') {
         if (countEl) countEl.textContent = card.querySelectorAll('.pf-act-row').length;
     }
 
-    // ── Recompute an activities weight-total indicator ──────────
+    // ── Recompute an activities weight-total indicator. Each milestone's
+    // activity weights must sum to that milestone's own Weight % (not a fixed
+    // 100) — activity weight is on the same scale as milestone weight, just a
+    // sub-allocation of it. ──
     function recomputePhaseActTotal(card) {
         var total = 0;
         card.querySelectorAll('.pf-act-weight').forEach(function (inp) {
             total += parseFloat(inp.value || 0);
         });
         total = Math.round(total * 10) / 10;
-        var totValEl = card.querySelector('.pf-act-total-val');
-        var totEl    = card.querySelector('.pf-act-total');
+        var msWeightInp = card.querySelector('.phase-weight-inp');
+        var target = msWeightInp ? (parseFloat(msWeightInp.value) || 0) : 0;
+        var totValEl    = card.querySelector('.pf-act-total-val');
+        var totTargetEl = card.querySelector('.pf-act-total-target');
+        var totEl       = card.querySelector('.pf-act-total');
         if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totTargetEl) totTargetEl.textContent = target.toFixed(1);
         if (totEl) {
-            totEl.classList.toggle('exact', Math.abs(total - 100) < 0.5);
-            totEl.classList.toggle('over',  total > 100.5);
+            totEl.classList.toggle('exact', Math.abs(total - target) < 0.5);
+            totEl.classList.toggle('over',  total > target + 0.5);
         }
-    }
-
-    // ── A lone activity implicitly covers 100% of its milestone — lock its
-    // weight so it can't be mistakenly set to match the milestone's own
-    // weight instead. Unlocks as soon as a second activity exists. ──
-    function applyPhaseActivityWeightLock(card) {
-        var rows = card.querySelectorAll('.pf-act-row');
-        if (rows.length === 1) {
-            var w = rows[0].querySelector('.pf-act-weight');
-            if (w) { w.value = 100; w.readOnly = true; }
-        } else {
-            rows.forEach(function (r) {
-                var w = r.querySelector('.pf-act-weight');
-                if (w) w.readOnly = false;
-            });
-        }
-    }
-
-    // ── Re-split 100% evenly across an activity list. Only called right after
-    // an add/remove (never on page load) so a saved uneven split — e.g. 70/30
-    // set deliberately on a previous visit — is never silently overwritten. ──
-    function evenSplitPhaseActivityWeights(card) {
-        var rows = card.querySelectorAll('.pf-act-row');
-        var n = rows.length;
-        if (n < 2) return;
-        var base = Math.floor((100 / n) * 10) / 10;
-        var sum  = Math.round(base * n * 10) / 10;
-        var last = Math.round((100 - sum + base) * 10) / 10;
-        rows.forEach(function (r, idx) {
-            var w = r.querySelector('.pf-act-weight');
-            if (w) w.value = (idx === n - 1) ? last : base;
-        });
     }
 
     // ── Wire the Activities sub-panel for a card (new or PHP-rendered) ──
@@ -1123,8 +1099,6 @@ if (window.location.hostname === 'localhost') {
                 var ai   = list.querySelectorAll('.pf-act-row').length;
                 list.insertAdjacentHTML('beforeend', activityRowHtml(card.dataset.pidx, ai, {}));
                 reindexPhaseActivities(card);
-                applyPhaseActivityWeightLock(card);
-                evenSplitPhaseActivityWeights(card);
                 recomputePhaseActTotal(card);
                 applyPhaseMode(card);
                 return;
@@ -1133,8 +1107,6 @@ if (window.location.hostname === 'localhost') {
             if (delBtn) {
                 delBtn.closest('.pf-act-row').remove();
                 reindexPhaseActivities(card);
-                applyPhaseActivityWeightLock(card);
-                evenSplitPhaseActivityWeights(card);
                 recomputePhaseActTotal(card);
                 applyPhaseMode(card);
                 return;
@@ -1151,7 +1123,6 @@ if (window.location.hostname === 'localhost') {
                 recomputePhaseActTotal(card);
             }
         });
-        applyPhaseActivityWeightLock(card);
         recomputePhaseActTotal(card);
     }
 
@@ -1181,6 +1152,9 @@ if (window.location.hostname === 'localhost') {
     function attachExistingCard(card) {
         attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        // The activities target is the milestone's own weight, so it must
+        // refresh when that weight changes too, not just the activities.
+        card.querySelector('.phase-weight-inp').addEventListener('input', function () { recomputePhaseActTotal(card); });
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });

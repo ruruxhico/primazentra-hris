@@ -213,6 +213,23 @@ class Projects extends BaseController
                 return redirect()->back()->withInput()->with('error', 'Project Schedule must have at least one milestone.');
             }
 
+            // Validate the schedule BEFORE writing anything — a project (plus its
+            // audit log entry, notifications, and chat group) must never be created
+            // only to be abandoned here on a schedule error, which used to leave a
+            // permanent orphaned "ghost" project behind on every failed submission.
+            $weightError = $this->validateMilestoneWeights($rawPhasesCheck);
+            if ($weightError) {
+                return redirect()->back()->withInput()->with('error', $weightError);
+            }
+            $activityError = $this->validateActivityWeights($rawPhasesCheck);
+            if ($activityError) {
+                return redirect()->back()->withInput()->with('error', $activityError);
+            }
+            $dateError = $this->validateNewMilestoneTargetDates($rawPhasesCheck);
+            if ($dateError) {
+                return redirect()->back()->withInput()->with('error', $dateError);
+            }
+
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
@@ -258,22 +275,8 @@ class Projects extends BaseController
                     log_message('error', 'Projects::create - verification error: ' . $t->getMessage());
                 }
 
-                if ($this->request->getPost('add_tasks_now')) {
-                    $rawPhases   = $this->request->getPost('phases') ?? [];
-                    $weightError = $this->validateMilestoneWeights($rawPhases);
-                    if ($weightError) {
-                        return redirect()->back()->withInput()->with('error', $weightError);
-                    }
-                    $activityError = $this->validateActivityWeights($rawPhases);
-                    if ($activityError) {
-                        return redirect()->back()->withInput()->with('error', $activityError);
-                    }
-                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases);
-                    if ($dateError) {
-                        return redirect()->back()->withInput()->with('error', $dateError);
-                    }
-                    $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
-                }
+                // Already validated above (before the project was written).
+                $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhasesCheck));
 
                 if ($this->request->getPost('add_resources_now')) {
                     return redirect()->to('projects/' . $projectId . '/resources')
@@ -2308,20 +2311,14 @@ class Projects extends BaseController
             }
             $i++;
         }
-        // A milestone with exactly one activity has that activity implicitly
-        // covering the whole milestone — its weight is always 100%, regardless
-        // of what the (client-locked) field actually submitted.
-        if (count($activities) === 1) {
-            $activities[0]['weight_percent'] = 100.0;
-        }
         return $activities;
     }
 
     /**
-     * Validate that each milestone's activity weights (if any) sum to 100%.
-     * A milestone with exactly one activity is exempt — it implicitly covers
-     * the whole milestone regardless of the (client-locked) weight submitted;
-     * see buildActivities(), which forces it to 100 server-side either way.
+     * Validate that each milestone's activity weights (if any) sum to exactly
+     * that milestone's own weight % — activity weight is on the same scale as
+     * milestone weight (percentage points of the whole project), not a separate
+     * 0–100 sub-scale internal to the milestone.
      */
     private function validateActivityWeights(array $rawPhases): ?string
     {
@@ -2331,21 +2328,20 @@ class Projects extends BaseController
             if ($name === '') continue;
             $hasAny = false;
             $total  = 0.0;
-            $count  = 0;
             foreach ((array)($phase['activities'] ?? []) as $a) {
                 if (trim((string)($a['name'] ?? '')) === '') continue;
                 $hasAny = true;
-                $count++;
                 $total += (float)($a['weight'] ?? 0);
             }
-            if (!$hasAny || $count === 1) continue;
-            $total = round($total, 1);
-            if (abs($total - 100.0) > 0.5) {
-                $bad[] = $name . ' (' . number_format($total, 1) . '%)';
+            if (!$hasAny) continue;
+            $msWeight = round((float)($phase['weight'] ?? 0), 1);
+            $total    = round($total, 1);
+            if (abs($total - $msWeight) > 0.5) {
+                $bad[] = $name . ' (' . number_format($total, 1) . '% vs milestone weight ' . number_format($msWeight, 1) . '%)';
             }
         }
         if (!empty($bad)) {
-            return 'Activity weights must sum to 100% within each milestone: ' . implode('; ', $bad) . '.';
+            return 'Activity weights must sum to their milestone\'s own weight %: ' . implode('; ', $bad) . '.';
         }
         return null;
     }

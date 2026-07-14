@@ -136,7 +136,6 @@
                             Activities (<span class="pf-act-count"><?= count($m['activities'] ?? []) ?></span>)
                         </button>
                         <div class="pf-act-body" hidden>
-                            <?php $onlyAct = count($m['activities'] ?? []) === 1; ?>
                             <div class="pf-act-list">
                                 <?php foreach (($m['activities'] ?? []) as $ai => $a): ?>
                                 <?php
@@ -157,9 +156,8 @@
                                             <div class="pf-act-weight-group">
                                                 <input type="number" class="pf-act-weight"
                                                        name="milestones[<?= $i ?>][activities][<?= $ai ?>][weight]"
-                                                       value="<?= esc($onlyAct ? 100 : ($a['weight_percent'] ?? $a['weight'] ?? 0)) ?>"
-                                                       step="0.1" min="0" max="100" placeholder="0"
-                                                       <?= $onlyAct ? 'readonly title="A single activity always covers 100% of its milestone"' : '' ?>>
+                                                       value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
+                                                       step="0.1" min="0" placeholder="0">
                                                 <span class="pf-act-weight-unit">%</span>
                                             </div>
                                         </div>
@@ -195,7 +193,7 @@
                             </div>
                             <div class="pf-act-add-row">
                                 <button type="button" class="pf-act-add-btn">+ Add Activity</button>
-                                <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
+                                <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                             </div>
                         </div>
                     </div>
@@ -271,7 +269,7 @@
                 <div class="pf-act-list"></div>
                 <div class="pf-act-add-row">
                     <button type="button" class="pf-act-add-btn">+ Add Activity</button>
-                    <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
+                    <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                 </div>
             </div>
         </div>
@@ -340,7 +338,12 @@
     }
 
     list.addEventListener('input', function (e) {
-        if (e.target.classList.contains('weight-input')) recomputeTotal();
+        if (e.target.classList.contains('weight-input')) {
+            recomputeTotal();
+            // The activities target is the milestone's own weight, so it must
+            // refresh when that weight changes too, not just the activities.
+            recomputeActTotal(e.target.closest('.ps-ms-row'));
+        }
     });
 
     /* ── Add / remove rows ── */
@@ -453,51 +456,26 @@
         if (countEl) countEl.textContent = count;
     }
 
+    // Each milestone's activity weights must sum to that milestone's own
+    // Weight % (not a fixed 100) — activity weight is on the same scale as
+    // milestone weight, just a sub-allocation of it.
     function recomputeActTotal(msRow) {
         var total = 0;
         msRow.querySelectorAll('.pf-act-weight').forEach(function (inp) {
             total += parseFloat(inp.value || 0);
         });
         total = Math.round(total * 10) / 10;
-        var totValEl = msRow.querySelector('.pf-act-total-val');
-        var totEl2   = msRow.querySelector('.pf-act-total');
+        var msWeightInp = msRow.querySelector('.weight-input');
+        var target = msWeightInp ? (parseFloat(msWeightInp.value) || 0) : 0;
+        var totValEl    = msRow.querySelector('.pf-act-total-val');
+        var totTargetEl = msRow.querySelector('.pf-act-total-target');
+        var totEl2      = msRow.querySelector('.pf-act-total');
         if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totTargetEl) totTargetEl.textContent = target.toFixed(1);
         if (totEl2) {
-            totEl2.classList.toggle('exact', Math.abs(total - 100) < 0.5);
-            totEl2.classList.toggle('over',  total > 100.5);
+            totEl2.classList.toggle('exact', Math.abs(total - target) < 0.5);
+            totEl2.classList.toggle('over',  total > target + 0.5);
         }
-    }
-
-    // ── A lone activity implicitly covers 100% of its milestone — lock its
-    // weight so it can't be mistakenly set to match the milestone's own
-    // weight instead. Unlocks as soon as a second activity exists. ──
-    function applyActivityWeightLock(msRow) {
-        var rows = msRow.querySelectorAll('.pf-act-row');
-        if (rows.length === 1) {
-            var w = rows[0].querySelector('.pf-act-weight');
-            if (w) { w.value = 100; w.readOnly = true; }
-        } else {
-            rows.forEach(function (r) {
-                var w = r.querySelector('.pf-act-weight');
-                if (w) w.readOnly = false;
-            });
-        }
-    }
-
-    // ── Re-split 100% evenly across an activity list. Only called right after
-    // an add/remove (never on page load) so a saved uneven split — e.g. 70/30
-    // set deliberately on a previous visit — is never silently overwritten. ──
-    function evenSplitActivityWeights(msRow) {
-        var rows = msRow.querySelectorAll('.pf-act-row');
-        var n = rows.length;
-        if (n < 2) return;
-        var base = Math.floor((100 / n) * 10) / 10;
-        var sum  = Math.round(base * n * 10) / 10;
-        var last = Math.round((100 - sum + base) * 10) / 10;
-        rows.forEach(function (r, idx) {
-            var w = r.querySelector('.pf-act-weight');
-            if (w) w.value = (idx === n - 1) ? last : base;
-        });
     }
 
     list.addEventListener('click', function (e) {
@@ -518,8 +496,6 @@
             actList.appendChild(actTpl.content.cloneNode(true));
             var msIndex = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow);
             reindexActivities(msRow, msIndex);
-            applyActivityWeightLock(msRow);
-            evenSplitActivityWeights(msRow);
             recomputeActTotal(msRow);
             applyMode(msRow);
             return;
@@ -531,8 +507,6 @@
             delBtn.closest('.pf-act-row').remove();
             var msIndex2 = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow2);
             reindexActivities(msRow2, msIndex2);
-            applyActivityWeightLock(msRow2);
-            evenSplitActivityWeights(msRow2);
             recomputeActTotal(msRow2);
             applyMode(msRow2);
             return;
@@ -586,7 +560,7 @@
     list.querySelectorAll('.ps-ms-date-picker').forEach(function (dp) {
         if (window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
     });
-    list.querySelectorAll('.ps-ms-row').forEach(function (row) { applyActivityWeightLock(row); recomputeActTotal(row); applyMode(row); });
+    list.querySelectorAll('.ps-ms-row').forEach(function (row) { recomputeActTotal(row); applyMode(row); });
 }());
 </script>
 

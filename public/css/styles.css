@@ -3556,7 +3556,6 @@ td .action-btn { vertical-align: middle; }
 .pf-act-weight-group { display: flex; align-items: stretch; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; height: 31px; box-sizing: border-box; }
 .pf-act-weight { border: none; padding: 0 8px; font-size: 0.86rem; text-align: right; width: 100%; font-family: inherit; }
 .pf-act-weight:focus { outline: none; }
-.pf-act-weight[readonly] { background: #f5f3ee; color: #8a7a55; cursor: not-allowed; }
 .pf-act-weight-unit { padding: 0 8px; display: flex; align-items: center; background: #f7f3e8; color: #8C701C; font-size: 0.82rem; font-weight: 700; }
 .pf-act-mode, .pf-act-qty, .pf-act-unit { border: 1px solid #ddd; border-radius: 6px; padding: 0 6px; font-size: 0.86rem; width: 100%; height: 31px; box-sizing: border-box; background: #fff; font-family: inherit; }
 .pf-act-qty { text-align: right; }
