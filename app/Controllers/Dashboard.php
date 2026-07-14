@@ -342,16 +342,15 @@ class Dashboard extends BaseController
                         // rule_days*2 ceiling). With a genuine active blocker (injury, accident,
                         // shortage, weather), trust the model's severity far more loosely — a
                         // real incident shouldn't be flattened just because the project is short.
-                        // With no blocker signal, scale the cap by how far behind schedule the
-                        // project actually is (same "behind%" shown in the reason text) rather
-                        // than a flat runway/duration multiple — so an on-track project caps near
-                        // zero, a 10%-behind project caps near its accumulated slip × a margin,
-                        // and the number stays explainable next to the "X% Behind" reason.
+                        // With no blocker signal, cap relative to how far behind schedule the
+                        // project actually is (same "behind%" shown in the reason text) —
+                        // totalDuration * behindRatio is the accumulated schedule slip in days;
+                        // 0.7 intentionally displays below that accrued slip (accepted tradeoff).
                         $hasActiveBlockerSignal = $emergFlags['active_count'] > 0;
                         $behindRatio = max(0.0, ($plannedPct - $progress) / 100);
                         $maxDelay = $hasActiveBlockerSignal
                             ? max(180, ($totalDuration > 0 ? $totalDuration : 365) * 10)
-                            : ($totalDuration > 0 ? max(1, (int) round($totalDuration * $behindRatio * 3)) : 365);
+                            : ($totalDuration > 0 ? max(1, (int) round($totalDuration * $behindRatio * 0.7)) : 365);
                         $estimatedDelay = min((float)$estimatedDelay, (float)$maxDelay);
 
                         $seReason = $this->_fetchBlockerReason((string)($p['id'] ?? ''), $predictedBlocker, $features);

@@ -388,7 +388,7 @@
                                                         <input type="number" class="pf-act-weight"
                                                                name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][weight]"
                                                                value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
-                                                               step="0.1" min="0" max="100" placeholder="0">
+                                                               step="0.1" min="0" placeholder="0">
                                                         <span class="pf-act-weight-unit">%</span>
                                                     </div>
                                                 </div>
@@ -401,15 +401,19 @@
                                                 </div>
                                                 <div class="phase-field">
                                                     <span class="phase-field-lbl pf-act-value-lbl"><?= $aIsQty ? 'Qty' : 'Status' ?></span>
-                                                    <select class="pf-act-status" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][status]" <?= $aIsQty ? 'hidden disabled' : '' ?>>
-                                                        <?php foreach (['Not Started', 'In Progress', 'Completed'] as $st): ?>
-                                                        <option value="<?= esc($st) ?>" <?= ($a['status'] ?? 'Not Started') === $st ? 'selected' : '' ?>><?= esc($st) ?></option>
-                                                        <?php endforeach; ?>
-                                                    </select>
+                                                    <span class="pf-act-status-badge" <?= $aIsQty ? 'hidden' : '' ?>><?= esc($a['status'] ?? 'Not Started') ?></span>
                                                     <input type="number" class="pf-act-qty"
                                                            name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][qty]"
                                                            value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
                                                            <?= !$aIsQty ? 'hidden disabled' : '' ?>>
+                                                </div>
+                                                <div class="phase-field pf-act-unit-field" <?= !$aIsQty ? 'hidden' : '' ?>>
+                                                    <span class="phase-field-lbl">Unit</span>
+                                                    <select class="pf-act-unit" name="phases[<?= $pIdx ?>][activities][<?= $ai ?>][unit]" <?= !$aIsQty ? 'disabled' : '' ?>>
+                                                        <?php foreach ($units as $u): ?>
+                                                        <option value="<?= esc($u) ?>" <?= ($a['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= esc($u) ?></option>
+                                                        <?php endforeach; ?>
+                                                    </select>
                                                 </div>
                                                 <button type="button" class="pf-act-del-btn" title="Remove activity">
                                                     <span class="material-symbols-outlined">close</span>
@@ -420,7 +424,7 @@
                                     </div>
                                     <div class="pf-act-add-row">
                                         <button type="button" class="pf-act-add-btn">+ Add Activity</button>
-                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>
+                                        <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                                     </div>
                                 </div>
                             </div>
@@ -862,8 +866,8 @@ if (window.location.hostname === 'localhost') {
         a = a || {};
         var isQty = a.tracking_mode === 'quantity';
         var statusVal = a.status || 'Not Started';
-        var statusOpts = ['Not Started', 'In Progress', 'Completed'].map(function (st) {
-            return '<option value="' + st + '"' + (statusVal === st ? ' selected' : '') + '>' + st + '</option>';
+        var actUnitOpts = UNITS.map(function (u) {
+            return '<option value="' + u + '"' + ((a.unit || 'pcs') === u ? ' selected' : '') + '>' + u + '</option>';
         }).join('');
         return '<div class="pf-act-row">' +
             '<div class="phase-field">' +
@@ -887,8 +891,12 @@ if (window.location.hostname === 'localhost') {
                 '</div>' +
                 '<div class="phase-field">' +
                     '<span class="phase-field-lbl pf-act-value-lbl">' + (isQty ? 'Qty' : 'Status') + '</span>' +
-                    '<select class="pf-act-status" name="phases[' + pi + '][activities][' + ai + '][status]"' + (isQty ? ' hidden disabled' : '') + '>' + statusOpts + '</select>' +
+                    '<span class="pf-act-status-badge"' + (isQty ? ' hidden' : '') + '>' + escHtml(statusVal) + '</span>' +
                     '<input type="number" class="pf-act-qty" name="phases[' + pi + '][activities][' + ai + '][qty]" min="1" step="1" placeholder="Qty" value="' + (a.qty != null ? a.qty : 1) + '"' + (!isQty ? ' hidden disabled' : '') + '>' +
+                '</div>' +
+                '<div class="phase-field pf-act-unit-field"' + (!isQty ? ' hidden' : '') + '>' +
+                    '<span class="phase-field-lbl">Unit</span>' +
+                    '<select class="pf-act-unit" name="phases[' + pi + '][activities][' + ai + '][unit]"' + (!isQty ? ' disabled' : '') + '>' + actUnitOpts + '</select>' +
                 '</div>' +
                 '<button type="button" class="pf-act-del-btn" title="Remove activity"><span class="material-symbols-outlined">close</span></button>' +
             '</div>' +
@@ -963,7 +971,7 @@ if (window.location.hostname === 'localhost') {
                     '</div>' +
                     '<div class="pf-act-add-row">' +
                         '<button type="button" class="pf-act-add-btn">+ Add Activity</button>' +
-                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>%</span>' +
+                        '<span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>' +
                     '</div>' +
                 '</div>' +
             '</div>';
@@ -976,6 +984,9 @@ if (window.location.hostname === 'localhost') {
 
         attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        // The activities target is the milestone's own weight, so it must
+        // refresh when that weight changes too, not just the activities.
+        card.querySelector('.phase-weight-inp').addEventListener('input', function () { recomputePhaseActTotal(card); });
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });
@@ -995,14 +1006,15 @@ if (window.location.hostname === 'localhost') {
         var unitField = card.querySelector('.phase-field.f-unit');
         if (!modeSel) return;
         var statusOnly = modeSel.value === 'status_only';
-        var hasQtyActivity = Array.prototype.some.call(card.querySelectorAll('.pf-act-mode'), function (sel) {
-            return sel.value === 'quantity';
-        });
-        var hideQty = statusOnly || hasQtyActivity;
+        // Any activity on the milestone — status-based or quantity-based — means
+        // progress is now driven by the activities, so the milestone-level qty/unit
+        // no longer apply, regardless of the milestone's own tracking mode.
+        var hasActivity = card.querySelectorAll('.pf-act-row').length > 0;
+        var hideQty = statusOnly || hasActivity;
         if (qtyInp) {
             qtyInp.disabled = hideQty;
-            if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
-            qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
+            if (hideQty) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
+            qtyInp.value = hideQty ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
         }
         // Fully remove the Qty (and paired Unit) field — not just disable it — so
         // there's no dangling "Qty" label with nothing under it once it no longer applies.
@@ -1016,42 +1028,56 @@ if (window.location.hostname === 'localhost') {
 
     // ── Activity-level status-only / quantity mode ──
     function applyPhaseActivityMode(actRow) {
-        var modeSel   = actRow.querySelector('.pf-act-mode');
-        var statusSel = actRow.querySelector('.pf-act-status');
-        var qtyInp    = actRow.querySelector('.pf-act-qty');
-        var valueLbl  = actRow.querySelector('.pf-act-value-lbl');
+        var modeSel     = actRow.querySelector('.pf-act-mode');
+        var statusBadge = actRow.querySelector('.pf-act-status-badge');
+        var qtyInp      = actRow.querySelector('.pf-act-qty');
+        var unitField   = actRow.querySelector('.pf-act-unit-field');
+        var valueLbl    = actRow.querySelector('.pf-act-value-lbl');
         if (!modeSel) return;
         var isQty = modeSel.value === 'quantity';
-        if (statusSel) { statusSel.hidden = isQty;  statusSel.disabled = isQty; }
-        if (qtyInp)    { qtyInp.hidden    = !isQty; qtyInp.disabled    = !isQty; }
+        if (statusBadge) statusBadge.hidden = isQty;
+        if (qtyInp)  { qtyInp.hidden  = !isQty; qtyInp.disabled  = !isQty; }
+        if (unitField) {
+            unitField.hidden = !isQty;
+            var unitSel = unitField.querySelector('.pf-act-unit');
+            if (unitSel) unitSel.disabled = !isQty;
+        }
         if (valueLbl)  valueLbl.textContent = isQty ? 'Qty' : 'Status';
     }
 
     // ── Re-index a card's activity rows after add/remove ────────
     function reindexPhaseActivities(card) {
         var pi = card.dataset.pidx;
-        var actKeys = ['name', 'weight', 'tracking_mode', 'status', 'qty'];
+        // Status is not a form field (server derives/preserves it) — not reindexed here.
+        var actKeys = ['name', 'weight', 'tracking_mode', 'qty', 'unit'];
         card.querySelectorAll('.pf-act-row').forEach(function (row, ai) {
-            row.querySelectorAll('.pf-act-name, .pf-act-weight, .pf-act-mode, .pf-act-status, .pf-act-qty')
+            row.querySelectorAll('.pf-act-name, .pf-act-weight, .pf-act-mode, .pf-act-qty, .pf-act-unit')
                .forEach(function (el, k) { el.name = 'phases[' + pi + '][activities][' + ai + '][' + actKeys[k] + ']'; });
         });
         var countEl = card.querySelector('.pf-act-count');
         if (countEl) countEl.textContent = card.querySelectorAll('.pf-act-row').length;
     }
 
-    // ── Recompute an activities weight-total indicator ──────────
+    // ── Recompute an activities weight-total indicator. Each milestone's
+    // activity weights must sum to that milestone's own Weight % (not a fixed
+    // 100) — activity weight is on the same scale as milestone weight, just a
+    // sub-allocation of it. ──
     function recomputePhaseActTotal(card) {
         var total = 0;
         card.querySelectorAll('.pf-act-weight').forEach(function (inp) {
             total += parseFloat(inp.value || 0);
         });
         total = Math.round(total * 10) / 10;
-        var totValEl = card.querySelector('.pf-act-total-val');
-        var totEl    = card.querySelector('.pf-act-total');
+        var msWeightInp = card.querySelector('.phase-weight-inp');
+        var target = msWeightInp ? (parseFloat(msWeightInp.value) || 0) : 0;
+        var totValEl    = card.querySelector('.pf-act-total-val');
+        var totTargetEl = card.querySelector('.pf-act-total-target');
+        var totEl       = card.querySelector('.pf-act-total');
         if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totTargetEl) totTargetEl.textContent = target.toFixed(1);
         if (totEl) {
-            totEl.classList.toggle('exact', Math.abs(total - 100) < 0.5);
-            totEl.classList.toggle('over',  total > 100.5);
+            totEl.classList.toggle('exact', Math.abs(total - target) < 0.5);
+            totEl.classList.toggle('over',  total > target + 0.5);
         }
     }
 
@@ -1126,6 +1152,9 @@ if (window.location.hostname === 'localhost') {
     function attachExistingCard(card) {
         attachFieldErrorClearing(card);
         card.querySelector('.phase-weight-inp').addEventListener('input', updateTotal);
+        // The activities target is the milestone's own weight, so it must
+        // refresh when that weight changes too, not just the activities.
+        card.querySelector('.phase-weight-inp').addEventListener('input', function () { recomputePhaseActTotal(card); });
         card.querySelector('.phase-del-btn').addEventListener('click', function () {
             card.remove(); reindex(); updateTotal();
         });

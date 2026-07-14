@@ -205,20 +205,30 @@ class ResourceRequests extends BaseController
         $releasedUnitsByProject  = [];
         // Allocatable units per project (not transfer-locked / not pending transfer)
         $availableUnitsByProject = [];
+        // Specific pullable units per project — serial number / worker name, so the
+        // approver can see exactly what would be transferred, not just a count.
+        $unitListByProject = [];
 
         if ($requestedModelId && in_array($reqCategory, ['equipment', 'tools'])) {
             try {
+                $modelDoc  = $this->firestore->getDb()->collection('resource')->document($requestedModelId)->snapshot();
+                $modelName = strtoupper(trim((string)(
+                    $modelDoc->data()['name'] ?? $req['requested_model_name'] ?? $req['resource_name'] ?? ''
+                )));
+
                 $allItems = $this->firestore->getDb()
                     ->collection('resource')->document($requestedModelId)
                     ->collection('items')->documents();
                 foreach ($allItems as $item) {
                     if (!$item->exists()) continue;
-                    $d    = $item->data();
-                    $asgn = $d['assigned_project_id'] ?? null;
-                    $pid  = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
+                    $d      = $item->data();
+                    $asgn   = $d['assigned_project_id'] ?? null;
+                    $pid    = $asgn instanceof \Google\Cloud\Firestore\DocumentReference
                         ? $asgn->id()
                         : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
                     if (!$pid) continue;
+                    $serial = trim((string)($d['serial_number'] ?? ''));
+                    $unit   = ['id' => $item->id(), 'name' => $modelName, 'serial' => $serial ?: $item->id()];
                     // SE-released count (for display)
                     if (($d['status'] ?? '') === 'Released') {
                         $releasedUnitsByProject[$pid] = ($releasedUnitsByProject[$pid] ?? 0) + 1;
@@ -226,6 +236,7 @@ class ResourceRequests extends BaseController
                     // Allocatable: not locked in an active transfer
                     if (!($d['transfer_locked'] ?? false)) {
                         $availableUnitsByProject[$pid] = ($availableUnitsByProject[$pid] ?? 0) + 1;
+                        $unitListByProject[$pid][]     = $unit;
                     }
                 }
             } catch (\Throwable $e) {
@@ -233,6 +244,11 @@ class ResourceRequests extends BaseController
             }
         } elseif ($reqCategory === 'manpower') {
             try {
+                // Requested skill/role (e.g. "MASON", "FOREMAN") — when set, only workers
+                // who actually match are counted as allocatable at a site, mirroring the
+                // same match rule _finalizeTransfer() uses to auto-select workers.
+                $manpowerType = strtoupper(trim((string)($req['manpower_type'] ?? '')));
+
                 $allMp = $this->firestore->getDb()->collection('manpower')->documents();
                 foreach ($allMp as $item) {
                     if (!$item->exists()) continue;
@@ -242,14 +258,33 @@ class ResourceRequests extends BaseController
                         ? $asgn->id()
                         : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
                     if (!$pid) continue;
-                    $st = strtolower($d['status'] ?? '');
+
+                    $dRole   = strtoupper(trim((string)($d['role'] ?? '')));
+                    $dSkills = array_map('strtoupper', array_filter((array)($d['skills'] ?? [])));
+                    $matchesType = $manpowerType === ''
+                        ? true
+                        : ($manpowerType === 'FOREMAN' ? $dRole === 'FOREMAN' : in_array($manpowerType, $dSkills, true));
+
+                    $st     = strtolower($d['status'] ?? '');
+                    $fn     = trim((string)($d['first_name'] ?? ''));
+                    $ln     = trim((string)($d['last_name']  ?? ''));
+                    $name   = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper((string)($d['name'] ?? $item->id()));
+                    $empId  = trim((string)($d['employee_id'] ?? ''));
+                    $unit   = [
+                        'id'     => $item->id(),
+                        'name'   => $name,
+                        'serial' => $empId ?: $item->id(),
+                        'skills' => implode(', ', $dSkills) ?: $dRole,
+                    ];
                     // SE-released (manpower uses Transfer Pending as the lock signal)
-                    if ($st === 'released') {
+                    if ($st === 'released' && $matchesType) {
                         $releasedUnitsByProject[$pid] = ($releasedUnitsByProject[$pid] ?? 0) + 1;
                     }
-                    // Allocatable: deployed or available (not pending transfer, not on-leave, not archived)
-                    if (in_array($st, ['available', 'deployed'])) {
+                    // Allocatable: deployed or available (not pending transfer, not on-leave,
+                    // not archived) AND matching the requested skill/role, if one was specified.
+                    if (in_array($st, ['available', 'deployed']) && $matchesType) {
                         $availableUnitsByProject[$pid] = ($availableUnitsByProject[$pid] ?? 0) + 1;
+                        $unitListByProject[$pid][]     = $unit;
                     }
                 }
             } catch (\Throwable $e) {
@@ -277,6 +312,7 @@ class ResourceRequests extends BaseController
                             'lng'             => (float)$proj['lng'],
                             'units_released'  => $releasedUnitsByProject[$proj['id']]  ?? 0,
                             'units_available' => $availableUnitsByProject[$proj['id']] ?? 0,
+                            'unit_list'       => $unitListByProject[$proj['id']]       ?? [],
                             'progress'        => $proj['progress']   ?? 0.0,
                             'start_date'      => $proj['start_date'] ?? null,
                             'end_date'        => $proj['end_date']   ?? null,
@@ -297,17 +333,18 @@ class ResourceRequests extends BaseController
                             'traffic_score'      => $s['traffic_score'],
                             'units_available'    => $s['units_available'],
                             'units_released'     => $s['units_released'],
+                            'unit_list'          => $s['unit_list'] ?? [],
                             'next_available_min' => $s['next_available_min'],
                             'ml_delay_days'      => $s['ml_delay_days'],
                             'ml_blocker'         => $s['ml_blocker'],
                             'wsm_score'          => $s['wsm_score'],
                         ];
                     }
-                    $recommendedBest        = $recommendedSites[0] ?? null;
-                    $recommendedNearest     = $recommendedBest;
                     $mcdaExcludedSites      = $mcdaResult['excluded']      ?? [];
                     $mcdaMlAvailable        = $mcdaResult['ml_available']  ?? false;
                 }
+                $recommendedBest    = $recommendedSites[0] ?? null;
+                $recommendedNearest = $recommendedBest;
             } catch (\Throwable $e) {
                 log_message('warning', 'ResourceRequests::show MCDA - ' . $e->getMessage());
             }
@@ -372,7 +409,7 @@ class ResourceRequests extends BaseController
             $catLower          = strtolower($category);
             $releasedByProject  = [];   // SE-released (display)
             $availableByProject = [];   // not transfer-locked (MCDA criterion)
-
+            $unitListByProject  = [];   // specific serial numbers / worker names, per project
             if ($modelId !== '' && in_array($catLower, ['equipment', 'tools'])) {
                 try {
                     $allItems = $this->firestore->getDb()
@@ -386,11 +423,13 @@ class ResourceRequests extends BaseController
                             ? $asgn->id()
                             : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
                         if (!$pid) continue;
+                        $label = trim((string)($d['serial_number'] ?? '')) ?: $item->id();
                         if (($d['status'] ?? '') === 'Released') {
                             $releasedByProject[$pid] = ($releasedByProject[$pid] ?? 0) + 1;
                         }
                         if (!($d['transfer_locked'] ?? false)) {
                             $availableByProject[$pid] = ($availableByProject[$pid] ?? 0) + 1;
+                            $unitListByProject[$pid][] = $label;
                         }
                     }
                 } catch (\Throwable $e) {
@@ -408,11 +447,15 @@ class ResourceRequests extends BaseController
                             : (is_string($asgn) ? (ltrim(strrchr($asgn, '/'), '/') ?: $asgn) : null);
                         if (!$pid) continue;
                         $st = strtolower($d['status'] ?? '');
+                        $fn = trim((string)($d['first_name'] ?? ''));
+                        $ln = trim((string)($d['last_name']  ?? ''));
+                        $label = strtoupper($fn . ($fn && $ln ? ' ' : '') . $ln) ?: strtoupper((string)($d['name'] ?? $item->id()));
                         if ($st === 'released') {
                             $releasedByProject[$pid] = ($releasedByProject[$pid] ?? 0) + 1;
                         }
                         if (in_array($st, ['available', 'deployed'])) {
                             $availableByProject[$pid] = ($availableByProject[$pid] ?? 0) + 1;
+                            $unitListByProject[$pid][] = $label;
                         }
                     }
                 } catch (\Throwable $e) {
@@ -443,6 +486,7 @@ class ResourceRequests extends BaseController
                         'lng'             => $lng,
                         'units_released'  => $releasedByProject[$p['id']]  ?? 0,
                         'units_available' => $availableByProject[$p['id']] ?? 0,
+                        'unit_list'       => $unitListByProject[$p['id']]  ?? [],
                         'progress'        => (float)($p['overall_progress'] ?? 0),
                         'start_date'      => $p['start_date'] ?? null,
                         'end_date'        => $p['end_date']   ?? null,
@@ -466,6 +510,7 @@ class ResourceRequests extends BaseController
                 'traffic_score'      => $s['traffic_score'],
                 'units_available'    => $s['units_available'],
                 'units_released'     => $s['units_released'],
+                'unit_list'          => $s['unit_list'] ?? [],
                 'next_available_min' => $s['next_available_min'],
                 'ml_delay_days'      => $s['ml_delay_days'],
                 'ml_blocker'         => $s['ml_blocker'],
@@ -584,13 +629,15 @@ class ResourceRequests extends BaseController
                 : ((float)($c['progress'] ?? 0) < 30.0 && $daysRemaining < 30);
 
             if ($isAtRisk) {
-                $excluded[] = $c;
+                $excluded[] = array_merge($c, ['exclude_reason' => 'ML predicted delay/blocker']);
             } else {
                 $passed[] = $c;
             }
         }
 
-        // If ML filter removes everything, fall back to using all candidates
+        // If ML filter removes everything, fall back to using all candidates —
+        // an all-or-nothing ML call is more likely a bad signal than every single
+        // site genuinely being at risk.
         if (empty($passed) && !empty($excluded)) {
             $passed   = $excluded;
             $excluded = [];
@@ -902,11 +949,25 @@ class ResourceRequests extends BaseController
         $sourceName   = trim($this->request->getPost('approved_source_project_name') ?? '');
         $bypassSecond = (bool)$this->request->getPost('bypass_secondary');
 
+        // Specific units hand-picked from the "Available Units" checklist. When present,
+        // _finalizeTransfer() pulls exactly these instead of auto-selecting by status scan.
+        $selectedUnitIds = array_values(array_unique(array_filter(
+            array_map('trim', (array)$this->request->getPost('selected_unit_ids')),
+            fn($v) => $v !== ''
+        )));
+
         $req = $this->requestModel->getById($id);
         if (!$req) return redirect()->to('requests')->with('error', 'Request not found.');
 
         if ($req['status'] !== 'Pending') {
             return redirect()->to('requests/' . $id)->with('error', 'Request is no longer pending.');
+        }
+
+        // Defense-in-depth: the checklist's own JS blocks submitting a partial selection,
+        // but if a hand-picked list did make it through, it must exactly match quantity.
+        $reqQty = max(1, (int)($req['requested_quantity'] ?? $req['quantity'] ?? 1));
+        if (!empty($selectedUnitIds) && count($selectedUnitIds) !== $reqQty) {
+            return redirect()->to('requests/' . $id)->with('error', "Please select exactly {$reqQty} unit(s) to approve.");
         }
 
         // Self-approval block: requester cannot approve their own request (Admin exempt)
@@ -943,9 +1004,10 @@ class ResourceRequests extends BaseController
             if ($bypassSecond) {
                 // Admin bypass: write source then finalize directly to In-Transit
                 $this->requestModel->update($id, [
-                    'source_project_id' => $finalSrcPid,
-                    'source_site_id'    => $finalSrcPid,
-                    'source_site_name'  => $finalSrcName,
+                    'source_project_id'  => $finalSrcPid,
+                    'source_site_id'     => $finalSrcPid,
+                    'source_site_name'   => $finalSrcName,
+                    'selected_unit_ids'  => $selectedUnitIds,
                 ]);
 
                 $this->_finalizeTransfer(
@@ -953,6 +1015,7 @@ class ResourceRequests extends BaseController
                         'source_project_id' => $finalSrcPid,
                         'source_site_id'    => $finalSrcPid,
                         'source_site_name'  => $finalSrcName,
+                        'selected_unit_ids' => $selectedUnitIds,
                     ]),
                     $uid, $user, $role, true
                 );
@@ -975,6 +1038,7 @@ class ResourceRequests extends BaseController
                     'source_project_id' => $finalSrcPid,
                     'source_site_id'    => $finalSrcPid,
                     'source_site_name'  => $finalSrcName,
+                    'selected_unit_ids' => $selectedUnitIds,
                 ]);
 
                 if ($requesterUid) {
@@ -1223,6 +1287,9 @@ class ResourceRequests extends BaseController
         $modelName = trim($req['requested_model_name'] ?? $req['resource_name'] ?? '');
         $qty       = max(1, (int)($req['requested_quantity'] ?? 1));
         $nowIso    = (new \DateTime())->format('c');
+        // Specific units hand-picked from the approval-time "Available Units" checklist —
+        // when present, bulk selection below pulls exactly these instead of auto-scanning.
+        $selectedUnitIds = array_values(array_filter((array)($req['selected_unit_ids'] ?? [])));
 
         if (!$destPid) return;
 
@@ -1247,81 +1314,113 @@ class ResourceRequests extends BaseController
             ];
 
             if ($category === 'manpower') {
-                $mpId   = $unitId ?: $modelId; // manpower doc ID is in source_resource_id
-                $mpData = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
-                $fn     = strtoupper(trim((string)($mpData['first_name']  ?? '')));
-                $mn     = strtoupper(trim((string)($mpData['middle_name'] ?? '')));
-                $ln     = strtoupper(trim((string)($mpData['last_name']   ?? '')));
-                $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
-                       ?: strtoupper(trim((string)($mpData['name'] ?? '')));
-                $empId  = strtolower(trim((string)($mpData['employee_id'] ?? '')));
+                $mpId = $unitId ?: $modelId; // manpower doc ID is in source_resource_id
 
-                // match_tokens: employee_id + full name (lower) + first+last (lower, if differs)
-                $fullLower      = strtolower($mpName);
-                $firstLastLower = strtolower(implode(' ', array_filter([$fn, $ln], fn($p) => $p !== '')));
-                $tokens = array_values(array_unique(array_filter(
-                    [$empId, $fullLower, $firstLastLower !== $fullLower ? $firstLastLower : ''],
-                    fn($t) => $t !== ''
-                )));
-
-                $reservedResources[] = [
-                    'kind'                  => 'manpower',
-                    'resource_id'           => $mpId,
-                    'model_id'              => null,
-                    'equipment_type'        => '',
-                    'source_site_id'        => $srcPid,
-                    'source_site_name'      => $srcName,
-                    'destination_site_id'   => $destPid,
-                    'destination_site_name' => $destName,
-                    'display_name'          => $mpName,
-                    'match_tokens'          => $tokens,
-                    'scanned'               => false,
-                    'scanned_at'            => null,
-                    'scanned_by'            => null,
-                ];
-
-                // Part C: lock manpower doc + move assigned_project_id immediately
-                $db->collection('manpower')->document($mpId)->update(array_merge($lockFields, [
-                    ['path' => 'assigned_project_id', 'value' => $destPid],
-                    ['path' => 'location', 'value' => [
-                        'address' => strtoupper($destName),
-                        'type'    => 'PROJECT SITE',
-                    ]],
-                ]));
-
-                // Part D (manpower): sync project.resources arrays
-                // Remove from source project immediately so it doesn't show in both places
-                if ($srcPid) {
-                    $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
-                    $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
-                    $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
-                        (string)($r['ref_id'] ?? '') !== $mpId
-                    ));
-                    if (count($srcFiltered) !== count($srcCurrent)) {
-                        $db->collection('project')->document($srcPid)->update([
-                            ['path' => 'resources', 'value' => $srcFiltered],
-                        ]);
+                $mpIds = [];
+                if ($mpId !== '') {
+                    // Specific worker (drag-drop, or a resolved model id)
+                    $mpIds[] = $mpId;
+                } elseif (!empty($selectedUnitIds)) {
+                    // Admin hand-picked exact workers from the "Available Units" checklist.
+                    $mpIds = $selectedUnitIds;
+                } else {
+                    // Type-based request (e.g. "Request Manpower" modal) — no specific
+                    // worker was chosen at creation time. Auto-select up to $qty
+                    // AVAILABLE workers whose role/skills match the requested type.
+                    $manpowerType = strtoupper(trim((string)($req['manpower_type'] ?? '')));
+                    if ($manpowerType !== '') {
+                        foreach ($db->collection('manpower')->documents() as $mpDoc) {
+                            if (count($mpIds) >= $qty) break;
+                            if (!$mpDoc->exists()) continue;
+                            $d = $mpDoc->data();
+                            if (strtoupper(trim((string)($d['status'] ?? ''))) !== 'AVAILABLE') continue;
+                            $dRole   = strtoupper(trim((string)($d['role'] ?? '')));
+                            $dSkills = array_map('strtoupper', (array)($d['skills'] ?? []));
+                            $matches = $manpowerType === 'FOREMAN'
+                                ? $dRole === 'FOREMAN'
+                                : in_array($manpowerType, $dSkills, true);
+                            if (!$matches) continue;
+                            $mpIds[] = $mpDoc->id();
+                        }
                     }
                 }
 
-                // Add to destination project with transit flags (mirrors equipment pattern)
-                $destSnap    = $db->collection('project')->document($destPid)->snapshot();
-                $destCurrent = (array)($destSnap->data()['resources'] ?? []);
-                $destCurrent = array_values(array_filter($destCurrent, fn($r) =>
-                    (string)($r['ref_id'] ?? '') !== $mpId && (string)($r['unit_id'] ?? '') !== $mpId
-                ));
-                $destCurrent[] = [
-                    'ref_id'              => $mpId,
-                    'unit_id'             => '',
-                    'name'                => $mpName,
-                    'category'            => 'manpower',
-                    'transit'             => true,
-                    'transit_incoming'    => true,
-                    'transfer_request_id' => $reqId,
-                ];
-                $db->collection('project')->document($destPid)->update([
-                    ['path' => 'resources', 'value' => array_values($destCurrent)],
-                ]);
+                foreach ($mpIds as $mpId) {
+                    $mpData = $db->collection('manpower')->document($mpId)->snapshot()->data() ?? [];
+                    $fn     = strtoupper(trim((string)($mpData['first_name']  ?? '')));
+                    $mn     = strtoupper(trim((string)($mpData['middle_name'] ?? '')));
+                    $ln     = strtoupper(trim((string)($mpData['last_name']   ?? '')));
+                    $mpName = implode(' ', array_filter([$fn, $mn, $ln], fn($p) => $p !== ''))
+                           ?: strtoupper(trim((string)($mpData['name'] ?? '')));
+                    $empId  = strtolower(trim((string)($mpData['employee_id'] ?? '')));
+
+                    // match_tokens: employee_id + full name (lower) + first+last (lower, if differs)
+                    $fullLower      = strtolower($mpName);
+                    $firstLastLower = strtolower(implode(' ', array_filter([$fn, $ln], fn($p) => $p !== '')));
+                    $tokens = array_values(array_unique(array_filter(
+                        [$empId, $fullLower, $firstLastLower !== $fullLower ? $firstLastLower : ''],
+                        fn($t) => $t !== ''
+                    )));
+
+                    $reservedResources[] = [
+                        'kind'                  => 'manpower',
+                        'resource_id'           => $mpId,
+                        'model_id'              => null,
+                        'equipment_type'        => '',
+                        'source_site_id'        => $srcPid,
+                        'source_site_name'      => $srcName,
+                        'destination_site_id'   => $destPid,
+                        'destination_site_name' => $destName,
+                        'display_name'          => $mpName,
+                        'match_tokens'          => $tokens,
+                        'scanned'               => false,
+                        'scanned_at'            => null,
+                        'scanned_by'            => null,
+                    ];
+
+                    // Part C: lock manpower doc + move assigned_project_id immediately
+                    $db->collection('manpower')->document($mpId)->update(array_merge($lockFields, [
+                        ['path' => 'assigned_project_id', 'value' => $destPid],
+                        ['path' => 'location', 'value' => [
+                            'address' => strtoupper($destName),
+                            'type'    => 'PROJECT SITE',
+                        ]],
+                    ]));
+
+                    // Part D (manpower): sync project.resources arrays
+                    // Remove from source project immediately so it doesn't show in both places
+                    if ($srcPid) {
+                        $srcSnap    = $db->collection('project')->document($srcPid)->snapshot();
+                        $srcCurrent = (array)($srcSnap->data()['resources'] ?? []);
+                        $srcFiltered = array_values(array_filter($srcCurrent, fn($r) =>
+                            (string)($r['ref_id'] ?? '') !== $mpId
+                        ));
+                        if (count($srcFiltered) !== count($srcCurrent)) {
+                            $db->collection('project')->document($srcPid)->update([
+                                ['path' => 'resources', 'value' => $srcFiltered],
+                            ]);
+                        }
+                    }
+
+                    // Add to destination project with transit flags (mirrors equipment pattern)
+                    $destSnap    = $db->collection('project')->document($destPid)->snapshot();
+                    $destCurrent = (array)($destSnap->data()['resources'] ?? []);
+                    $destCurrent = array_values(array_filter($destCurrent, fn($r) =>
+                        (string)($r['ref_id'] ?? '') !== $mpId && (string)($r['unit_id'] ?? '') !== $mpId
+                    ));
+                    $destCurrent[] = [
+                        'ref_id'              => $mpId,
+                        'unit_id'             => '',
+                        'name'                => $mpName,
+                        'category'            => 'manpower',
+                        'transit'             => true,
+                        'transit_incoming'    => true,
+                        'transfer_request_id' => $reqId,
+                    ];
+                    $db->collection('project')->document($destPid)->update([
+                        ['path' => 'resources', 'value' => array_values($destCurrent)],
+                    ]);
+                }
 
             } elseif (in_array($category, ['equipment', 'tools'])) {
                 $resData  = $db->collection('resource')->document($modelId)->snapshot()->data() ?? [];
@@ -1358,6 +1457,39 @@ class ResourceRequests extends BaseController
                     // Part C: lock this unit
                     $itemsRef->document($unitId)->update($unitLockFields);
 
+                } elseif (!empty($selectedUnitIds)) {
+                    // Admin hand-picked exact units from the "Available Units" checklist —
+                    // pull exactly those (skipping any that got taken in the meantime)
+                    // instead of blindly scanning for the first N In-Storage items.
+                    $moved = 0;
+                    foreach ($selectedUnitIds as $iId) {
+                        if ($moved >= $qty) break;
+                        $itemDoc = $itemsRef->document($iId)->snapshot();
+                        if (!$itemDoc->exists() || (string)($itemDoc->data()['status'] ?? '') !== 'In-Storage') continue;
+
+                        $sn     = strtolower(trim((string)($itemDoc->data()['serial_number'] ?? '')));
+                        $tokens = array_values(array_filter([$sn], fn($t) => $t !== ''));
+
+                        $reservedResources[] = [
+                            'kind'                  => 'unit',
+                            'resource_id'           => $iId,
+                            'model_id'              => $modelId,
+                            'equipment_type'        => $resLabel,
+                            'source_site_id'        => $srcPid,
+                            'source_site_name'      => $srcName,
+                            'destination_site_id'   => $destPid,
+                            'destination_site_name' => $destName,
+                            'display_name'          => $sn ?: $iId,
+                            'match_tokens'          => $tokens,
+                            'scanned'               => false,
+                            'scanned_at'            => null,
+                            'scanned_by'            => null,
+                        ];
+
+                        // Part C: lock this unit
+                        $itemsRef->document($iId)->update($unitLockFields);
+                        $moved++;
+                    }
                 } else {
                     // Bulk: select $qty In-Storage units
                     $moved = 0;

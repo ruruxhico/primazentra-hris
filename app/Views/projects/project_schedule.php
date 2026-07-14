@@ -30,30 +30,9 @@
 .ps-mode-select { padding:3px 6px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.78rem; background:#fff; font-family:inherit; }
 .ps-mode-select:focus { outline:none; border-color:#C47A0F; }
 .ps-ms-qty:disabled, .ps-ms-select:disabled { opacity:0.45; background:#f5f3ee; cursor:not-allowed; }
+/* Activity sub-list reuses the .pf-act-* component styles from Create Project
+   (public/css/styles.css) so both screens share one look and behavior. */
 .ps-act-panel { padding:0.35rem 0 0.15rem; }
-.ps-act-toggle-btn { display:inline-flex; align-items:center; gap:2px; background:none; border:none; cursor:pointer; color:#8C701C; font-size:0.76rem; font-weight:700; padding:2px 4px; border-radius:5px; }
-.ps-act-toggle-btn:hover { background:#faf6ee; }
-.ps-act-toggle-icon { font-size:1rem; }
-.ps-act-body { margin:0.4rem 0 0.2rem 1.75rem; border-left:2px solid #f0ebe0; padding-left:0.75rem; }
-.ps-act-col-hdr { display:grid; grid-template-columns:1fr 90px 96px 140px 32px; gap:8px; padding:0 0 0.3rem; }
-.ps-act-col-hdr span { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#8C701C; }
-.ps-act-row { display:grid; grid-template-columns:1fr 90px 96px 140px 32px; gap:8px; align-items:center; margin-bottom:0.4rem; }
-.ps-act-name { font-size:0.82rem; padding:5px 8px; border:1px solid #e0dbd0; border-radius:6px; font-family:inherit; }
-.ps-act-weight-wrap { position:relative; }
-.ps-act-weight { width:100%; padding:5px 22px 5px 8px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.82rem; text-align:right; font-family:inherit; }
-.ps-act-weight-suffix { position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:0.76rem; color:#999; pointer-events:none; }
-.ps-act-mode, .ps-act-status, .ps-act-qty { padding:5px 6px; border:1px solid #e0dbd0; border-radius:6px; font-size:0.78rem; background:#fff; font-family:inherit; width:100%; box-sizing:border-box; }
-.ps-act-qty { text-align:right; }
-.ps-act-name:focus, .ps-act-weight:focus, .ps-act-mode:focus, .ps-act-status:focus, .ps-act-qty:focus { outline:none; border-color:#C47A0F; }
-.ps-act-del { background:none; border:none; cursor:pointer; color:#e53e3e; padding:4px; border-radius:6px; display:flex; align-items:center; justify-content:center; }
-.ps-act-del:hover { background:#fff0f0; }
-.ps-act-del .material-symbols-outlined { font-size:16px; }
-.ps-act-add-row { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-top:0.15rem; }
-.ps-act-add-btn { background:none; border:1px dashed #C47A0F; color:#C47A0F; font-size:0.76rem; font-weight:700; padding:4px 10px; border-radius:6px; cursor:pointer; }
-.ps-act-add-btn:hover { background:#fff8ec; }
-.ps-act-total { font-size:0.72rem; font-weight:700; color:#999; }
-.ps-act-total.exact { color:#2f7d4f; }
-.ps-act-total.over  { color:#e53e3e; }
 </style>
 
 <div class="ps-shell">
@@ -152,55 +131,69 @@
                     </div>
 
                     <div class="ps-act-panel" style="grid-column:1 / -1">
-                        <button type="button" class="ps-act-toggle-btn">
-                            <span class="material-symbols-outlined ps-act-toggle-icon">expand_more</span>
-                            Activities (<span class="ps-act-count"><?= count($m['activities'] ?? []) ?></span>)
+                        <button type="button" class="pf-act-toggle-btn">
+                            <span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>
+                            Activities (<span class="pf-act-count"><?= count($m['activities'] ?? []) ?></span>)
                         </button>
-                        <div class="ps-act-body" hidden>
-                            <div class="ps-act-col-hdr">
-                                <span>Activity Name</span>
-                                <span>Weight %</span>
-                                <span>Track By</span>
-                                <span>Status</span>
-                                <span></span>
-                            </div>
-                            <div class="ps-act-list">
+                        <div class="pf-act-body" hidden>
+                            <div class="pf-act-list">
                                 <?php foreach (($m['activities'] ?? []) as $ai => $a): ?>
-                                <?php $aMode = ($a['tracking_mode'] ?? 'status_only') === 'quantity' ? 'quantity' : 'status_only'; ?>
-                                <div class="ps-act-row">
-                                    <input type="text" class="ps-act-name"
-                                           name="milestones[<?= $i ?>][activities][<?= $ai ?>][name]"
-                                           value="<?= esc($a['activity_name'] ?? $a['name'] ?? '') ?>"
-                                           placeholder="Activity name">
-                                    <div class="ps-act-weight-wrap">
-                                        <input type="number" class="ps-act-weight"
-                                               name="milestones[<?= $i ?>][activities][<?= $ai ?>][weight]"
-                                               value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
-                                               step="0.1" min="0" max="100" placeholder="0">
-                                        <span class="ps-act-weight-suffix">%</span>
+                                <?php
+                                    $aMode  = ($a['tracking_mode'] ?? 'status_only') === 'quantity' ? 'quantity' : 'status_only';
+                                    $aIsQty = $aMode === 'quantity';
+                                ?>
+                                <div class="pf-act-row">
+                                    <div class="phase-field">
+                                        <span class="phase-field-lbl">Activity Name</span>
+                                        <input type="text" class="pf-act-name"
+                                               name="milestones[<?= $i ?>][activities][<?= $ai ?>][name]"
+                                               value="<?= esc($a['activity_name'] ?? $a['name'] ?? '') ?>"
+                                               placeholder="Activity name">
                                     </div>
-                                    <select class="ps-act-mode" name="milestones[<?= $i ?>][activities][<?= $ai ?>][tracking_mode]">
-                                        <option value="status_only" <?= $aMode === 'status_only' ? 'selected' : '' ?>>Status</option>
-                                        <option value="quantity"    <?= $aMode === 'quantity'    ? 'selected' : '' ?>>Quantity</option>
-                                    </select>
-                                    <select class="ps-act-status" name="milestones[<?= $i ?>][activities][<?= $ai ?>][status]" <?= $aMode === 'quantity' ? 'hidden disabled' : '' ?>>
-                                        <?php foreach (['Not Started', 'In Progress', 'Completed'] as $st): ?>
-                                        <option value="<?= esc($st) ?>" <?= ($a['status'] ?? 'Not Started') === $st ? 'selected' : '' ?>><?= esc($st) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <input type="number" class="ps-act-qty"
-                                           name="milestones[<?= $i ?>][activities][<?= $ai ?>][qty]"
-                                           value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
-                                           <?= $aMode === 'status_only' ? 'hidden disabled' : '' ?>>
-                                    <button type="button" class="ps-act-del" title="Remove activity">
-                                        <span class="material-symbols-outlined">close</span>
-                                    </button>
+                                    <div class="pf-act-row2">
+                                        <div class="phase-field">
+                                            <span class="phase-field-lbl">Weight %</span>
+                                            <div class="pf-act-weight-group">
+                                                <input type="number" class="pf-act-weight"
+                                                       name="milestones[<?= $i ?>][activities][<?= $ai ?>][weight]"
+                                                       value="<?= esc($a['weight_percent'] ?? $a['weight'] ?? 0) ?>"
+                                                       step="0.1" min="0" placeholder="0">
+                                                <span class="pf-act-weight-unit">%</span>
+                                            </div>
+                                        </div>
+                                        <div class="phase-field">
+                                            <span class="phase-field-lbl">Track By</span>
+                                            <select class="pf-act-mode" name="milestones[<?= $i ?>][activities][<?= $ai ?>][tracking_mode]">
+                                                <option value="status_only" <?= !$aIsQty ? 'selected' : '' ?>>Status</option>
+                                                <option value="quantity"    <?= $aIsQty  ? 'selected' : '' ?>>Quantity</option>
+                                            </select>
+                                        </div>
+                                        <div class="phase-field">
+                                            <span class="phase-field-lbl pf-act-value-lbl"><?= $aIsQty ? 'Qty' : 'Status' ?></span>
+                                            <span class="pf-act-status-badge" <?= $aIsQty ? 'hidden' : '' ?>><?= esc($a['status'] ?? 'Not Started') ?></span>
+                                            <input type="number" class="pf-act-qty"
+                                                   name="milestones[<?= $i ?>][activities][<?= $ai ?>][qty]"
+                                                   value="<?= esc($a['target_quantity'] ?? 1) ?>" min="1" step="1" placeholder="Qty"
+                                                   <?= !$aIsQty ? 'hidden disabled' : '' ?>>
+                                        </div>
+                                        <div class="phase-field pf-act-unit-field" <?= !$aIsQty ? 'hidden' : '' ?>>
+                                            <span class="phase-field-lbl">Unit</span>
+                                            <select class="pf-act-unit" name="milestones[<?= $i ?>][activities][<?= $ai ?>][unit]" <?= !$aIsQty ? 'disabled' : '' ?>>
+                                                <?php foreach ($units as $u): ?>
+                                                <option value="<?= esc($u) ?>" <?= ($a['unit'] ?? 'pcs') === $u ? 'selected' : '' ?>><?= esc($u) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                        <button type="button" class="pf-act-del-btn" title="Remove activity">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <?php endforeach; ?>
                             </div>
-                            <div class="ps-act-add-row">
-                                <button type="button" class="ps-act-add-btn">+ Add Activity</button>
-                                <span class="ps-act-total">Activities total <span class="ps-act-total-val">0.0</span>%</span>
+                            <div class="pf-act-add-row">
+                                <button type="button" class="pf-act-add-btn">+ Add Activity</button>
+                                <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                             </div>
                         </div>
                     </div>
@@ -268,21 +261,15 @@
         </div>
 
         <div class="ps-act-panel" style="grid-column:1 / -1">
-            <button type="button" class="ps-act-toggle-btn">
-                <span class="material-symbols-outlined ps-act-toggle-icon">expand_more</span>
-                Activities (<span class="ps-act-count">0</span>)
+            <button type="button" class="pf-act-toggle-btn">
+                <span class="material-symbols-outlined pf-act-toggle-icon">expand_more</span>
+                Activities (<span class="pf-act-count">0</span>)
             </button>
-            <div class="ps-act-body" hidden>
-                <div class="ps-act-col-hdr">
-                    <span>Activity Name</span>
-                    <span>Weight %</span>
-                    <span>Status</span>
-                    <span></span>
-                </div>
-                <div class="ps-act-list"></div>
-                <div class="ps-act-add-row">
-                    <button type="button" class="ps-act-add-btn">+ Add Activity</button>
-                    <span class="ps-act-total">Activities total <span class="ps-act-total-val">0.0</span>%</span>
+            <div class="pf-act-body" hidden>
+                <div class="pf-act-list"></div>
+                <div class="pf-act-add-row">
+                    <button type="button" class="pf-act-add-btn">+ Add Activity</button>
+                    <span class="pf-act-total">Activities total <span class="pf-act-total-val">0.0</span>% / <span class="pf-act-total-target">0.0</span>%</span>
                 </div>
             </div>
         </div>
@@ -291,25 +278,43 @@
 
 <!-- Activity row template (hidden) -->
 <template id="actRowTpl">
-    <div class="ps-act-row">
-        <input type="text" class="ps-act-name" placeholder="Activity name">
-        <div class="ps-act-weight-wrap">
-            <input type="number" class="ps-act-weight" value="0" step="0.1" min="0" max="100" placeholder="0">
-            <span class="ps-act-weight-suffix">%</span>
+    <div class="pf-act-row">
+        <div class="phase-field">
+            <span class="phase-field-lbl">Activity Name</span>
+            <input type="text" class="pf-act-name" placeholder="Activity name">
         </div>
-        <select class="ps-act-mode">
-            <option value="status_only" selected>Status</option>
-            <option value="quantity">Quantity</option>
-        </select>
-        <select class="ps-act-status">
-            <option value="Not Started">Not Started</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Completed">Completed</option>
-        </select>
-        <input type="number" class="ps-act-qty" value="1" min="1" step="1" placeholder="Qty" hidden disabled>
-        <button type="button" class="ps-act-del" title="Remove activity">
-            <span class="material-symbols-outlined">close</span>
-        </button>
+        <div class="pf-act-row2">
+            <div class="phase-field">
+                <span class="phase-field-lbl">Weight %</span>
+                <div class="pf-act-weight-group">
+                    <input type="number" class="pf-act-weight" value="0" step="0.1" min="0" max="100" placeholder="0">
+                    <span class="pf-act-weight-unit">%</span>
+                </div>
+            </div>
+            <div class="phase-field">
+                <span class="phase-field-lbl">Track By</span>
+                <select class="pf-act-mode">
+                    <option value="status_only" selected>Status</option>
+                    <option value="quantity">Quantity</option>
+                </select>
+            </div>
+            <div class="phase-field">
+                <span class="phase-field-lbl pf-act-value-lbl">Status</span>
+                <span class="pf-act-status-badge">Not Started</span>
+                <input type="number" class="pf-act-qty" value="1" min="1" step="1" placeholder="Qty" hidden disabled>
+            </div>
+            <div class="phase-field pf-act-unit-field" hidden>
+                <span class="phase-field-lbl">Unit</span>
+                <select class="pf-act-unit" disabled>
+                    <?php foreach ($units as $u): ?>
+                    <option value="<?= esc($u) ?>" <?= $u === 'pcs' ? 'selected' : '' ?>><?= esc($u) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="button" class="pf-act-del-btn" title="Remove activity">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
     </div>
 </template>
 
@@ -333,7 +338,12 @@
     }
 
     list.addEventListener('input', function (e) {
-        if (e.target.classList.contains('weight-input')) recomputeTotal();
+        if (e.target.classList.contains('weight-input')) {
+            recomputeTotal();
+            // The activities target is the milestone's own weight, so it must
+            // refresh when that weight changes too, not just the activities.
+            recomputeActTotal(e.target.closest('.ps-ms-row'));
+        }
     });
 
     /* ── Add / remove rows ── */
@@ -387,37 +397,46 @@
         var qtyInp  = row.querySelector('.ps-ms-qty');
         var unitSel = row.querySelector('.ps-ms-select');
         if (!modeSel) return;
-        var statusOnly = modeSel.value === 'status_only';
-        var hasQtyActivity = Array.prototype.some.call(row.querySelectorAll('.ps-act-mode'), function (sel) {
-            return sel.value === 'quantity';
-        });
-        var hideQty = statusOnly || hasQtyActivity;
+        var statusOnly  = modeSel.value === 'status_only';
+        // Any activity on the milestone — status-based or quantity-based — means
+        // progress is now driven by the activities, so the milestone-level qty/unit
+        // no longer apply, regardless of the milestone's own tracking mode.
+        var hasActivity = row.querySelectorAll('.pf-act-row').length > 0;
+        var hideQty = statusOnly || hasActivity;
         if (qtyInp) {
             qtyInp.disabled = hideQty;
             qtyInp.style.visibility = hideQty ? 'hidden' : '';
-            if (statusOnly) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
-            qtyInp.value = statusOnly ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
+            if (hideQty) qtyInp.dataset.prevValue = qtyInp.dataset.prevValue || qtyInp.value;
+            qtyInp.value = hideQty ? 1 : (qtyInp.dataset.prevValue || qtyInp.value);
         }
-        if (unitSel) unitSel.disabled = statusOnly;
+        if (unitSel) unitSel.disabled = hideQty;
     }
 
     /* ── Activity-level status-only / quantity mode ── */
     function applyActivityMode(actRow) {
-        var modeSel   = actRow.querySelector('.ps-act-mode');
-        var statusSel = actRow.querySelector('.ps-act-status');
-        var qtyInp    = actRow.querySelector('.ps-act-qty');
+        var modeSel     = actRow.querySelector('.pf-act-mode');
+        var statusBadge = actRow.querySelector('.pf-act-status-badge');
+        var qtyInp      = actRow.querySelector('.pf-act-qty');
+        var unitField   = actRow.querySelector('.pf-act-unit-field');
+        var valueLbl    = actRow.querySelector('.pf-act-value-lbl');
         if (!modeSel) return;
         var isQty = modeSel.value === 'quantity';
-        if (statusSel) { statusSel.hidden = isQty;  statusSel.disabled = isQty; }
-        if (qtyInp)    { qtyInp.hidden    = !isQty; qtyInp.disabled    = !isQty; }
+        if (statusBadge) statusBadge.hidden = isQty;
+        if (qtyInp) { qtyInp.hidden = !isQty; qtyInp.disabled = !isQty; }
+        if (unitField) {
+            unitField.hidden = !isQty;
+            var unitSel = unitField.querySelector('.pf-act-unit');
+            if (unitSel) unitSel.disabled = !isQty;
+        }
+        if (valueLbl) valueLbl.textContent = isQty ? 'Qty' : 'Status';
     }
 
     list.addEventListener('change', function (e) {
         if (e.target.classList.contains('ps-mode-select')) {
             applyMode(e.target.closest('.ps-ms-row'));
         }
-        if (e.target.classList.contains('ps-act-mode')) {
-            applyActivityMode(e.target.closest('.ps-act-row'));
+        if (e.target.classList.contains('pf-act-mode')) {
+            applyActivityMode(e.target.closest('.pf-act-row'));
             applyMode(e.target.closest('.ps-ms-row'));
         }
     });
@@ -426,46 +445,54 @@
     var actTpl = document.getElementById('actRowTpl');
 
     function reindexActivities(msRow, msIndex) {
-        var actKeys = ['name', 'weight', 'tracking_mode', 'status', 'qty'];
-        msRow.querySelectorAll('.ps-act-row').forEach(function (row, j) {
-            row.querySelectorAll('.ps-act-name, .ps-act-weight, .ps-act-mode, .ps-act-status, .ps-act-qty')
+        // Status is not a form field (server derives/preserves it) — not reindexed here.
+        var actKeys = ['name', 'weight', 'tracking_mode', 'qty', 'unit'];
+        msRow.querySelectorAll('.pf-act-row').forEach(function (row, j) {
+            row.querySelectorAll('.pf-act-name, .pf-act-weight, .pf-act-mode, .pf-act-qty, .pf-act-unit')
                .forEach(function (el, k) { el.name = 'milestones[' + msIndex + '][activities][' + j + '][' + actKeys[k] + ']'; });
         });
-        var count = msRow.querySelectorAll('.ps-act-row').length;
-        var countEl = msRow.querySelector('.ps-act-count');
+        var count = msRow.querySelectorAll('.pf-act-row').length;
+        var countEl = msRow.querySelector('.pf-act-count');
         if (countEl) countEl.textContent = count;
     }
 
+    // Each milestone's activity weights must sum to that milestone's own
+    // Weight % (not a fixed 100) — activity weight is on the same scale as
+    // milestone weight, just a sub-allocation of it.
     function recomputeActTotal(msRow) {
         var total = 0;
-        msRow.querySelectorAll('.ps-act-weight').forEach(function (inp) {
+        msRow.querySelectorAll('.pf-act-weight').forEach(function (inp) {
             total += parseFloat(inp.value || 0);
         });
         total = Math.round(total * 10) / 10;
-        var totValEl = msRow.querySelector('.ps-act-total-val');
-        var totEl2   = msRow.querySelector('.ps-act-total');
+        var msWeightInp = msRow.querySelector('.weight-input');
+        var target = msWeightInp ? (parseFloat(msWeightInp.value) || 0) : 0;
+        var totValEl    = msRow.querySelector('.pf-act-total-val');
+        var totTargetEl = msRow.querySelector('.pf-act-total-target');
+        var totEl2      = msRow.querySelector('.pf-act-total');
         if (totValEl) totValEl.textContent = total.toFixed(1);
+        if (totTargetEl) totTargetEl.textContent = target.toFixed(1);
         if (totEl2) {
-            totEl2.classList.toggle('exact', Math.abs(total - 100) < 0.5);
-            totEl2.classList.toggle('over',  total > 100.5);
+            totEl2.classList.toggle('exact', Math.abs(total - target) < 0.5);
+            totEl2.classList.toggle('over',  total > target + 0.5);
         }
     }
 
     list.addEventListener('click', function (e) {
-        var toggleBtn = e.target.closest('.ps-act-toggle-btn');
+        var toggleBtn = e.target.closest('.pf-act-toggle-btn');
         if (toggleBtn) {
-            var body = toggleBtn.parentElement.querySelector('.ps-act-body');
-            var icon = toggleBtn.querySelector('.ps-act-toggle-icon');
+            var body = toggleBtn.parentElement.querySelector('.pf-act-body');
+            var icon = toggleBtn.querySelector('.pf-act-toggle-icon');
             var open = body.hidden;
             body.hidden = !open;
             if (icon) icon.textContent = open ? 'expand_less' : 'expand_more';
             return;
         }
 
-        var addBtn = e.target.closest('.ps-act-add-btn');
+        var addBtn = e.target.closest('.pf-act-add-btn');
         if (addBtn) {
             var msRow = addBtn.closest('.ps-ms-row');
-            var actList = msRow.querySelector('.ps-act-list');
+            var actList = msRow.querySelector('.pf-act-list');
             actList.appendChild(actTpl.content.cloneNode(true));
             var msIndex = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow);
             reindexActivities(msRow, msIndex);
@@ -474,10 +501,10 @@
             return;
         }
 
-        var delBtn = e.target.closest('.ps-act-del');
+        var delBtn = e.target.closest('.pf-act-del-btn');
         if (delBtn) {
             var msRow2 = delBtn.closest('.ps-ms-row');
-            delBtn.closest('.ps-act-row').remove();
+            delBtn.closest('.pf-act-row').remove();
             var msIndex2 = Array.prototype.indexOf.call(list.querySelectorAll('.ps-ms-row'), msRow2);
             reindexActivities(msRow2, msIndex2);
             recomputeActTotal(msRow2);
@@ -487,7 +514,7 @@
     });
 
     list.addEventListener('input', function (e) {
-        if (e.target.classList.contains('ps-act-weight')) {
+        if (e.target.classList.contains('pf-act-weight')) {
             recomputeActTotal(e.target.closest('.ps-ms-row'));
         }
     });

@@ -213,6 +213,23 @@ class Projects extends BaseController
                 return redirect()->back()->withInput()->with('error', 'Project Schedule must have at least one milestone.');
             }
 
+            // Validate the schedule BEFORE writing anything — a project (plus its
+            // audit log entry, notifications, and chat group) must never be created
+            // only to be abandoned here on a schedule error, which used to leave a
+            // permanent orphaned "ghost" project behind on every failed submission.
+            $weightError = $this->validateMilestoneWeights($rawPhasesCheck);
+            if ($weightError) {
+                return redirect()->back()->withInput()->with('error', $weightError);
+            }
+            $activityError = $this->validateActivityWeights($rawPhasesCheck);
+            if ($activityError) {
+                return redirect()->back()->withInput()->with('error', $activityError);
+            }
+            $dateError = $this->validateNewMilestoneTargetDates($rawPhasesCheck);
+            if ($dateError) {
+                return redirect()->back()->withInput()->with('error', $dateError);
+            }
+
             try {
                 $projectId = bin2hex(random_bytes(8));
                 $projectData = $this->buildProjectPayload();
@@ -258,22 +275,8 @@ class Projects extends BaseController
                     log_message('error', 'Projects::create - verification error: ' . $t->getMessage());
                 }
 
-                if ($this->request->getPost('add_tasks_now')) {
-                    $rawPhases   = $this->request->getPost('phases') ?? [];
-                    $weightError = $this->validateMilestoneWeights($rawPhases);
-                    if ($weightError) {
-                        return redirect()->back()->withInput()->with('error', $weightError);
-                    }
-                    $activityError = $this->validateActivityWeights($rawPhases);
-                    if ($activityError) {
-                        return redirect()->back()->withInput()->with('error', $activityError);
-                    }
-                    $dateError = $this->validateNewMilestoneTargetDates($rawPhases);
-                    if ($dateError) {
-                        return redirect()->back()->withInput()->with('error', $dateError);
-                    }
-                    $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhases));
-                }
+                // Already validated above (before the project was written).
+                $this->writeMilestonesFlat($projectId, $this->normalizeToMilestones($rawPhasesCheck));
 
                 if ($this->request->getPost('add_resources_now')) {
                     return redirect()->to('projects/' . $projectId . '/resources')
@@ -397,6 +400,14 @@ class Projects extends BaseController
                             $m['completed_quantity']     = (int)($ex['completed_quantity'] ?? 0);
                             $m['actual_completion_date'] = $ex['actual_completion_date'] ?? null;
                             $m['status']                 = $ex['status'] ?? 'Pending';
+                            // A blank date on a matched existing milestone isn't a deliberate
+                            // clear — fall back to what's already stored rather than wiping it.
+                            if ($m['target_start'] === null) {
+                                $m['target_start'] = $this->psTsToDate($ex['target_start'] ?? null);
+                            }
+                            if ($m['target_date'] === null) {
+                                $m['target_date'] = $this->psTsToDate($ex['target_date'] ?? null);
+                            }
                         }
                     }
                     unset($m);
@@ -1133,6 +1144,15 @@ class Projects extends BaseController
                     $ex    = $existByOrder[$order] ?? [];
                     $tdStr = trim((string)($m['target_date'] ?? ''));
                     $tsStr = trim((string)($m['target_start'] ?? ''));
+                    // A blank date on a row that already has a saved milestone is not a
+                    // deliberate clear — the form has no control for that — so fall back to
+                    // what's already stored rather than silently wiping it out on save.
+                    if ($tsStr === '' && !empty($ex)) {
+                        $tsStr = $this->psTsToDate($ex['target_start'] ?? null) ?? '';
+                    }
+                    if ($tdStr === '' && !empty($ex)) {
+                        $tdStr = $this->psTsToDate($ex['target_date'] ?? null) ?? '';
+                    }
                     // A row with no matching existing milestone at this position is new —
                     // require a target start and target end for it. Pre-existing undated
                     // milestones are left alone.
@@ -1143,7 +1163,7 @@ class Projects extends BaseController
                     // Optional per-milestone activities: name + weight (must sum to 100% of
                     // this milestone if any are present), each independently tracked by
                     // either a manually-set status or its own quantity (see buildActivities()).
-                    $activities = $this->buildActivities((array)($m['activities'] ?? []));
+                    $activities = $this->buildActivities((array)($m['activities'] ?? []), (array)($ex['activities'] ?? []));
 
                     // Status-only milestones are quantity-based under the hood with a fixed
                     // target of 1 — one report entry of "1" completes them. Enforced here
@@ -2257,36 +2277,49 @@ class Projects extends BaseController
 
     /**
      * Build a milestone's activity sub-list from raw POST rows. Each activity is
-     * tracked independently by either a manually-set status or its own quantity —
-     * status-only activities keep {activity_name, weight_percent, tracking_mode, status};
-     * quantity activities get {activity_name, weight_percent, tracking_mode, target_quantity}
+     * tracked independently by either status or its own quantity — status-only
+     * activities keep {activity_name, weight_percent, tracking_mode, status};
+     * quantity activities get {activity_name, weight_percent, tracking_mode, target_quantity, unit}
      * instead. Blank-named rows are dropped.
+     *
+     * Status is not client-editable: it defaults to "Not Started" for a brand-new
+     * activity and otherwise carries over unchanged from $existingActs (matched by
+     * position, since activity rows aren't reorderable) — the form never submits it.
      */
-    private function buildActivities(array $rawActs): array
+    private function buildActivities(array $rawActs, array $existingActs = []): array
     {
         $activities = [];
+        $i = 0;
         foreach ($rawActs as $a) {
             $actName = trim((string)($a['name'] ?? ''));
-            if ($actName === '') continue;
-
-            $trackingMode = ($a['tracking_mode'] ?? '') === 'quantity' ? 'quantity' : 'status_only';
-            $activity = [
-                'activity_name'  => $actName,
-                'weight_percent' => (float)($a['weight'] ?? 0),
-                'tracking_mode'  => $trackingMode,
-            ];
-            if ($trackingMode === 'quantity') {
-                $activity['target_quantity'] = (float)max(1, (int)($a['qty'] ?? 1));
-            } else {
-                $activity['status'] = in_array($a['status'] ?? '', ['Not Started', 'In Progress', 'Completed'], true)
-                    ? $a['status'] : 'Not Started';
+            if ($actName !== '') {
+                $trackingMode = ($a['tracking_mode'] ?? '') === 'quantity' ? 'quantity' : 'status_only';
+                $activity = [
+                    'activity_name'  => $actName,
+                    'weight_percent' => (float)($a['weight'] ?? 0),
+                    'tracking_mode'  => $trackingMode,
+                ];
+                if ($trackingMode === 'quantity') {
+                    $activity['target_quantity'] = (float)max(1, (int)($a['qty'] ?? 1));
+                    $activity['unit']            = trim((string)($a['unit'] ?? 'pcs')) ?: 'pcs';
+                } else {
+                    $exStatus = (string)($existingActs[$i]['status'] ?? '');
+                    $activity['status'] = in_array($exStatus, ['Not Started', 'In Progress', 'Completed'], true)
+                        ? $exStatus : 'Not Started';
+                }
+                $activities[] = $activity;
             }
-            $activities[] = $activity;
+            $i++;
         }
         return $activities;
     }
 
-    /** Validate that each milestone's activity weights (if any) sum to 100%. */
+    /**
+     * Validate that each milestone's activity weights (if any) sum to exactly
+     * that milestone's own weight % — activity weight is on the same scale as
+     * milestone weight (percentage points of the whole project), not a separate
+     * 0–100 sub-scale internal to the milestone.
+     */
     private function validateActivityWeights(array $rawPhases): ?string
     {
         $bad = [];
@@ -2301,13 +2334,14 @@ class Projects extends BaseController
                 $total += (float)($a['weight'] ?? 0);
             }
             if (!$hasAny) continue;
-            $total = round($total, 1);
-            if (abs($total - 100.0) > 0.5) {
-                $bad[] = $name . ' (' . number_format($total, 1) . '%)';
+            $msWeight = round((float)($phase['weight'] ?? 0), 1);
+            $total    = round($total, 1);
+            if (abs($total - $msWeight) > 0.5) {
+                $bad[] = $name . ' (' . number_format($total, 1) . '% vs milestone weight ' . number_format($msWeight, 1) . '%)';
             }
         }
         if (!empty($bad)) {
-            return 'Activity weights must sum to 100% within each milestone: ' . implode('; ', $bad) . '.';
+            return 'Activity weights must sum to their milestone\'s own weight %: ' . implode('; ', $bad) . '.';
         }
         return null;
     }
