@@ -372,9 +372,35 @@ class ResourceRequests extends BaseController
 
     // ── MCDA Source Recommendation ────────────────────────────────────────
 
+    // Accepts either an existing web session (isLoggedIn) or a Firebase ID token in the
+    // Authorization header — the latter is how the mobile app authenticates here, since
+    // it signs in via Firebase Auth directly and never holds a PHP session cookie. This
+    // is the single canonical MCDA computation both web and mobile should call, so they
+    // always see the same recommendation for the same request.
+    private function authenticateApiRequest(): bool
+    {
+        if (session()->get('isLoggedIn')) {
+            return true;
+        }
+        $header = $this->request->getHeaderLine('Authorization');
+        if (stripos($header, 'Bearer ') !== 0) {
+            return false;
+        }
+        $idToken = trim(substr($header, 7));
+        if ($idToken === '') {
+            return false;
+        }
+        try {
+            $this->firestore->getAuth()->verifyIdToken($idToken);
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     public function recommendSource()
     {
-        if (!session()->get('isLoggedIn')) {
+        if (!$this->authenticateApiRequest()) {
             return $this->response->setStatusCode(401)->setJSON(['error' => 'Unauthenticated']);
         }
 
@@ -548,11 +574,21 @@ class ResourceRequests extends BaseController
         $nowTs   = time();
         $nowDt   = new \DateTime('now', new \DateTimeZone('Asia/Manila'));
 
-        // ── Step 0: ML delay/blocker filter ─────────────────────────────
+        // ── Step 0: ML delay/blocker risk scoring ───────────────────────
+        // Risk is folded into the WSM ranking (Step 3) rather than used as a hard
+        // exclude — a model that calls nearly every real candidate "at risk" would
+        // otherwise wipe out the whole recommendation list (see incident notes).
         $mlService   = new \App\Libraries\MLServiceClient();
         $mlAvailable = true;
         $excluded    = [];
         $passed      = [];
+
+        $riskWeight = fn(string $level): float => match ($level) {
+            'HIGH'   => 0.9,
+            'MEDIUM' => 0.6,
+            'LOW'    => 0.3,
+            default  => 0.5,
+        };
 
         foreach ($candidates as $c) {
             $endDate   = $this->tsToDate($c['end_date']   ?? null);
@@ -592,8 +628,10 @@ class ResourceRequests extends BaseController
                 'days_since_last_blocker'  => 999,
             ];
 
-            $mlDelayDays = 0;
-            $mlBlocker   = null;
+            $mlDelayDays   = 0;
+            $mlDelayRisk   = 0.0;
+            $mlBlocker     = null;
+            $mlBlockerRisk = 0.0;
 
             if ($mlAvailable) {
                 try {
@@ -601,9 +639,21 @@ class ResourceRequests extends BaseController
                     if (isset($delayRes['error'])) {
                         $mlAvailable = false;
                     } else {
-                        $mlDelayDays = (int)round((float)(
-                            $delayRes['predicted_delay_days'] ?? $delayRes['delay_days'] ?? $delayRes['prediction'] ?? 0
-                        ));
+                        // API response shape is delay_predicted (bool) + risk_level + a day
+                        // estimate — not predicted_delay_days/delay_days/prediction, which this
+                        // used to look for and would silently read as 0 every time.
+                        $delayPredicted = (bool)($delayRes['delay_predicted'] ?? false);
+                        $riskLevel      = strtoupper((string)($delayRes['risk_level'] ?? ''));
+                        $rawDelayDays   = (float)(
+                            $delayRes['estimated_delay_days'] ?? $delayRes['predicted_delay_days']
+                            ?? $delayRes['delay_days'] ?? $delayRes['prediction'] ?? 0
+                        );
+                        // The API can return a far-future placeholder (thousands of days) instead
+                        // of a real estimate when it predicts delay — only surface a day count
+                        // when it's a plausible project-scale figure.
+                        $mlDelayDays = ($delayPredicted && $rawDelayDays > 0 && $rawDelayDays <= 365)
+                            ? (int)round($rawDelayDays) : 0;
+                        $mlDelayRisk = $delayPredicted ? $riskWeight($riskLevel) : 0.0;
                     }
                 } catch (\Throwable $e) { $mlAvailable = false; }
 
@@ -611,9 +661,11 @@ class ResourceRequests extends BaseController
                     try {
                         $blockerRes = $mlService->predictBlockers($features);
                         if (!isset($blockerRes['error'])) {
-                            $raw = $blockerRes['blocker_type'] ?? $blockerRes['predicted_blocker'] ?? $blockerRes['prediction'] ?? '';
+                            $raw       = $blockerRes['blocker_type'] ?? $blockerRes['predicted_blocker'] ?? $blockerRes['prediction'] ?? '';
+                            $severity  = strtoupper((string)($blockerRes['severity'] ?? ''));
                             $noBlocker = in_array(strtolower((string)$raw), ['no blocker', 'unknown', 'none', ''], true);
-                            $mlBlocker = $noBlocker ? null : (string)$raw;
+                            $mlBlocker     = $noBlocker ? null : (string)$raw;
+                            $mlBlockerRisk = $noBlocker ? 0.0 : $riskWeight($severity);
                         }
                     } catch (\Throwable $e) { /* blocker prediction optional */ }
                 }
@@ -621,26 +673,16 @@ class ResourceRequests extends BaseController
 
             $c['ml_delay_days'] = $mlDelayDays;
             $c['ml_blocker']    = $mlBlocker;
+            // Worse of the two signals, 0 (safe) .. 1 (high risk). Never used to exclude a
+            // site outright — an ML call that flags nearly every real candidate as "at risk"
+            // would otherwise wipe out the whole recommendation list (see incident notes).
+            // It only pulls the WSM ranking down (Step 3), so risky sites still show up but
+            // rank lower, and the approver can judge the risk themselves.
+            $c['risk_score'] = $mlAvailable
+                ? max($mlDelayRisk, $mlBlockerRisk)
+                : (((float)($c['progress'] ?? 0) < 30.0 && $daysRemaining < 30) ? 0.7 : 0.2);
 
-            // Exclude if ML predicts delay OR a meaningful blocker
-            // Fallback heuristic when ML is down: progress significantly behind schedule
-            $isAtRisk = $mlAvailable
-                ? ($mlDelayDays > 0 || $mlBlocker !== null)
-                : ((float)($c['progress'] ?? 0) < 30.0 && $daysRemaining < 30);
-
-            if ($isAtRisk) {
-                $excluded[] = array_merge($c, ['exclude_reason' => 'ML predicted delay/blocker']);
-            } else {
-                $passed[] = $c;
-            }
-        }
-
-        // If ML filter removes everything, fall back to using all candidates —
-        // an all-or-nothing ML call is more likely a bad signal than every single
-        // site genuinely being at risk.
-        if (empty($passed) && !empty($excluded)) {
-            $passed   = $excluded;
-            $excluded = [];
+            $passed[] = $c;
         }
 
         $candidates = $passed;
