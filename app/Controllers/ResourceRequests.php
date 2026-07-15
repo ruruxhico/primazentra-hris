@@ -331,12 +331,14 @@ class ResourceRequests extends BaseController
                             'eta_min'            => $s['travel_time_min'],
                             'traffic_label'      => $s['traffic_label'],
                             'traffic_score'      => $s['traffic_score'],
+                            'distance_estimated' => $s['distance_estimated'] ?? false,
                             'units_available'    => $s['units_available'],
                             'units_released'     => $s['units_released'],
                             'unit_list'          => $s['unit_list'] ?? [],
                             'next_available_min' => $s['next_available_min'],
                             'ml_delay_days'      => $s['ml_delay_days'],
                             'ml_blocker'         => $s['ml_blocker'],
+                            'risk_score'         => $s['risk_score'] ?? 0.0,
                             'wsm_score'          => $s['wsm_score'],
                         ];
                     }
@@ -522,7 +524,10 @@ class ResourceRequests extends BaseController
             }
 
             if (empty($candidates)) {
-                return $this->response->setJSON(['recommendations' => [], 'best' => null]);
+                return $this->response->setJSON([
+                    'recommendations' => [], 'best' => null,
+                    'excluded' => [], 'excluded_count' => 0, 'ml_available' => false,
+                ]);
             }
 
             $mcdaResult = $this->computeMcda($candidates, $destLat, $destLng, $modelId, $catLower);
@@ -534,34 +539,54 @@ class ResourceRequests extends BaseController
                 'travel_time_min'    => $s['travel_time_min'],
                 'traffic_label'      => $s['traffic_label'],
                 'traffic_score'      => $s['traffic_score'],
+                'distance_estimated' => $s['distance_estimated'] ?? false,
                 'units_available'    => $s['units_available'],
                 'units_released'     => $s['units_released'],
                 'unit_list'          => $s['unit_list'] ?? [],
                 'next_available_min' => $s['next_available_min'],
                 'ml_delay_days'      => $s['ml_delay_days'],
                 'ml_blocker'         => $s['ml_blocker'],
+                'risk_score'         => $s['risk_score'] ?? 0.0,
                 'wsm_score'          => $s['wsm_score'],
             ], $mcdaResult['ranked']);
+
+            // Both remaining exclusion reasons are deterministic facts (never ML-based —
+            // ML risk only ranks lower now, see computeMcda), so a stable enum is safe here.
+            $reasonCode = fn(string $r): string => match ($r) {
+                'No progress since start' => 'no_progress_since_start',
+                'No allocatable units'    => 'no_stock',
+                default                   => 'no_stock',
+            };
+            $excluded = array_map(fn($ex) => [
+                'project_id'   => $ex['project_id'],
+                'project_name' => $ex['project_name'],
+                'reason'       => $reasonCode($ex['exclude_reason'] ?? ''),
+            ], $mcdaResult['excluded']);
 
             return $this->response->setJSON([
                 'recommendations'   => $recommendations,
                 'best'              => $recommendations[0] ?? null,
-                'excluded_count'    => count($mcdaResult['excluded']),
+                'excluded'          => $excluded,
+                'excluded_count'    => count($excluded),
                 'ml_available'      => $mcdaResult['ml_available'],
             ]);
         } catch (\Throwable $e) {
             log_message('warning', 'ResourceRequests::recommendSource - ' . $e->getMessage());
-            return $this->response->setJSON(['recommendations' => [], 'best' => null]);
+            return $this->response->setJSON([
+                'recommendations' => [], 'best' => null,
+                'excluded' => [], 'excluded_count' => 0, 'ml_available' => false,
+            ]);
         }
     }
 
-    // ── MCDA: 5-criterion WSM + ML risk pre-filter ───────────────────────
-    // Step 0  : ML delay/blocker prediction — exclude at-risk projects
+    // ── MCDA: 6-criterion WSM with ML risk folded into the score ─────────
+    // Step 0  : deterministic hard-exclude (no progress since start date) +
+    //           ML delay/blocker risk scoring (informs ranking, never excludes)
     // Step 1  : Next availability from Firestore item timestamps
     // Step 2  : Google Maps Distance Matrix API (live traffic) / Haversine fallback
     // Step 3  : Traffic labels
-    // Step 4  : Weighted Sum Model (distance 0.25, travel_time 0.20, traffic 0.25,
-    //           availability 0.20, next_available 0.10)
+    // Step 4  : Weighted Sum Model (distance 0.20, travel_time 0.20, traffic 0.10,
+    //           availability 0.15, next_available 0.10, risk 0.25)
     // Returns : ['ranked'=>[...], 'excluded'=>[...], 'ml_available'=>bool]
 
     private function computeMcda(
@@ -593,6 +618,17 @@ class ResourceRequests extends BaseController
         foreach ($candidates as $c) {
             $endDate   = $this->tsToDate($c['end_date']   ?? null);
             $startDate = $this->tsToDate($c['start_date'] ?? null);
+
+            // Deterministic hard-exclude, checked before the ML call and immune to any
+            // ML-uncertainty fallback: a project that has genuinely not moved since its
+            // own start date is a verified fact about that site, not a model guess, so
+            // it's excluded unconditionally rather than left to a possibly-flaky ML call.
+            // Mirrors the same rule in the mobile app so both platforms agree here.
+            $pastStart = $startDate !== null && $startDate < $nowDt;
+            if ((float)($c['progress'] ?? 0) <= 0.0 && $pastStart) {
+                $excluded[] = array_merge($c, ['exclude_reason' => 'No progress since start']);
+                continue;
+            }
 
             $daysElapsed   = $startDate ? max(0, (int)$startDate->diff($nowDt)->days) : 0;
             $daysRemaining = $endDate   ? max(0, (int)$nowDt->diff($endDate)->days)   : 30;
@@ -776,10 +812,14 @@ class ResourceRequests extends BaseController
                         $c['traffic_score']   = $durTrafficSec > 0
                             ? min(1.0, round($durSec / $durTrafficSec, 3))
                             : 1.0;
+                        // Real Distance Matrix result — traffic_score reflects actual conditions.
+                        $c['distance_estimated'] = false;
                     } else {
                         $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
                         $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
                         $c['traffic_score']   = 1.0;
+                        // Haversine fallback — traffic_score/eta are placeholders, not real traffic data.
+                        $c['distance_estimated'] = true;
                     }
                 }
                 unset($c);
@@ -789,6 +829,7 @@ class ResourceRequests extends BaseController
                     $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
                     $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
                     $c['traffic_score']   = 1.0;
+                    $c['distance_estimated'] = true;
                 }
                 unset($c);
             }
@@ -797,6 +838,7 @@ class ResourceRequests extends BaseController
                 $c['distance_km']     = round($this->haversine($c['lat'], $c['lng'], $destLat, $destLng), 1);
                 $c['travel_time_min'] = max(1, (int)round($c['distance_km'] / 60 * 60));
                 $c['traffic_score']   = 1.0;
+                $c['distance_estimated'] = true;
             }
             unset($c);
         }
@@ -811,8 +853,11 @@ class ResourceRequests extends BaseController
         // ── Step 3: WSM — normalize each criterion then apply weights ────
         // availability uses units_available (not transfer-locked) as the count
         // of units that can actually be allocated from each source project.
-        $w = ['distance' => 0.25, 'travel_time' => 0.25, 'traffic' => 0.15,
-              'availability' => 0.20, 'next_available' => 0.15];
+        // ML/blocker risk is folded in here as a ranking criterion (rather than a hard
+        // exclude, see Step 0) — risk_score is already an absolute 0..1 probability-based
+        // scale, so it's used directly rather than min-max normalized within this batch.
+        $w = ['distance' => 0.20, 'travel_time' => 0.20, 'traffic' => 0.10,
+              'availability' => 0.15, 'next_available' => 0.10, 'risk' => 0.25];
 
         $dMin   = min(array_column($candidates, 'distance_km'));
         $dMax   = max(array_column($candidates, 'distance_km'));
@@ -833,7 +878,8 @@ class ResourceRequests extends BaseController
                 $w['travel_time']    * (1 - $norm($c['travel_time_min'],    $tMin,   $tMax))   +
                 $w['traffic']        * $norm($c['traffic_score'],           $trkMin, $trkMax)  +
                 $w['availability']   * $norm($c['units_available'],         $aMin,   $aMax)    +
-                $w['next_available'] * (1 - $norm($c['next_available_min'], $nMin,   $nMax)),
+                $w['next_available'] * (1 - $norm($c['next_available_min'], $nMin,   $nMax))    +
+                $w['risk']           * (1 - (float)($c['risk_score'] ?? 0)),
                 4
             );
         }
