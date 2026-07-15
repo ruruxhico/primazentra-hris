@@ -382,10 +382,14 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                 </div>
 
                 <?php
-                    // ML filter summary badges — split by the actual exclusion reason so
-                    // "no stock at that site" is never mislabeled as an ML risk call.
-                    $nExcludedMl    = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'ML predicted delay/blocker'));
-                    $nExcludedUnits = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'No allocatable units'));
+                    // Filter summary badges. ML risk no longer hard-excludes anyone (see
+                    // computeMcda) — it only pulls the WSM ranking down — so the only real
+                    // exclusion reasons left are the deterministic "stalled since start" rule
+                    // and "no stock". At-risk sites still appear in the ranked table below,
+                    // just flagged and ranked lower.
+                    $nExcludedStalled = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'No progress since start'));
+                    $nExcludedUnits   = count(array_filter($mcdaExcludedSites, fn($s) => ($s['exclude_reason'] ?? '') === 'No allocatable units'));
+                    $nAtRiskShown     = count(array_filter($recommendedSites, fn($s) => (float)($s['risk_score'] ?? 0) >= 0.5));
                 ?>
 
                 <?php if ($mcdaMlAvailable): ?>
@@ -394,10 +398,10 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                         <span class="material-symbols-outlined" style="font-size:.88rem;">psychology</span>
                         ML Risk Filter Active
                     </span>
-                    <?php if ($nExcludedMl > 0): ?>
+                    <?php if ($nExcludedStalled > 0): ?>
                     <span style="display:inline-flex;align-items:center;gap:.28rem;background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #fde68a;">
                         <span class="material-symbols-outlined" style="font-size:.88rem;">warning</span>
-                        <?= $nExcludedMl ?> project<?= $nExcludedMl > 1 ? 's' : '' ?> excluded (predicted delay / blocker)
+                        <?= $nExcludedStalled ?> site<?= $nExcludedStalled > 1 ? 's' : '' ?> excluded (no progress since start)
                     </span>
                     <?php endif; ?>
                     <?php if ($nExcludedUnits > 0): ?>
@@ -406,7 +410,13 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                         <?= $nExcludedUnits ?> site<?= $nExcludedUnits > 1 ? 's' : '' ?> with no stock of this resource
                     </span>
                     <?php endif; ?>
-                    <?php if ($nExcludedMl === 0 && $nExcludedUnits === 0): ?>
+                    <?php if ($nAtRiskShown > 0): ?>
+                    <span style="display:inline-flex;align-items:center;gap:.28rem;background:#fef3c7;color:#92400e;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #fde68a;">
+                        <span class="material-symbols-outlined" style="font-size:.88rem;">warning</span>
+                        <?= $nAtRiskShown ?> ranked site<?= $nAtRiskShown > 1 ? 's' : '' ?> flagged at-risk by ML — still shown, ranked lower
+                    </span>
+                    <?php endif; ?>
+                    <?php if ($nExcludedStalled === 0 && $nExcludedUnits === 0 && $nAtRiskShown === 0): ?>
                     <span style="display:inline-flex;align-items:center;gap:.28rem;background:#dcfce7;color:#166534;font-size:.72rem;font-weight:700;padding:.22rem .55rem;border-radius:6px;border:1px solid #bbf7d0;">
                         <span class="material-symbols-outlined" style="font-size:.88rem;">check_circle</span>
                         All candidates on track
@@ -447,8 +457,6 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                             $unitsRel     = (int)($site['units_released']  ?? 0);
                             $trafficLabel = $site['traffic_label'] ?? 'Light';
                             $wsmScore     = (float)($site['wsm_score']     ?? 0);
-                            $mlDelay      = (int)($site['ml_delay_days']   ?? 0);
-                            $mlBlocker    = $site['ml_blocker'] ?? null;
 
                             if ($trafficLabel === 'Heavy') {
                                 $tBg='#fee2e2';$tFg='#991b1b';$tBd='#fca5a5';
@@ -464,8 +472,18 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                             $wsmPct   = min(100, (int)round($wsmScore * 100));
                             $wsmColor = $wsmPct >= 70 ? '#16a34a' : ($wsmPct >= 45 ? '#b45309' : '#dc2626');
 
-                            $mlStatusBg = '#dcfce7'; $mlStatusFg = '#166534'; $mlStatusText = 'On Track';
-                            if (!$mcdaMlAvailable) { $mlStatusBg = '#f3f4f6'; $mlStatusFg = '#6b7280'; $mlStatusText = 'N/A'; }
+                            // Reflects the site's actual risk_score (folded into the WSM score
+                            // above, not a hard exclude) rather than a hardcoded "On Track".
+                            $riskScore = (float)($site['risk_score'] ?? 0);
+                            if (!$mcdaMlAvailable) {
+                                $mlStatusBg = '#f3f4f6'; $mlStatusFg = '#6b7280'; $mlStatusText = 'N/A';
+                            } elseif ($riskScore >= 0.65) {
+                                $mlStatusBg = '#fee2e2'; $mlStatusFg = '#991b1b'; $mlStatusText = 'At Risk';
+                            } elseif ($riskScore >= 0.35) {
+                                $mlStatusBg = '#fef3c7'; $mlStatusFg = '#92400e'; $mlStatusText = 'Elevated';
+                            } else {
+                                $mlStatusBg = '#dcfce7'; $mlStatusFg = '#166534'; $mlStatusText = 'On Track';
+                            }
                         ?>
                         <tr id="mcda-row-<?= esc($site['project_id']) ?>"
                             style="cursor:pointer;border-bottom:1px solid #f0e6cd;transition:background .12s;<?= $isTop ? 'background:#fffbeb;' : '' ?>"
@@ -543,12 +561,14 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
                         </tr></thead>
                         <tbody>
                         <?php foreach ($mcdaExcludedSites as $ex): ?>
-                        <?php $exReason = $ex['exclude_reason'] ?? 'ML predicted delay/blocker'; ?>
+                        <?php $exReason = $ex['exclude_reason'] ?? 'No allocatable units'; ?>
                         <tr style="border-bottom:1px solid #fef3c7;">
                             <td style="padding:5px 8px;color:#78350f;font-weight:600;"><?= esc($ex['project_name'] ?? $ex['project_id']) ?></td>
                             <td style="padding:5px 8px;text-align:center;">
                                 <?php if ($exReason === 'No allocatable units'): ?>
                                 <span style="background:#f3f4f6;color:#4b5563;font-size:.68rem;font-weight:600;padding:.12rem .35rem;border-radius:4px;">No stock here</span>
+                                <?php elseif ($exReason === 'No progress since start'): ?>
+                                <span style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:600;padding:.12rem .35rem;border-radius:4px;">Stalled since start</span>
                                 <?php else: ?>
                                 <span style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:600;padding:.12rem .35rem;border-radius:4px;">ML risk</span>
                                 <?php endif; ?>
@@ -575,18 +595,20 @@ $finalRole = $finalName !== '' ? ($req['approved_by_role'] ?? '') : '';
 
                 <p style="margin:.5rem 0 0;font-size:.72rem;color:#9a7b3a;">
                     <span class="material-symbols-outlined" style="font-size:.78rem;vertical-align:middle;">touch_app</span>
-                    Click a row to select that site as the transfer source. <strong>WSM Score</strong> combines 5 criteria: distance (25%) · ETA (25%) · traffic (15%) · allocatable units (20%) · next availability (15%).
-                    Excluded sites either had no stock of this resource, or were flagged by ML as an active-project risk.
+                    Click a row to select that site as the transfer source. <strong>WSM Score</strong> combines 6 criteria: distance (20%) · ETA (20%) · traffic (10%) · allocatable units (15%) · next availability (10%) · ML risk (25%).
+                    A site flagged at-risk by ML still ranks lower rather than disappearing — excluded sites either had no stock of this resource, or showed zero progress after their own start date.
                 </p>
 
                 <?php else: ?>
                 <div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.83rem;color:#8a6420;padding:.5rem 0;">
                     <span class="material-symbols-outlined" style="font-size:1rem;flex-shrink:0;margin-top:.05rem;">info</span>
                     <span>
-                        <?php if ($nExcludedUnits > 0 && $nExcludedMl === 0): ?>
+                        <?php if ($nExcludedUnits > 0 && $nExcludedStalled === 0): ?>
                         No eligible source sites found — none of the candidate <strong>On-going</strong> project sites currently have stock of this resource. Please select a source site manually.
+                        <?php elseif ($nExcludedStalled > 0 && $nExcludedUnits === 0): ?>
+                        No eligible source sites found — the remaining candidate <strong>On-going</strong> project sites have shown zero progress since their own start date. Please select a source site manually.
                         <?php else: ?>
-                        No eligible source sites found. MCDA only considers <strong>On-going</strong> projects with no active emergency and a registered location<?= $mcdaMlAvailable ? ', and passes ML delay/blocker prediction' : '' ?>. Please select a source site manually.
+                        No eligible source sites found. MCDA only considers <strong>On-going</strong> projects with no active emergency, a registered location, and at least some progress since their start date. Please select a source site manually.
                         <?php endif; ?>
                     </span>
                 </div>
