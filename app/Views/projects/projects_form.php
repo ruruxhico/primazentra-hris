@@ -1337,6 +1337,8 @@ if (window.location.hostname === 'localhost') {
             var phaseCards  = container.querySelectorAll('.phase-card');
             var mileErrs    = [];   // { idx, label, missing[] }
             var firstErrCard = null;
+            var projS = startEl ? startEl.value : '';
+            var projE = endEl   ? endEl.value   : '';
 
             phaseCards.forEach(function (card, idx) {
                 var nameInp    = card.querySelector('.phase-card-name-inp');
@@ -1366,11 +1368,26 @@ if (window.location.hostname === 'localhost') {
                 if (!startHid || !startHid.value.trim()) {
                     missing.push('Target Start');
                     if (startPicker) startPicker.classList.add('pz-field-error');
+                } else if (projS && startHid.value.trim() < projS) {
+                    missing.push('Target Start (must be on/after the project start date)');
+                    if (startPicker) startPicker.classList.add('pz-field-error');
+                } else if (projE && startHid.value.trim() > projE) {
+                    missing.push('Target Start (must be on/before the project end date)');
+                    if (startPicker) startPicker.classList.add('pz-field-error');
                 }
                 var dateHid = card.querySelector('input[type="hidden"][name$="[site_date]"]');
                 var datePicker = dateHid ? dateHid.closest('.phase-card-date-picker') : null;
                 if (!dateHid || !dateHid.value.trim()) {
                     missing.push('Target End');
+                    if (datePicker) datePicker.classList.add('pz-field-error');
+                } else if (startHid && startHid.value.trim() && startHid.value.trim() > dateHid.value.trim()) {
+                    missing.push('Target End (must be on/after Target Start)');
+                    if (datePicker) datePicker.classList.add('pz-field-error');
+                } else if (projS && dateHid.value.trim() < projS) {
+                    missing.push('Target End (must be on/after the project start date)');
+                    if (datePicker) datePicker.classList.add('pz-field-error');
+                } else if (projE && dateHid.value.trim() > projE) {
+                    missing.push('Target End (must be on/before the project end date)');
                     if (datePicker) datePicker.classList.add('pz-field-error');
                 }
 
@@ -1639,6 +1656,42 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (target === 'end') {
             opts.getMin  = function () { return startHidden ? startHidden.value : ''; };
             opts.onSelect = function () {};
+        } else if (wrapper.classList.contains('phase-card-date-picker')) {
+            // Milestone (phase) Target Start / Target End — same rule as the
+            // project's own start/end date (paired within this phase card), and
+            // additionally bounded by the project's own start/end date window —
+            // a milestone can't be scheduled outside the project's timeline.
+            var card       = wrapper.closest('.phase-card');
+            var isStart    = hidden && /\[site_start_date\]$/.test(hidden.name || '');
+            var partnerHid = card ? card.querySelector(
+                'input[type="hidden"][name$="' + (isStart ? '[site_date]' : '[site_start_date]') + '"]'
+            ) : null;
+            var partnerDisp = partnerHid ? partnerHid.closest('.phase-card-date-picker').querySelector('.date-display') : null;
+
+            if (isStart) {
+                opts.getMin  = function () { return startHidden ? startHidden.value : ''; };
+                opts.getMax  = function () {
+                    var vals = [];
+                    if (partnerHid && partnerHid.value) vals.push(partnerHid.value);
+                    if (endHidden && endHidden.value) vals.push(endHidden.value);
+                    return vals.length ? vals.reduce(function (a, b) { return a < b ? a : b; }) : '';
+                };
+                opts.onSelect = function (val) {
+                    if (partnerHid && partnerHid.value && val > partnerHid.value) {
+                        partnerHid.value  = '';
+                        if (partnerDisp) partnerDisp.value = '';
+                        if (window.showFormToast) window.showFormToast('Target End cleared — it must be on or after the Target Start.');
+                    }
+                };
+            } else {
+                opts.getMin  = function () {
+                    var vals = [];
+                    if (partnerHid && partnerHid.value) vals.push(partnerHid.value);
+                    if (startHidden && startHidden.value) vals.push(startHidden.value);
+                    return vals.length ? vals.reduce(function (a, b) { return a > b ? a : b; }) : '';
+                };
+                opts.getMax  = function () { return endHidden ? endHidden.value : ''; };
+            }
         }
 
         window.pzCreateCalendar(popup, hidden, display, opts);

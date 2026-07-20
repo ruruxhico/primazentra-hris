@@ -229,6 +229,14 @@ class Projects extends BaseController
             if ($dateError) {
                 return redirect()->back()->withInput()->with('error', $dateError);
             }
+            $dateOrderError = $this->validateMilestoneTargetDateOrder($rawPhasesCheck);
+            if ($dateOrderError) {
+                return redirect()->back()->withInput()->with('error', $dateOrderError);
+            }
+            $dateBoundsError = $this->validateMilestoneTargetDateBounds($rawPhasesCheck, $chkStart, $chkEnd);
+            if ($dateBoundsError) {
+                return redirect()->back()->withInput()->with('error', $dateBoundsError);
+            }
 
             try {
                 $projectId = bin2hex(random_bytes(8));
@@ -391,6 +399,14 @@ class Projects extends BaseController
                     $dateError = $this->validateNewMilestoneTargetDates($rawPhases, array_keys($existByName));
                     if ($dateError) {
                         return redirect()->back()->withInput()->with('error', $dateError);
+                    }
+                    $dateOrderError = $this->validateMilestoneTargetDateOrder($rawPhases);
+                    if ($dateOrderError) {
+                        return redirect()->back()->withInput()->with('error', $dateOrderError);
+                    }
+                    $dateBoundsError = $this->validateMilestoneTargetDateBounds($rawPhases, $chkStart, $chkEnd);
+                    if ($dateBoundsError) {
+                        return redirect()->back()->withInput()->with('error', $dateBoundsError);
                     }
                     $newMilestones = $this->normalizeToMilestones($rawPhases);
                     foreach ($newMilestones as &$m) {
@@ -1135,6 +1151,7 @@ class Projects extends BaseController
                 $rawMs             = $this->request->getPost('milestones') ?? [];
                 $milestones        = [];
                 $missingDates      = [];
+                $invalidDateOrder  = [];
                 $order             = 1;
 
                 $now = new Timestamp(new \DateTime());
@@ -1158,6 +1175,11 @@ class Projects extends BaseController
                     // milestones are left alone.
                     if (empty($ex) && ($tdStr === '' || $tsStr === '')) {
                         $missingDates[] = $name;
+                    }
+                    // Same rule as the project's own start/end date: the target end
+                    // can't fall before the target start.
+                    if ($tsStr !== '' && $tdStr !== '' && $tsStr > $tdStr) {
+                        $invalidDateOrder[] = $name;
                     }
 
                     // Optional per-milestone activities: name + weight (must sum to 100% of
@@ -1196,6 +1218,30 @@ class Projects extends BaseController
                 if (!empty($missingDates)) {
                     return redirect()->back()->withInput()
                         ->with('error', 'Target start and target end are required for new milestones: ' . implode(', ', $missingDates) . '.');
+                }
+
+                if (!empty($invalidDateOrder)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', 'Target end date must be on or after the target start date for: ' . implode(', ', $invalidDateOrder) . '.');
+                }
+
+                $outOfRangeNames = [];
+                $projStart = (string)($project['start_date_value'] ?? '');
+                $projEnd   = (string)($project['end_date_value']   ?? '');
+                if ($projStart !== '' || $projEnd !== '') {
+                    foreach ($milestones as $m) {
+                        $s = $this->psTsToDate($m['target_start'] ?? null) ?? '';
+                        $d = $this->psTsToDate($m['target_date']  ?? null) ?? '';
+                        $outOfRange = ($projStart !== '' && (($s !== '' && $s < $projStart) || ($d !== '' && $d < $projStart)))
+                            || ($projEnd !== '' && (($s !== '' && $s > $projEnd) || ($d !== '' && $d > $projEnd)));
+                        if ($outOfRange) {
+                            $outOfRangeNames[] = $m['milestone_name'];
+                        }
+                    }
+                }
+                if (!empty($outOfRangeNames)) {
+                    return redirect()->back()->withInput()
+                        ->with('error', "Milestone target dates must fall within the project's start and end dates for: " . implode(', ', $outOfRangeNames) . '.');
                 }
 
                 $activityError = $this->validateActivityWeights($rawMs);
@@ -2256,6 +2302,64 @@ class Projects extends BaseController
         }
         if (!empty($missing)) {
             return 'Target start and target end are required for new milestones: ' . implode(', ', $missing) . '.';
+        }
+        return null;
+    }
+
+    /**
+     * Same rule as the project's own start/end date (end must be on or after start),
+     * applied per milestone to its target start/end.
+     */
+    private function validateMilestoneTargetDateOrder(array $rawPhases): ?string
+    {
+        $invalid = [];
+        foreach ($rawPhases as $phase) {
+            $name = trim((string) ($phase['name'] ?? ''));
+            if ($name === '') continue;
+            $start = trim((string) ($phase['site_start_date'] ?? ''));
+            $end   = trim((string) ($phase['site_date'] ?? ''));
+            if ($start !== '' && $end !== '' && $start > $end) {
+                $invalid[] = $name;
+            }
+        }
+        if (!empty($invalid)) {
+            return 'Target end date must be on or after the target start date for: ' . implode(', ', $invalid) . '.';
+        }
+        return null;
+    }
+
+    /**
+     * A milestone's target start/end must fall within the project's own start/end
+     * date window — a milestone can't be scheduled before the project starts or
+     * after it ends.
+     */
+    private function validateMilestoneTargetDateBounds(array $rawPhases, string $projectStart, string $projectEnd): ?string
+    {
+        if ($projectStart === '' && $projectEnd === '') {
+            return null;
+        }
+
+        $invalid = [];
+        foreach ($rawPhases as $phase) {
+            $name = trim((string) ($phase['name'] ?? ''));
+            if ($name === '') continue;
+            $start = trim((string) ($phase['site_start_date'] ?? ''));
+            $end   = trim((string) ($phase['site_date'] ?? ''));
+
+            $outOfRange = false;
+            if ($projectStart !== '' && (($start !== '' && $start < $projectStart) || ($end !== '' && $end < $projectStart))) {
+                $outOfRange = true;
+            }
+            if ($projectEnd !== '' && (($start !== '' && $start > $projectEnd) || ($end !== '' && $end > $projectEnd))) {
+                $outOfRange = true;
+            }
+            if ($outOfRange) {
+                $invalid[] = $name;
+            }
+        }
+
+        if (!empty($invalid)) {
+            return "Milestone target dates must fall within the project's start and end dates for: " . implode(', ', $invalid) . '.';
         }
         return null;
     }

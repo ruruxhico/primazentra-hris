@@ -325,6 +325,11 @@
     var totEl  = document.getElementById('totalWeightDisplay');
     var totVal = document.getElementById('totalWeightVal');
 
+    // Project's own start/end date — every milestone's target start/end must
+    // fall within this window.
+    var projStart = <?= json_encode($startDate) ?>;
+    var projEnd   = <?= json_encode($endDate) ?>;
+
     /* ── Total weight ── */
     function recomputeTotal() {
         var total = 0;
@@ -346,6 +351,57 @@
         }
     });
 
+    /* ── Target Start / Target End date pickers (same rule as the project's own
+       start/end date: the target end can't be before the target start) ── */
+    function initMsDatePickers(row) {
+        if (!window.pzInitDatePicker) return;
+        var startHidden = row.querySelector('.ps-ms-date-start');
+        var endHidden    = row.querySelector('.ps-ms-date');
+        var startDp      = startHidden ? startHidden.closest('.ps-ms-date-picker') : null;
+        var endDp        = endHidden   ? endHidden.closest('.ps-ms-date-picker')   : null;
+        var endDisplay   = endDp ? endDp.querySelector('.date-display') : null;
+
+        if (startDp) {
+            window.pzInitDatePicker(startDp, {
+                getMin: function () { return projStart || ''; },
+                getMax: function () {
+                    var vals = [];
+                    if (endHidden && endHidden.value) vals.push(endHidden.value);
+                    if (projEnd) vals.push(projEnd);
+                    return vals.length ? vals.reduce(function (a, b) { return a < b ? a : b; }) : '';
+                },
+                onSelect: function (val) {
+                    if (endHidden && endHidden.value && val > endHidden.value) {
+                        endHidden.value = '';
+                        if (endDisplay) endDisplay.value = '';
+                    }
+                }
+            });
+        }
+        if (endDp) {
+            window.pzInitDatePicker(endDp, {
+                getMin: function () {
+                    var vals = [];
+                    if (startHidden && startHidden.value) vals.push(startHidden.value);
+                    if (projStart) vals.push(projStart);
+                    return vals.length ? vals.reduce(function (a, b) { return a > b ? a : b; }) : '';
+                },
+                getMax: function () { return projEnd || ''; }
+            });
+        }
+    }
+
+    function showScheduleError(msg) {
+        var existing = document.querySelector('.ps-alert-js-error');
+        if (existing) existing.remove();
+        var div = document.createElement('div');
+        div.className = 'ps-alert ps-alert-error ps-alert-js-error';
+        div.textContent = msg;
+        var form = document.getElementById('scheduleForm');
+        form.parentNode.insertBefore(div, form);
+        div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     /* ── Add / remove rows ── */
     window.addRow = function () {
         var clone = tpl.content.cloneNode(true);
@@ -355,9 +411,7 @@
         var rows = list.querySelectorAll('.ps-ms-row');
         var newRow = rows[rows.length - 1];
         newRow.querySelector('.ps-ms-name').focus();
-        newRow.querySelectorAll('.ps-ms-date-picker').forEach(function (dp) {
-            if (window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
-        });
+        initMsDatePickers(newRow);
         applyMode(newRow);
     };
 
@@ -555,12 +609,44 @@
         }
     });
 
+    /* ── Submit-time guard (catches anything the calendar constraints miss) ── */
+    document.getElementById('scheduleForm').addEventListener('submit', function (e) {
+        var invalid    = [];
+        var outOfRange = [];
+        list.querySelectorAll('.ps-ms-row').forEach(function (row, i) {
+            var s = row.querySelector('.ps-ms-date-start');
+            var d = row.querySelector('.ps-ms-date');
+            var nameInp = row.querySelector('.ps-ms-name');
+            var label = nameInp && nameInp.value.trim() ? nameInp.value.trim() : ('Milestone ' + (i + 1));
+            var sv = s ? s.value : '';
+            var dv = d ? d.value : '';
+            if (sv && dv && sv > dv) {
+                invalid.push(label);
+            }
+            var beforeStart = (projStart && ((sv && sv < projStart) || (dv && dv < projStart)));
+            var afterEnd    = (projEnd && ((sv && sv > projEnd) || (dv && dv > projEnd)));
+            if (beforeStart || afterEnd) {
+                outOfRange.push(label);
+            }
+        });
+        var msgs = [];
+        if (invalid.length > 0) {
+            msgs.push('Target end date must be on or after the target start date for: ' + invalid.join(', ') + '.');
+        }
+        if (outOfRange.length > 0) {
+            msgs.push('Milestone target dates must fall within the project\'s start and end dates for: ' + outOfRange.join(', ') + '.');
+        }
+        if (msgs.length > 0) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            showScheduleError(msgs.join(' '));
+            return false;
+        }
+    });
+
     /* ── Init ── */
     recomputeTotal();
-    list.querySelectorAll('.ps-ms-date-picker').forEach(function (dp) {
-        if (window.pzInitDatePicker) window.pzInitDatePicker(dp, {});
-    });
-    list.querySelectorAll('.ps-ms-row').forEach(function (row) { recomputeActTotal(row); applyMode(row); });
+    list.querySelectorAll('.ps-ms-row').forEach(function (row) { initMsDatePickers(row); recomputeActTotal(row); applyMode(row); });
 }());
 </script>
 
