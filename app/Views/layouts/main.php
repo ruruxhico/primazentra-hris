@@ -334,12 +334,12 @@
   <script>
   (function () {
     var _fbConfig = {
-      apiKey:            'AIzaSyCq8YNyOXnaYP7Q-BKI65CuDG2bemwCFaI',
-      authDomain:        'nebuhive-primazentra.firebaseapp.com',
-      projectId:         'nebuhive-primazentra',
-      storageBucket:     'nebuhive-primazentra.firebasestorage.app',
-      messagingSenderId: '385215892270',
-      appId:             '1:385215892270:web:d50e3773b7688c0aaf88bf',
+      apiKey: "AIzaSyDZpQJjChNVS86hOIjz-1HX7Qw_NKv9P6I",
+      authDomain: "primazentra-hris.firebaseapp.com",
+      projectId: "primazentra-hris",
+      storageBucket: "primazentra-hris.firebasestorage.app",
+      messagingSenderId: "229479251112",
+      appId: "1:229479251112:web:1814aacd9193acdf1f169d",
     };
     var _fbApp  = firebase.initializeApp(_fbConfig);
     var _fbDb   = firebase.firestore(_fbApp);
