@@ -5057,6 +5057,9 @@ body.sidebar-toggled.map-panel-collapsed .main-content { width: calc(100% - 72px
 .pz-badge-maintenance       { background: #cfe2ff; color: #084298; }
 .pz-badge-unavailable       { background: #e2e3e5; color: #2b2d42; }
 .pz-badge-progress          { background: #f5e7b2; color: #5c3d11; border: 1px solid #c8a951; }
+.pz-badge-sm                { font-size: .68rem; padding: .12rem .5rem; letter-spacing: .03em; vertical-align: middle; }
+.pz-cell-sub                { display: block; margin-top: .2rem; }
+.pz-muted-amount            { color: #8a8a8a; }
 
 /* ── Tabs ────────────────────────────────────────────────── */
 .pz-tabs { display: flex; border-bottom: 2px solid #e8dfc7; margin: 0 2rem; padding: 0; gap: 0; }

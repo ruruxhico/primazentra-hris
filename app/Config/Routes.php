@@ -188,3 +188,17 @@ $routes->get('export', 'Export::index');
 // Import (template download + file processing)
 $routes->get('import/template', 'Import::template');
 $routes->post('import/process', 'Import::process');
+
+// ── HRIS: employee master data ───────────────────────────────────────────
+$routes->get('employees',                    'Employees::index');
+$routes->match(['GET', 'POST'], 'employees/create',             'Employees::create');
+$routes->match(['GET', 'POST'], 'employees/update/(:segment)',  'Employees::update/$1');
+$routes->get('employees/show/(:segment)',     'Employees::show/$1');
+
+// ── HRIS service API (consumed by hris-attendance and hris-payroll) ───────
+// Protected by the `servicekey` filter (X-Api-Key header), not by a session.
+$routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static function ($routes) {
+    $routes->get('employees',            'Employees::index');
+    $routes->get('employees/(:segment)', 'Employees::show/$1');
+    $routes->post('auth/login',          'Auth::login');
+});

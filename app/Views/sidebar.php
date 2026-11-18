@@ -8,6 +8,7 @@
     $isRequests  = $currentPath === 'requests' || str_starts_with($currentPath, 'requests/');
     $isResources = $currentPath === 'resources' || str_starts_with($currentPath, 'resources/');
     $isStaff     = $currentPath === 'staff' || str_starts_with($currentPath, 'staff/');
+    $isEmployees = $currentPath === 'employees' || str_starts_with($currentPath, 'employees/');
     $isProfile   = $currentPath === 'profile' || str_starts_with($currentPath, 'profile/');
     $isMessages  = $currentPath === 'messages' || str_starts_with($currentPath, 'messages/');
     $isAuditLogs = $currentPath === 'audit-logs' || str_starts_with($currentPath, 'audit-logs/');
@@ -47,8 +48,40 @@
                 <?php endif; ?>
             </li>
 
+            <!-- HRIS: employee master data (owned by this app) -->
+            <?php if (pz_can('view_employees')): ?>
+            <li>
+                <a href="<?= base_url('employees') ?>" class="<?= $isEmployees ? 'active' : '' ?>">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">badge</span>
+                    <span class="label">Employees</span>
+                </a>
+            </li>
+            <?php endif; ?>
+
+            <!-- HRIS: separate apps, opened in a new tab -->
+            <?php if (pz_is('Administrator', 'Operations Manager', 'Project Manager') && env('HRIS_ATTENDANCE_URL')): ?>
+            <li>
+                <a href="<?= esc(env('HRIS_ATTENDANCE_URL')) ?>" target="_blank" rel="noopener">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">schedule</span>
+                    <span class="label">Attendance ↗</span>
+                </a>
+            </li>
+            <?php endif; ?>
+            <?php if (pz_is('Administrator', 'Operations Manager') && env('HRIS_PAYROLL_URL')): ?>
+            <li>
+                <a href="<?= esc(env('HRIS_PAYROLL_URL')) ?>" target="_blank" rel="noopener">
+                    <span class="icon material-symbols-outlined" aria-hidden="true">payments</span>
+                    <span class="label">Payroll ↗</span>
+                </a>
+            </li>
+            <?php endif; ?>
+
+            <!-- Construction modules inherited from PrimaZentra: hidden in the HRIS
+                 (code kept). Set HRIS_SHOW_CONSTRUCTION = true in .env to show. -->
+            <?php $showConstruction = filter_var(env('HRIS_SHOW_CONSTRUCTION', false), FILTER_VALIDATE_BOOLEAN); ?>
+
             <!-- Projects — Admin / OpsMgr / PM -->
-            <?php if (pz_can('view_projects')): ?>
+            <?php if ($showConstruction && pz_can('view_projects')): ?>
             <li>
                 <a href="<?= base_url('projects') ?>" class="<?= $isProjects ? 'active' : '' ?>">
                     <span class="icon material-symbols-outlined" aria-hidden="true">edit_calendar</span>
@@ -58,7 +91,7 @@
             <?php endif; ?>
 
             <!-- Resources — Admin / OpsMgr / PM -->
-            <?php if (pz_can('view_resources')): ?>
+            <?php if ($showConstruction && pz_can('view_resources')): ?>
             <li>
                 <a href="<?= base_url('resources') ?>" class="<?= ($isResources && !$isRequests) ? 'active' : '' ?>">
                     <span class="icon material-symbols-outlined" aria-hidden="true">inventory_2</span>

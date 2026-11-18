@@ -140,3 +140,6 @@ google_key.json
 
 # DO NOT use *.json here, as it may block future config files.
 # Instead, ensure your specific key folder above is blocked.
+
+# local curl session cookies
+cookiejar.txt

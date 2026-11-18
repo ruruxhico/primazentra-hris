@@ -40,6 +40,10 @@ if (!function_exists('pz_can')) {
             'view_requests'           => in_array($r, [$admin, $ops, $pm, $se], true),
             'view_staff'              => in_array($r, [$admin, $ops], true),
 
+            // ── HRIS: employee master data ────────────────────────────────
+            'view_employees'          => in_array($r, [$admin, $ops], true),
+            'manage_employees'        => in_array($r, [$admin, $ops], true),
+
             // ── Projects ──────────────────────────────────────────────────
             'create_project'          => in_array($r, [$admin, $ops], true),
             'edit_project'            => in_array($r, [$admin, $ops], true),

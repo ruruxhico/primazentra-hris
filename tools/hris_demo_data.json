@@ -1,0 +1,254 @@
+{
+    "exported_at": "2026-11-18T09:45:11+01:00",
+    "collections": {
+        "employees": {
+            "EMP001": {
+                "first_name": "ana",
+                "position": "Operations manager",
+                "schedule_type": "8hrs",
+                "status": "active",
+                "employee_id": "EMP001",
+                "schema_version": 1,
+                "created_at": {
+                    "__ts": "2026-11-17T09:57:53.873237Z"
+                },
+                "created_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "monthly_salary": 18200,
+                "updated_at": {
+                    "__ts": "2026-11-17T10:07:37.847688Z"
+                },
+                "updated_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "last_name": "santos-lim"
+            },
+            "EMP002": {
+                "first_name": "DAN",
+                "last_name": "LOPEZ",
+                "position": "",
+                "schedule_type": "8hrs",
+                "monthly_salary": 13000,
+                "status": "active",
+                "employee_id": "EMP002",
+                "schema_version": 1,
+                "created_at": {
+                    "__ts": "2026-11-17T12:23:29.679524Z"
+                },
+                "updated_at": {
+                    "__ts": "2026-11-17T12:23:29.679524Z"
+                },
+                "created_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2"
+            }
+        },
+        "dtr_records": {
+            "EMP001_2026-11-16": {
+                "employee_id": "EMP001",
+                "date": "2026-11-16",
+                "schedule_type": "8hrs",
+                "late_minutes": 29,
+                "undertime_minutes": 0,
+                "ot_hours": 0,
+                "is_absent": false,
+                "employee_name": "cruz, ana",
+                "schema_version": 1,
+                "created_at": {
+                    "__ts": "2026-11-17T10:00:18.999851Z"
+                },
+                "updated_at": {
+                    "__ts": "2026-11-17T10:00:18.999851Z"
+                },
+                "encoded_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "approved": true,
+                "approved_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "approved_at": {
+                    "__ts": "2026-11-17T10:04:15.167869Z"
+                },
+                "supervisor_name": "JUAN DELA CRUZ"
+            },
+            "EMP001_2026-11-17": {
+                "employee_id": "EMP001",
+                "date": "2026-11-17",
+                "schedule_type": "8hrs",
+                "late_minutes": 0,
+                "undertime_minutes": 0,
+                "ot_hours": 0,
+                "is_absent": false,
+                "employee_name": "santos-lim, ana",
+                "schema_version": 1,
+                "created_at": {
+                    "__ts": "2026-11-17T12:24:31.748519Z"
+                },
+                "updated_at": {
+                    "__ts": "2026-11-17T12:24:31.748519Z"
+                },
+                "encoded_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "approved": false
+            },
+            "EMP002_2026-11-17": {
+                "employee_id": "EMP002",
+                "date": "2026-11-17",
+                "schedule_type": "8hrs",
+                "late_minutes": 0,
+                "undertime_minutes": 0,
+                "ot_hours": 2,
+                "is_absent": false,
+                "employee_name": "LOPEZ, DAN",
+                "schema_version": 1,
+                "created_at": {
+                    "__ts": "2026-11-17T12:24:32.021494Z"
+                },
+                "updated_at": {
+                    "__ts": "2026-11-17T12:24:32.021494Z"
+                },
+                "encoded_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "approved": true,
+                "approved_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "approved_at": {
+                    "__ts": "2026-11-17T12:25:24.559376Z"
+                },
+                "supervisor_name": "JUAN DELA CRUZ"
+            }
+        },
+        "period_locks": [],
+        "payroll_runs": {
+            "2026-11-A": {
+                "period_id": "2026-11-A",
+                "period_start": "2026-11-01",
+                "period_end": "2026-11-15",
+                "status": "draft",
+                "totals": {
+                    "basic_pay": 10000,
+                    "ot_pay": 0,
+                    "late_deduction": 0,
+                    "undertime_deduction": 0,
+                    "absence_deduction": 0,
+                    "total_deductions": 0,
+                    "gross_pay": 10000,
+                    "net_pay": 10000,
+                    "employee_count": 1
+                },
+                "warnings": [],
+                "computed_at": {
+                    "__ts": "2026-11-17T10:02:06.271346Z"
+                },
+                "computed_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "computed_by_name": "JUAN DELA CRUZ",
+                "input_hash": "084fd4b883ffb28c9c65c8c1f308bb3ce562c21e4088dda80018f8e6304e86a2",
+                "schema_version": 1,
+                "stale": true,
+                "stale_reason": "demo data restored",
+                "stale_since": {
+                    "__ts": "2026-11-18T05:11:43.410894Z"
+                }
+            },
+            "2026-11-B": {
+                "period_id": "2026-11-B",
+                "period_start": "2026-11-16",
+                "period_end": "2026-11-30",
+                "status": "draft",
+                "totals": {
+                    "basic_pay": 27700,
+                    "ot_pay": 156.25,
+                    "late_deduction": 80.48,
+                    "undertime_deduction": 0,
+                    "absence_deduction": 0,
+                    "total_deductions": 80.48,
+                    "gross_pay": 27775.77,
+                    "net_pay": 27775.77,
+                    "employee_count": 3
+                },
+                "warnings": [
+                    "2 DTR record(s) are still pending approval and were NOT included (EMP001, EMP002)."
+                ],
+                "computed_at": {
+                    "__ts": "2026-11-18T05:16:29.657004Z"
+                },
+                "computed_by": "uxP9nIswObbfxBt4D7BJWQ9OkHj2",
+                "computed_by_name": "JUAN DELA CRUZ",
+                "input_hash": "f07af722ee41e0ed152b4f1e1b8089f908302ccfbb842ec3fd623edc57f445c9",
+                "stale": true,
+                "schema_version": 1,
+                "stale_reason": "demo data restored"
+            }
+        },
+        "payroll_details": {
+            "2026-11-A_EMP001": {
+                "employee_id": "EMP001",
+                "employee_name": "cruz, ana",
+                "schedule_type": "8hrs",
+                "monthly_salary": 20000,
+                "daily_rate": 769.23,
+                "hourly_rate": 96.1538,
+                "days_recorded": 0,
+                "days_absent": 0,
+                "late_minutes": 0,
+                "late_minutes_deducted": 0,
+                "undertime_minutes": 0,
+                "ot_hours": 0,
+                "basic_pay": 10000,
+                "ot_pay": 0,
+                "late_deduction": 0,
+                "undertime_deduction": 0,
+                "absence_deduction": 0,
+                "total_deductions": 0,
+                "gross_pay": 10000,
+                "net_pay": 10000,
+                "statutory_deductions_applied": false,
+                "warnings": [],
+                "period_id": "2026-11-A",
+                "schema_version": 1
+            },
+            "2026-11-B_EMP001": {
+                "employee_id": "EMP001",
+                "employee_name": "santos-lim, ana",
+                "schedule_type": "8hrs",
+                "monthly_salary": 18200,
+                "daily_rate": 700,
+                "hourly_rate": 87.5,
+                "days_recorded": 2,
+                "days_absent": 0,
+                "late_minutes": 29,
+                "late_minutes_deducted": 29,
+                "undertime_minutes": 0,
+                "ot_hours": 0,
+                "basic_pay": 9100,
+                "ot_pay": 0,
+                "late_deduction": 42.29,
+                "undertime_deduction": 0,
+                "absence_deduction": 0,
+                "total_deductions": 42.29,
+                "gross_pay": 9057.71,
+                "net_pay": 9057.71,
+                "statutory_deductions_applied": false,
+                "warnings": [],
+                "period_id": "2026-11-B",
+                "schema_version": 1
+            },
+            "2026-11-B_EMP002": {
+                "employee_id": "EMP002",
+                "employee_name": "LOPEZ, DAN",
+                "schedule_type": "8hrs",
+                "monthly_salary": 13000,
+                "daily_rate": 500,
+                "hourly_rate": 62.5,
+                "days_recorded": 1,
+                "days_absent": 0,
+                "late_minutes": 0,
+                "late_minutes_deducted": 0,
+                "undertime_minutes": 0,
+                "ot_hours": 2,
+                "basic_pay": 6500,
+                "ot_pay": 156.25,
+                "late_deduction": 0,
+                "undertime_deduction": 0,
+                "absence_deduction": 0,
+                "total_deductions": 0,
+                "gross_pay": 6656.25,
+                "net_pay": 6656.25,
+                "statutory_deductions_applied": false,
+                "warnings": [],
+                "period_id": "2026-11-B",
+                "schema_version": 1
+            }
+        }
+    },
+    "note": "Demo starting state: Ana and Dan, three DTR records for Nov 16-17 (one pending), drafts for both November periods (recompute when opened)."
+}

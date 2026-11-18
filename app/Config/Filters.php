@@ -36,6 +36,7 @@ class Filters extends BaseFilters
         'pagecache'     => PageCache::class,
         'performance'   => PerformanceMetrics::class,
         'auth'          => AuthFilter::class,
+        'servicekey'    => \App\Filters\ServiceKeyFilter::class,
     ];
 
     /**
@@ -127,6 +128,14 @@ class Filters extends BaseFilters
                 'profile/*',
                 'audit-logs',
                 'audit-logs/*',
+                'employees',
+                'employees/*',
+            ],
+        ],
+        // Service-to-service API used by hris-attendance and hris-payroll.
+        'servicekey' => [
+            'before' => [
+                'api/v1/*',
             ],
         ],
     ];
