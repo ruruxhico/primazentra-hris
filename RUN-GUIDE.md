@@ -3,11 +3,11 @@
 The system is three CodeIgniter 4 apps that exchange data over REST APIs and
 store their own data in one Firebase (Firestore) project:
 
-| App | Folder | URL | Owns |
-|---|---|---|---|
-| PrimaZentra HRIS (main) | `primazentra-hris` | http://localhost/primazentra-hris/ | users, employees |
-| Attendance | `hris-attendance` | http://localhost/hris-attendance/ | DTR records, period locks |
-| Payroll | `hris-payroll` | http://localhost/hris-payroll/ | payroll runs and details |
+| App | Folder | Repository | URL | Owns |
+|---|---|---|---|---|
+| PrimaZentra HRIS (main) | `primazentra-hris` | github.com/ruruxhico/primazentra-hris | http://localhost/primazentra-hris/ | users, employees |
+| Attendance | `hris-attendance` | github.com/ruruxhico/primazentra-attendance | http://localhost/hris-attendance/ | DTR records, period locks |
+| Payroll | `hris-payroll` | github.com/ruruxhico/primazentra-payroll | http://localhost/hris-payroll/ | payroll runs and details |
 
 Each app's own `README.md` documents its APIs, rules and formulas.
 
@@ -30,7 +30,18 @@ These are not in the source code and are handed over with the submission:
 
 ## 2. Put the folders in place
 
-Copy the three folders into `C:\xampp\htdocs\` so they sit side by side:
+From the submission zip, copy the three folders into `C:\xampp\htdocs\`.
+Or clone them from GitHub. The folder names on the right are required,
+and two of them differ from the repository names:
+
+```
+cd C:\xampp\htdocs
+git clone --branch v1.0.1 https://github.com/ruruxhico/primazentra-hris.git primazentra-hris
+git clone --branch v1.0.0 https://github.com/ruruxhico/primazentra-attendance.git hris-attendance
+git clone --branch v1.0.0 https://github.com/ruruxhico/primazentra-payroll.git hris-payroll
+```
+
+Either way, the three folders sit side by side:
 
 ```
 C:\xampp\htdocs\primazentra-hris
