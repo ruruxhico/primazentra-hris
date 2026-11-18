@@ -11,12 +11,13 @@ store their own data in one Firebase (Firestore) project:
 
 Each app's own `README.md` documents its APIs, rules and formulas.
 
-## What you receive separately
+## Not included: database key and login
 
-These are not in the source code and are handed over with the submission:
+For security, two things are not in the source code. Both are available
+from the team on request:
 
 1. **`firebase_key.json`**: a Firebase service-account key for the project
-   `primazentra-hris`, issued for this review only.
+   `primazentra-hris`. The apps cannot reach their data without it.
 2. **A login**: email and password for an Administrator account.
 
 ## 1. Requirements
@@ -36,7 +37,7 @@ and two of them differ from the repository names:
 
 ```
 cd C:\xampp\htdocs
-git clone --branch v1.0.1 https://github.com/ruruxhico/primazentra-hris.git primazentra-hris
+git clone --branch v1.0.2 https://github.com/ruruxhico/primazentra-hris.git primazentra-hris
 git clone --branch v1.0.0 https://github.com/ruruxhico/primazentra-attendance.git hris-attendance
 git clone --branch v1.0.0 https://github.com/ruruxhico/primazentra-payroll.git hris-payroll
 ```
@@ -91,8 +92,8 @@ payroll data in the project.
 ## 6. Start and log in
 
 1. Start **Apache** in the XAMPP Control Panel. MySQL is not needed.
-2. Open http://localhost/primazentra-hris/ and log in with the account you
-   received.
+2. Open http://localhost/primazentra-hris/ and log in with the Administrator
+   account from the team.
 3. Open http://localhost/hris-attendance/ and http://localhost/hris-payroll/.
    Both log in with the same PrimaZentra account (the main app checks it
    over its API).
